@@ -25,6 +25,20 @@ jobs:
           sh -c "$(curl -sSfL https://release.anza.xyz/v2.1.6/install)"
           echo "$HOME/.local/share/solana/install/active_release/bin" >> $GITHUB_PATH
 
+      - name: Inspect Solana install layout
+        run: |
+          SOLANA_ROOT="$HOME/.local/share/solana/install/active_release"
+          echo "=== top-level ==="
+          ls -la "$SOLANA_ROOT/"
+          echo "=== bin/ ==="
+          ls "$SOLANA_ROOT/bin/" | head -20
+          echo "=== bin/sdk/ ==="
+          ls "$SOLANA_ROOT/bin/sdk/" 2>/dev/null || echo "MISSING: bin/sdk/"
+          echo "=== sdk/ at root ==="
+          ls "$SOLANA_ROOT/sdk/" 2>/dev/null || echo "MISSING: sdk/ at root"
+          echo "=== cargo-build-sbf realpath ==="
+          realpath "$(which cargo-build-sbf)" || echo "not found"
+
       - name: Cache Solana platform tools
         uses: actions/cache@v4
         with:
@@ -51,6 +65,8 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: anchor build
+        env:
+          RUST_BACKTRACE: full
         run: anchor build
 
       - name: anchor test
