@@ -20,15 +20,16 @@ jobs:
       - name: Cache cargo
         uses: Swatinem/rust-cache@v2
 
-      - name: Install Solana CLI + SBF toolchain
+      - name: Install Solana CLI 2.1.6
         run: |
           sh -c "$(curl -sSfL https://release.anza.xyz/v2.1.6/install)"
           echo "$HOME/.local/share/solana/install/active_release/bin" >> $GITHUB_PATH
-          # cargo-build-sbf needs platform-tools — download it explicitly
-          mkdir -p "$HOME/.local/share/solana/install/active_release/bin/sdk/sbf/dependencies/platform-tools"
-          PLATFORM_TOOLS_URL="https://github.com/anza-xyz/platform-tools/releases/latest/download/platform-tools-linux-x86_64.tar.bz2"
-          curl -L "$PLATFORM_TOOLS_URL" | tar xj -C "$HOME/.local/share/solana/install/active_release/bin/sdk/sbf/dependencies/platform-tools"
-          "$HOME/.local/share/solana/install/active_release/bin/sdk/sbf/dependencies/platform-tools/rust/bin/rustc" --version
+
+      - name: Cache Solana platform tools
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/solana
+          key: solana-platform-tools-${{ runner.os }}-2.1.6
 
       - name: Install Anchor CLI 1.0.0
         run: |
