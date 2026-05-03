@@ -4,6 +4,8 @@ Solana token-distribution protocol combining Merkle-tree compression with full v
 
 Built by Team 7 (Mancer x Superteam Scholarship).
 
+> **Setup time**: ~10 min from clone to a green test on a machine with Rust + Solana CLI + Anchor + Node already installed; ~30 min from a clean machine.
+
 ## Repo layout
 
 ```
@@ -11,9 +13,11 @@ mancer-vesting/
 ├── programs/vesting/   # Anchor program (Rust)              — owner: Lana
 ├── clients/ts/         # Off-chain Merkle tooling (TS)      — owner: Lana
 ├── apps/web/           # Frontend dApp                       — owner: Geral
-├── Anchor.toml         # Anchor workspace
-├── Cargo.toml          # Rust workspace
-├── package.json        # pnpm workspaces root
+├── tests/              # ts-mocha integration tests
+├── .github/workflows/  # CI: anchor build + anchor test
+├── Anchor.toml
+├── Cargo.toml
+├── package.json
 └── pnpm-workspace.yaml
 ```
 
@@ -26,11 +30,30 @@ mancer-vesting/
 | `apps/web/`         | Geral | Frontend stack, wallet adapter, UX          |
 | Root configs, CI    | Joint | Workspace files, GitHub Actions             |
 
+## Architecture (Week 3 scaffold)
+
+The program declares **10 instruction entry points** matching the Week 2 architecture:
+
+| Instruction          | Role                                                              |
+| -------------------- | ----------------------------------------------------------------- |
+| `create_campaign`    | Initialize a vesting tree (Merkle root, supply, authorities).     |
+| `fund_campaign`      | Creator deposits SPL tokens into the campaign vault.              |
+| `claim`              | Recipient claims vested portion against a Merkle proof.           |
+| `cancel_campaign`    | Cancel authority freezes the curve and starts a 7-day grace.      |
+| `update_root`        | Rotate the Merkle root to add/remove/adjust recipients.           |
+| `withdraw_unvested`  | Creator sweeps unvested tokens after the grace window.            |
+| `pause_campaign`     | Temporarily block claims.                                         |
+| `unpause_campaign`   | Resume a paused campaign.                                         |
+| `close_claim_record` | Reclaim rent on a fully-claimed `ClaimRecord` PDA.                |
+| `get_vested_amount`  | Read-only helper that runs the schedule math against a leaf.     |
+
+> **Week 3 status**: All 10 handlers compile with empty `Ok(())` bodies. State structs (`VestingTree`, `ClaimRecord`, `VestingLeaf`), error codes, and event types are fully defined per Week 2 architecture. Real instruction logic, Merkle math, and integration tests land in Weeks 4-5.
+
 ## Prerequisites
 
 - Rust stable (edition 2021)
 - Solana CLI ≥ 2.1
-- Anchor CLI 1.0.0 — install with `avm install 1.0.0 && avm use 1.0.0`
+- Anchor CLI **1.0.0** — install with `avm install 1.0.0 && avm use 1.0.0`
 - Node ≥ 20
 - pnpm ≥ 10 (`npm i -g pnpm`)
 
@@ -45,9 +68,47 @@ anchor build
 anchor test
 ```
 
-## Build spec
+Expected output: `2 passing` from the `vesting program scaffold` suite.
 
-The full backend build brief (instructions, account layouts, math primitives, test scenarios) lives in `../week3/OPENCLAW_BRIEF.md` in the parent research repo.
+## Build
+
+```bash
+anchor build
+```
+
+Produces `target/deploy/vesting.so` and the IDL at `target/idl/vesting.json`. The program ID is fixed at `G6iaigUdi2btFwUc2N65twfxwA8Ew5uKKhKJ5RJa8wvu` (committed at `target/deploy/vesting-keypair.json`, since this is a *program* keypair, not a wallet).
+
+## Run tests
+
+`anchor test` boots the embedded validator (Anchor 1.0 LiteSVM by default) and runs the suite in `tests/`:
+
+```bash
+pnpm install     # first time only
+anchor test
+```
+
+Add new specs as `tests/*.spec.ts`. The runner is `ts-mocha` driven by the `[scripts] test` line in `Anchor.toml`.
+
+## Deploy to devnet
+
+```bash
+# 1. Point Solana CLI at devnet and fund the deployer wallet
+solana config set --url devnet
+solana airdrop 2
+
+# 2. Build and deploy
+anchor build
+anchor deploy --provider.cluster devnet
+
+# 3. Verify the deployment
+solana program show G6iaigUdi2btFwUc2N65twfxwA8Ew5uKKhKJ5RJa8wvu --url devnet
+```
+
+`anchor deploy` reuses `target/deploy/vesting-keypair.json` so the program ID stays stable across redeploys.
+
+## CI
+
+`.github/workflows/ci.yml` runs `anchor build` and `anchor test` on every push and pull request. See the badge on the GitHub repo for the latest status.
 
 ## License
 
