@@ -28,9 +28,40 @@ mancer-vesting/
 
 ## Prerequisites
 
-- Rust stable (edition 2021)
-- Solana CLI ≥ 2.1
-- Anchor CLI 1.0.0 — install with `avm install 1.0.0 && avm use 1.0.0`
+Install in this order:
+
+### 1. Rust
+
+```bash
+curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+rustup default stable
+```
+
+### 2. Solana CLI (≥ 2.1)
+
+```bash
+sh -c "$(curl -sSfL https://release.anza.xyz/stable/install)"
+```
+
+After install, add to PATH as instructed, then verify:
+
+```bash
+solana --version
+```
+
+### 3. Anchor CLI (1.0.0)
+
+Requires Rust installed first:
+
+```bash
+cargo install --git https://github.com/coral-xyz/anchor avm --force
+avm install 1.0.0
+avm use 1.0.0
+anchor --version
+```
+
+### 4. Node and pnpm
+
 - Node ≥ 20
 - pnpm ≥ 10 (`npm i -g pnpm`)
 
