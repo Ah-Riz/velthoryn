@@ -1,5 +1,6 @@
 import { MerkleTree } from "merkletreejs";
 import keccak256 from "keccak256";
+import { decode as bs58decode } from "bs58";
 
 // Anti second-preimage attack: same byte tags as Jito's distributor
 // Ref: research-week2.md §6.3
@@ -7,46 +8,36 @@ export const LEAF_PREFIX = Buffer.from([0x00]);
 export const NODE_PREFIX = Buffer.from([0x01]);
 
 export type VestingLeaf = {
-  beneficiary: string; // base58 public key
-  amount: bigint;      // total tokens (u64 LE)
-  releaseType: 0 | 1 | 2; // 0=Cliff, 1=Linear, 2=Milestone
-  cliffTs: bigint;     // i64 unix timestamp
-  startTs: bigint;
-  endTs: bigint;
+  leafIndex: number;       // u32 LE  (4 bytes, offset 0)
+  beneficiary: string;     // Pubkey  (32 bytes, offset 4)
+  amount: bigint;          // u64 LE  (8 bytes, offset 36)
+  releaseType: 0 | 1 | 2; // u8      (1 byte,  offset 44) — 0=Cliff 1=Linear 2=Milestone
+  startTs: bigint;         // i64 LE  (8 bytes, offset 45)
+  cliffTs: bigint;         // i64 LE  (8 bytes, offset 53)
+  endTs: bigint;           // i64 LE  (8 bytes, offset 61)
+  milestoneIdx: number;    // u8      (1 byte,  offset 69)
 };
 
-// Encodes leaf data as Borsh-compatible LE bytes, matching Rust struct layout.
-// Field order must match Lana's Rust `LeafData` struct exactly.
+// Encodes leaf as 70-byte Borsh-compatible LE buffer matching Rust struct layout.
+// Field order must match programs/vesting/src/state/leaf.rs exactly.
 export function encodeLeaf(leaf: VestingLeaf): Buffer {
-  const buf = Buffer.alloc(
-    32 + // beneficiary (Pubkey = 32 bytes)
-    8 +  // amount (u64 LE)
-    1 +  // release_type (u8)
-    8 +  // cliff_ts (i64 LE)
-    8 +  // start_ts (i64 LE)
-    8,   // end_ts (i64 LE)
-  );
+  const buf = Buffer.alloc(70);
 
-  const pkBuf = Buffer.from(
-    require("bs58").decode(leaf.beneficiary) as Uint8Array,
-  );
-  pkBuf.copy(buf, 0);
-
-  buf.writeBigUInt64LE(leaf.amount, 32);
-  buf.writeUInt8(leaf.releaseType, 40);
-  buf.writeBigInt64LE(leaf.cliffTs, 41);
-  buf.writeBigInt64LE(leaf.startTs, 49);
-  buf.writeBigInt64LE(leaf.endTs, 57);
+  buf.writeUInt32LE(leaf.leafIndex, 0);
+  Buffer.from(bs58decode(leaf.beneficiary)).copy(buf, 4);
+  buf.writeBigUInt64LE(leaf.amount, 36);
+  buf.writeUInt8(leaf.releaseType, 44);
+  buf.writeBigInt64LE(leaf.startTs, 45);
+  buf.writeBigInt64LE(leaf.cliffTs, 53);
+  buf.writeBigInt64LE(leaf.endTs, 61);
+  buf.writeUInt8(leaf.milestoneIdx, 69);
 
   return buf;
 }
 
-// Hashes leaf: keccak256(LEAF_PREFIX || encodedLeaf)
-// Must be byte-equal to Rust: keccak::hash(&[&[0x00], leaf_bytes].concat())
-// This is the Day 1 Week 3 test gate.
+// keccak256(LEAF_PREFIX || encodedLeaf) — must be byte-equal to Rust leaf_hash()
 export function hashLeaf(leaf: VestingLeaf): Buffer {
-  const encoded = encodeLeaf(leaf);
-  return keccak256(Buffer.concat([LEAF_PREFIX, encoded]));
+  return keccak256(Buffer.concat([LEAF_PREFIX, encodeLeaf(leaf)]));
 }
 
 export function hashNode(left: Buffer, right: Buffer): Buffer {

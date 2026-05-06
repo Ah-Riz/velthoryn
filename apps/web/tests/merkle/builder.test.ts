@@ -3,22 +3,23 @@ import { hashLeaf, buildTree, getRoot, getProof, type VestingLeaf } from "../../
 
 // Day 1 Week 3 test gate: TS keccak256(LEAF_PREFIX || encodedLeaf) must equal Rust golden hex.
 // Ref: research-week2.md §6.3 + §10.2
-//
-// HOW TO OBTAIN GOLDEN HEX:
-//   1. In programs/vesting/src/lib.rs, add a #[test] that prints:
-//      println!("{}", hex::encode(leaf_hash(&leaf_data)));
-//   2. Run `cargo test -- --nocapture`
-//   3. Paste hex output below as RUST_GOLDEN_HEX
+// Regenerate: cd programs/vesting && cargo test golden_leaf_hex -- --nocapture
 
-const RUST_GOLDEN_HEX: string | null = null; // TODO: fill in from `cargo test`
+const RUST_GOLDEN_HEX = "cf2129259e55d196c624b52834eeca822036914cabe10ce39ebbfbe67270627b";
 
+// Canonical fixture — matches Lana's Rust golden_leaf_hex test exactly.
+// leaf_index=0, beneficiary=Pubkey::default(), amount=1_000_000,
+// release_type=1 (Linear), start_time=1_700_000_000, cliff_time=0,
+// end_time=1_731_536_000, milestone_idx=0
 const FIXTURE: VestingLeaf = {
+  leafIndex: 0,
   beneficiary: "11111111111111111111111111111111",
   amount: 1_000_000n,
-  releaseType: 1, // Linear
-  cliffTs: 0n,
+  releaseType: 1,
   startTs: 1_700_000_000n,
+  cliffTs: 0n,
   endTs: 1_731_536_000n,
+  milestoneIdx: 0,
 };
 
 describe("merkle builder", () => {
@@ -51,12 +52,8 @@ describe("merkle builder", () => {
     expect(valid).toBe(true);
   });
 
-  // Unblocks once Lana provides golden hex from Rust unit test
-  it.skipIf(RUST_GOLDEN_HEX === null)(
-    "byte-equal with Rust keccak output (GATE)",
-    () => {
-      const tsHex = hashLeaf(FIXTURE).toString("hex");
-      expect(tsHex).toBe(RUST_GOLDEN_HEX);
-    },
-  );
+  it("byte-equal with Rust keccak output (GATE)", () => {
+    const tsHex = hashLeaf(FIXTURE).toString("hex");
+    expect(tsHex).toBe(RUST_GOLDEN_HEX);
+  });
 });
