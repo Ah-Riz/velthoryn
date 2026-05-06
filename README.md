@@ -87,6 +87,14 @@ Then build:
 anchor build
 ```
 
+### Install test dependencies
+
+Test runner (`ts-mocha`) and related packages are not yet in `package.json`. Install before running tests:
+
+```bash
+pnpm add -Dw ts-mocha mocha @types/mocha chai @types/chai typescript ts-node @coral-xyz/anchor @solana/web3.js
+```
+
 ### Run tests
 
 ```bash
