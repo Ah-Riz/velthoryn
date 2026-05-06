@@ -4,6 +4,8 @@ Solana token-distribution protocol combining Merkle-tree compression with full v
 
 Built by Team 7 (Mancer x Superteam Scholarship).
 
+> **Build verified by @geral on 2026-05-06.** Clone-to-devnet in ~20 min on WSL/Ubuntu. See [Week 3 report](report-week3.md) for full verification log and friction points found.
+
 > **Setup time**: ~10 min from clone to a green test on a machine with Rust + Solana CLI + Anchor + Node already installed; ~30 min from a clean machine.
 
 ## Repo layout
@@ -68,7 +70,36 @@ git clone https://github.com/Ah-Riz/mancerxsuperteam-token-vesting.git
 cd mancerxsuperteam-token-vesting
 
 pnpm install
+```
+
+### First build — sync program ID
+
+The repo ships with a placeholder program ID. You must sync it to your local keypair before the first build:
+
+```bash
+solana address -k target/deploy/vesting-keypair.json
+# Copy the output address, then replace in Anchor.toml and programs/vesting/src/lib.rs:
+PROG_ID=$(solana address -k target/deploy/vesting-keypair.json) && \
+sed -i "s/Vest1111111111111111111111111111111111111111/$PROG_ID/g" Anchor.toml programs/vesting/src/lib.rs
+```
+
+Then build:
+
+```bash
 anchor build
+```
+
+### Install test dependencies
+
+Test runner (`ts-mocha`) and related packages are not yet in `package.json`. Install before running tests:
+
+```bash
+pnpm add -Dw ts-mocha mocha @types/mocha chai @types/chai typescript ts-node @coral-xyz/anchor @solana/web3.js
+```
+
+### Run tests
+
+```bash
 anchor test
 ```
 
