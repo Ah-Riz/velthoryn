@@ -70,6 +70,14 @@ npm install -g pnpm
 pnpm --version          # must be ≥ 10
 ```
 
+### 5. Solana keypair (for devnet deploy)
+
+```bash
+solana-keygen new       # skip if you already have ~/.config/solana/id.json
+solana config set -u devnet
+solana airdrop 2        # fund your devnet wallet
+```
+
 ## Quickstart
 
 ```bash
@@ -79,6 +87,14 @@ cd mancerxsuperteam-token-vesting
 pnpm install
 anchor build
 anchor test
+```
+
+### Devnet deploy
+
+```bash
+solana config set -u devnet
+anchor build
+anchor deploy --provider.cluster devnet
 ```
 
 ## Build spec
