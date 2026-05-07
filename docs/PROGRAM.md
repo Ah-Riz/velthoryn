@@ -1,8 +1,9 @@
-# Vesting Program — Internals (Week 3 scaffold)
+# Vesting Program — Internals
 
-This document describes the on-chain program at `programs/vesting/`. It's the reference for whoever picks up Week 4 to fill in real handler logic. Everything called out as **stub** here returns `Ok(())` (or `0` / `false` / zero-bytes) today — the *shape* matches the Week 2 architecture, the *behaviour* does not.
+This document describes the on-chain program at `programs/vesting/`. Items marked **STUB** return `Ok(())` (or `0` / `false`) — shape matches the Week 2 architecture, behaviour does not yet. Items marked **LIVE** are fully implemented.
 
-Program ID: `G6iaigUdi2btFwUc2N65twfxwA8Ew5uKKhKJ5RJa8wvu` (committed at `target/deploy/vesting-keypair.json`).
+Program ID: `G6iaigUdi2btFwUc2N65twfxwA8Ew5uKKhKJ5RJa8wvu`
+Deployed: devnet (slot 460511260). Keypair at `target/deploy/vesting-keypair.json`.
 
 ## File map
 
@@ -10,8 +11,8 @@ Program ID: `G6iaigUdi2btFwUc2N65twfxwA8Ew5uKKhKJ5RJa8wvu` (committed at `target
 programs/vesting/src/
 ├── lib.rs                  # #[program] dispatcher — wires the 10 entry points
 ├── constants.rs            # GRACE_PERIOD_SECS, MAX_MILESTONES, LEAF_PREFIX, NODE_PREFIX
-├── errors.rs               # VestingError enum (24 variants, full set per architecture)
-├── events.rs               # All 10 event types (CampaignCreated, Claimed, RootUpdated, …)
+├── errors.rs               # VestingError enum (30 variants, full set per architecture)
+├── events.rs               # 9 event types (CampaignCreated, Claimed, RootUpdated, …)
 ├── state/
 │   ├── mod.rs              # re-exports
 │   ├── vesting_tree.rs     # VestingTree #[account] — campaign PDA
@@ -20,7 +21,7 @@ programs/vesting/src/
 ├── math/
 │   ├── mod.rs              # re-exports
 │   ├── schedule.rs         # vested(), get_vested_amount() — STUB: returns 0
-│   └── merkle.rs           # leaf_hash(), verify_merkle_proof() — STUB: returns 0/false
+│   └── merkle.rs           # leaf_hash() — LIVE; verify_merkle_proof() — STUB: returns false
 └── instructions/
     ├── mod.rs              # re-exports
     ├── create_campaign.rs  # STUB
@@ -36,17 +37,17 @@ programs/vesting/src/
 
 ## Instruction surface
 
-| Entry point          | Args                                                  | Role (target behaviour, Week 4) |
-| -------------------- | ----------------------------------------------------- | ------------------------------- |
-| `create_campaign`    | `CreateCampaignArgs`                                  | Initialize a `VestingTree` PDA + token vault. Validates root, leaf_count, total_supply, cancel_authority. |
-| `fund_campaign`      | `amount: u64`                                         | Transfer SPL tokens from creator into the vault, capped at `total_supply`. |
-| `claim`              | `leaf: VestingLeaf, proof: Vec<[u8; 32]>`             | Verify proof against current root, run schedule math, transfer vested delta to beneficiary, update `ClaimRecord`. |
-| `cancel_campaign`    | —                                                     | Cancel-authority sets `cancelled_at = now`. Starts the 7-day grace clock. |
-| `update_root`        | `new_root: [u8; 32], new_leaf_count: u32`             | Cancel-authority rotates the Merkle root (per-recipient clawback). |
-| `withdraw_unvested`  | —                                                     | After grace, creator sweeps `vault_balance − vested_total_at_cancel`. |
-| `pause_campaign`     | —                                                     | Pause-authority blocks claims. |
-| `unpause_campaign`   | — (shares Accounts with pause_campaign)               | Resume a paused campaign. |
-| `close_claim_record` | `expected_total: u64`                                 | Reclaim rent on a finished `ClaimRecord`. |
+| Entry point          | Args                                                     | Role (Week 4 target) |
+| -------------------- | -------------------------------------------------------- | -------------------- |
+| `create_campaign`    | `CreateCampaignArgs`                                     | Initialize a `VestingTree` PDA + token vault. Validates root, leaf_count, total_supply, cancel_authority. |
+| `fund_campaign`      | `amount: u64`                                            | Transfer SPL tokens from creator into the vault, capped at `total_supply`. |
+| `claim`              | `leaf: VestingLeaf, proof: Vec<[u8; 32]>`                | Verify proof against current root, run schedule math, transfer vested delta to beneficiary, update `ClaimRecord`. |
+| `cancel_campaign`    | —                                                        | Cancel-authority sets `cancelled_at = now`. Starts the 7-day grace clock. |
+| `update_root`        | `new_root: [u8; 32], new_leaf_count: u32`                | Cancel-authority rotates the Merkle root (per-recipient clawback). |
+| `withdraw_unvested`  | —                                                        | After grace, creator sweeps `vault_balance − vested_total_at_cancel`. |
+| `pause_campaign`     | —                                                        | Pause-authority blocks claims. |
+| `unpause_campaign`   | — (shares Accounts with pause_campaign)                  | Resume a paused campaign. |
+| `close_claim_record` | `expected_total: u64`                                    | Reclaim rent on a finished `ClaimRecord`. |
 | `get_vested_amount`  | `leaf: VestingLeaf, cancelled_at: Option<i64>, now: i64` | Read-only helper that runs schedule math (returns u64). |
 
 Args are defined alongside their instruction (`CreateCampaignArgs` lives in `instructions/create_campaign.rs`).
@@ -93,22 +94,22 @@ PDA seeds: `["claim", tree.key(), beneficiary]`.
 
 Not an account — lives off-chain inside the Merkle tree, gets passed in to `claim` along with the proof.
 
-| Field           | Type      |
-| --------------- | --------- |
-| `leaf_index`    | `u32`     |
-| `beneficiary`   | `Pubkey`  |
-| `amount`        | `u64`     |
-| `release_type`  | `u8`      | `0 = Cliff`, `1 = Linear`, `2 = Milestone` |
-| `start_time`    | `i64`     |
-| `cliff_time`    | `i64`     |
-| `end_time`      | `i64`     |
-| `milestone_idx` | `u8`      |
+| Field           | Type     | Offset | Notes |
+| --------------- | -------- | ------ | ----- |
+| `leaf_index`    | `u32`    | 0      | |
+| `beneficiary`   | `Pubkey` | 4      | |
+| `amount`        | `u64`    | 36     | |
+| `release_type`  | `u8`     | 44     | `0 = Cliff`, `1 = Linear`, `2 = Milestone` |
+| `start_time`    | `i64`    | 45     | |
+| `cliff_time`    | `i64`    | 53     | |
+| `end_time`      | `i64`    | 61     | |
+| `milestone_idx` | `u8`     | 69     | |
 
-**Field order is the wire order.** The TS encoder in `clients/ts/leaf.ts` (Week 4) must serialize bytes identically; a golden-vector test gates this.
+Total: **70 bytes** Borsh LE. **Field order is the wire order** — the TS encoder must serialize bytes identically or every claim fails proof verification. Golden-vector test in `apps/web/` gates byte equality between Rust and TS.
 
 ## Errors
 
-`VestingError` (24 variants) covers every checked condition in the design. Read `programs/vesting/src/errors.rs` for the full list and message text. Notable ones:
+`VestingError` (30 variants) covers every checked condition. Read `programs/vesting/src/errors.rs` for the full list. Notable ones:
 
 - `EmptyRoot`, `EmptyCampaign`, `ZeroAmount` — guard `create_campaign` args.
 - `InvalidProof`, `NothingToClaim`, `MilestoneAlreadyClaimed` — claim-path failures.
@@ -119,23 +120,26 @@ Not an account — lives off-chain inside the Merkle tree, gets passed in to `cl
 
 Indexers watch these (`events.rs`): `CampaignCreated`, `CampaignFunded`, `Claimed`, `CampaignCancelled`, `RootUpdated`, `UnvestedWithdrawn`, `CampaignPaused`, `CampaignUnpaused`, `ClaimRecordClosed`. Each carries the tree pubkey + the relevant deltas.
 
-## Math (stubbed)
+## Math
 
-`math::schedule::vested(leaf, now)` will compute Cliff (binary), Linear (proportional, `u128` multiply guarding overflow), or Milestone (binary by `cliff_time`). `math::schedule::get_vested_amount(leaf, cancelled_at, now)` clamps `now` against `cancelled_at` so post-cancel `claim` calls see a frozen curve.
+### `math::merkle` — LIVE / partial
 
-`math::merkle::leaf_hash(leaf)` keccak's `[LEAF_PREFIX] ++ borsh(leaf)`. `verify_merkle_proof(leaf_hash, proof, index, root)` walks left/right siblings driven by `index`'s low bit, prefixing each node hash with `NODE_PREFIX`.
+`leaf_hash(leaf)` — **LIVE**. Computes `keccak256([LEAF_PREFIX] ++ borsh(leaf))` using `solana_keccak_hasher::hashv`. Byte-identical to the TS `hashLeaf()` in `apps/web/src/lib/merkle/builder.ts`.
 
-Reference implementations are inlined in `week3/OPENCLAW_BRIEF.md` §6.12–6.13 (research repo) — copy directly when wiring Week 4.
+`verify_merkle_proof(leaf_hash, proof, index, root)` — **STUB** (returns `false`). Will walk left/right siblings driven by `index`'s low bit, prefixing each node hash with `NODE_PREFIX`.
+
+### `math::schedule` — STUB
+
+`vested(leaf, now)` — returns `0`. Will compute Cliff (binary), Linear (proportional, `u128` multiply guarding overflow), or Milestone (binary by `cliff_time`).
+
+`get_vested_amount(leaf, cancelled_at, now)` — returns `0`. Will clamp `now` against `cancelled_at` so post-cancel `claim` calls see a frozen curve.
 
 ## Where Week 4 picks up
 
 For each instruction:
 1. Replace the minimal `Accounts` block (currently `Signer + Program<System>`) with the full constraint block from `OPENCLAW_BRIEF.md` §6.15+.
 2. Replace `Ok(())` with the real handler body.
-3. For `claim`, also import `crate::math::{schedule, merkle}` once those bodies are real.
+3. Implement `verify_merkle_proof` and `math::schedule::vested` / `get_vested_amount`.
+4. For `claim`, wire `crate::math::{schedule, merkle}`.
 
-For tests, add cases to `tests/vesting.spec.ts` (or split into themed specs) using the integration scenarios from the brief §10. The TS Merkle tooling at `clients/ts/` (currently empty) needs to land before any claim-path test.
-
-## Where Week 5 picks up
-
-Devnet deploy + frontend integration smoke test. By that point `clients/ts/` should expose `buildTree`, `proofFor`, and `encodeLeaf` for the frontend.
+For tests, expand `tests/vesting.spec.ts` using integration scenarios from the brief §10. The TS Merkle helpers are already real (`apps/web/src/lib/merkle/builder.ts`) — use them in tests directly or wait for `clients/ts/` to re-export them.
