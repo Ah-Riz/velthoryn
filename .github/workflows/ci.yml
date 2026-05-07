@@ -69,18 +69,19 @@ jobs:
       - name: Install JS deps
         run: pnpm install --frozen-lockfile
 
-      - name: Restore program keypair from secret
-        # The keypair is not committed (see .gitignore). Inject from the
-        # PROGRAM_KEYPAIR_JSON repository secret so anchor build sees the
-        # correct program ID (G6iaigUdi2btFwUc2N65twfxwA8Ew5uKKhKJ5RJa8wvu).
+      - name: anchor build
         env:
           PROGRAM_KEYPAIR_JSON: ${{ secrets.PROGRAM_KEYPAIR_JSON }}
         run: |
           mkdir -p target/deploy
-          echo "$PROGRAM_KEYPAIR_JSON" > target/deploy/vesting-keypair.json
-
-      - name: anchor build
-        run: anchor build
+          printf '%s' "$PROGRAM_KEYPAIR_JSON" > target/deploy/vesting-keypair.json
+          if [ ! -s target/deploy/vesting-keypair.json ]; then
+            echo "ERROR: target/deploy/vesting-keypair.json is empty."
+            echo "Check that the PROGRAM_KEYPAIR_JSON secret is set in:"
+            echo "  Settings → Secrets and variables → Actions"
+            exit 1
+          fi
+          anchor build
 
       - name: anchor test
         run: anchor test
