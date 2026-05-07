@@ -1,0 +1,85 @@
+name: ci
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  build-test:
+    runs-on: ubuntu-latest
+    env:
+      CARGO_INCREMENTAL: 0
+      CARGO_TERM_COLOR: always
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust stable
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@v2
+
+      - name: Install Solana CLI 2.1.6
+        run: |
+          sh -c "$(curl -sSfL https://release.anza.xyz/v2.1.6/install)"
+          echo "$HOME/.local/share/solana/install/active_release/bin" >> $GITHUB_PATH
+          # cargo-build-sbf calls fs::read_dir(~/.cache/solana).unwrap() at startup
+          # (find_installed_platform_tools, sdk/cargo-build-sbf/src/main.rs:146).
+          # On a fresh runner the dir doesn't exist yet, so it panics before it
+          # can download platform-tools. Create it empty.
+          mkdir -p "$HOME/.cache/solana"
+          # AnchorProvider.env() reads ~/.config/solana/id.json (per Anchor.toml).
+          # Generate a throwaway keypair for the test runner.
+          mkdir -p "$HOME/.config/solana"
+          "$HOME/.local/share/solana/install/active_release/bin/solana-keygen" new \
+            --no-bip39-passphrase --silent -o "$HOME/.config/solana/id.json"
+
+      - name: Cache Solana platform tools
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/solana
+          key: solana-platform-tools-${{ runner.os }}-2.1.6
+
+      - name: Install Anchor CLI 1.0.0
+        run: |
+          cargo install --git https://github.com/coral-xyz/anchor avm --force
+          avm install 1.0.0
+          avm use 1.0.0
+          anchor --version
+
+      - name: Install surfpool (Anchor 1.0 default test validator)
+        run: |
+          mkdir -p "$HOME/.local/bin"
+          curl -sSfL "https://github.com/solana-foundation/surfpool/releases/latest/download/surfpool-linux-x64.tar.gz" \
+            | tar xz -C "$HOME/.local/bin"
+          chmod +x "$HOME/.local/bin/surfpool"
+          echo "$HOME/.local/bin" >> $GITHUB_PATH
+          "$HOME/.local/bin/surfpool" --version
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: "pnpm"
+
+      - name: Install JS deps
+        run: pnpm install --frozen-lockfile
+
+      - name: anchor build
+        env:
+          PROGRAM_KEYPAIR_JSON: ${{ secrets.PROGRAM_KEYPAIR_JSON }}
+        run: |
+          mkdir -p target/deploy
+          echo "$PROGRAM_KEYPAIR_JSON" > target/deploy/vesting-keypair.json
+          if [ ! -s target/deploy/vesting-keypair.json ]; then
+            echo "ERROR: keypair empty — update PROGRAM_KEYPAIR_JSON secret (Settings → Secrets → Actions)"
+            exit 1
+          fi
+          anchor build
+
+      - name: anchor test
+        run: anchor test
