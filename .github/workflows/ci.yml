@@ -69,12 +69,13 @@ jobs:
       - name: Install JS deps
         run: pnpm install --frozen-lockfile
 
-      - name: Restore committed program keypair
-        # Swatinem/rust-cache restores target/ from a prior run, which
-        # overwrites the committed target/deploy/vesting-keypair.json with
-        # a stale auto-generated one. Anchor 1.0 then errors on a program
-        # ID mismatch against declare_id!. Pin the keypair back to HEAD.
-        run: git checkout -- target/deploy/vesting-keypair.json
+      - name: Restore program keypair from secret
+        # The keypair is not committed (see .gitignore). Inject from the
+        # PROGRAM_KEYPAIR_JSON repository secret so anchor build sees the
+        # correct program ID (G6iaigUdi2btFwUc2N65twfxwA8Ew5uKKhKJ5RJa8wvu).
+        run: |
+          mkdir -p target/deploy
+          echo '${{ secrets.PROGRAM_KEYPAIR_JSON }}' > target/deploy/vesting-keypair.json
 
       - name: anchor build
         run: anchor build

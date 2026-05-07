@@ -68,6 +68,17 @@ git clone https://github.com/Ah-Riz/mancerxsuperteam-token-vesting.git
 cd mancerxsuperteam-token-vesting
 git checkout test      # Week 3 work — not yet merged to main
 pnpm install
+```
+
+`target/deploy/vesting-keypair.json` is **not committed** (security). Generate it once on a fresh clone:
+
+```bash
+solana-keygen new -o target/deploy/vesting-keypair.json --no-bip39-passphrase
+```
+
+> The program ID is already hardcoded in `Anchor.toml` and `programs/vesting/src/lib.rs` (`G6iaigUdi2btFwUc2N65twfxwA8Ew5uKKhKJ5RJa8wvu`). The keypair file is only needed locally to sign a redeploy — for normal build and test it isn't used.
+
+```bash
 anchor build           # produces target/idl/vesting.json + target/types/vesting.ts
 anchor test            # expected: 3 passing
 ```
@@ -80,7 +91,7 @@ Program is deployed at `G6iaigUdi2btFwUc2N65twfxwA8Ew5uKKhKJ5RJa8wvu` (slot 4605
 solana program show G6iaigUdi2btFwUc2N65twfxwA8Ew5uKKhKJ5RJa8wvu --url devnet
 ```
 
-To redeploy (keypair is committed — program ID stays stable):
+To redeploy (inject keypair from your local file — program ID stays stable):
 
 ```bash
 solana config set --url devnet
