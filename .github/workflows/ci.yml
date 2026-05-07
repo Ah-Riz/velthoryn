@@ -74,11 +74,9 @@ jobs:
           PROGRAM_KEYPAIR_JSON: ${{ secrets.PROGRAM_KEYPAIR_JSON }}
         run: |
           mkdir -p target/deploy
-          printf '%s' "$PROGRAM_KEYPAIR_JSON" > target/deploy/vesting-keypair.json
+          echo "$PROGRAM_KEYPAIR_JSON" | base64 -d > target/deploy/vesting-keypair.json
           if [ ! -s target/deploy/vesting-keypair.json ]; then
-            echo "ERROR: target/deploy/vesting-keypair.json is empty."
-            echo "Check that the PROGRAM_KEYPAIR_JSON secret is set in:"
-            echo "  Settings → Secrets and variables → Actions"
+            echo "ERROR: keypair empty — update PROGRAM_KEYPAIR_JSON secret (Settings → Secrets → Actions)"
             exit 1
           fi
           anchor build
