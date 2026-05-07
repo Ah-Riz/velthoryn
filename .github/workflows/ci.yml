@@ -73,9 +73,11 @@ jobs:
         # The keypair is not committed (see .gitignore). Inject from the
         # PROGRAM_KEYPAIR_JSON repository secret so anchor build sees the
         # correct program ID (G6iaigUdi2btFwUc2N65twfxwA8Ew5uKKhKJ5RJa8wvu).
+        env:
+          PROGRAM_KEYPAIR_JSON: ${{ secrets.PROGRAM_KEYPAIR_JSON }}
         run: |
           mkdir -p target/deploy
-          echo '${{ secrets.PROGRAM_KEYPAIR_JSON }}' > target/deploy/vesting-keypair.json
+          echo "$PROGRAM_KEYPAIR_JSON" > target/deploy/vesting-keypair.json
 
       - name: anchor build
         run: anchor build
