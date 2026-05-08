@@ -31,6 +31,12 @@ yarn.lock
 .env.*
 !.env.example
 
+# Claude Code
+.claude/
+
+# Research docs (private, not for GitHub)
+research-docs/
+
 # IDE / OS
 .idea/
 .vscode/*
