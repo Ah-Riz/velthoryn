@@ -4,15 +4,14 @@ Solana token-distribution protocol combining Merkle-tree compression with full v
 
 Built by Team 7 (Mancer x Superteam Scholarship).
 
-> **Build verified by @geral on 2026-05-06.** Clone-to-test in ~10 min on WSL/Ubuntu. See [Week 3 report](report-week3.md) for full verification log and friction points found.
+> **Setup time**: ~10 min from clone to a green test on a machine with Rust + Solana CLI + Anchor + Node already installed; ~30 min from a clean machine.
 
 ## Repo layout
 
 ```
 mancer-vesting/
 ├── programs/vesting/   # Anchor program (Rust)              — owner: Lana
-├── clients/ts/         # Off-chain Merkle tooling (TS)      — placeholder, see apps/web/src/lib/merkle/
-├── apps/web/           # Frontend dApp (Next.js 15)          — owner: Geral
+├── apps/web/           # Frontend dApp + Merkle tooling      — owner: Geral
 ├── tests/              # ts-mocha integration tests
 ├── .github/workflows/  # CI: anchor build + anchor test + lint
 ├── Anchor.toml
@@ -23,12 +22,11 @@ mancer-vesting/
 
 ## Ownership
 
-| Area                | Owner | Notes                                             |
-| ------------------- | ----- | ------------------------------------------------- |
-| `programs/vesting/` | Lana  | Anchor program, instructions, state, math         |
-| `clients/ts/`       | Lana  | Placeholder — Merkle helpers currently in `apps/web/src/lib/merkle/builder.ts` |
-| `apps/web/`         | Geral | Frontend, wallet adapter, Merkle builder, UX      |
-| Root configs, CI    | Joint | Workspace files, GitHub Actions                   |
+| Area                | Owner | Notes                                       |
+| ------------------- | ----- | ------------------------------------------- |
+| `programs/vesting/` | Lana  | Anchor program, instructions, state, math   |
+| `apps/web/`         | Geral | Frontend stack, wallet adapter, Merkle tooling |
+| Root configs, CI    | Joint | Workspace files, GitHub Actions             |
 
 ## Current status
 
