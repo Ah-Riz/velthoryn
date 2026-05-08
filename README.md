@@ -4,8 +4,6 @@ Solana token-distribution protocol combining Merkle-tree compression with full v
 
 Built by Team 7 (Mancer x Superteam Scholarship).
 
-> **Build verified by @geral on 2026-05-06.** Clone-to-devnet in ~20 min on WSL/Ubuntu. See [Week 3 report](report-week3.md) for full verification log and friction points found.
-
 > **Setup time**: ~10 min from clone to a green test on a machine with Rust + Solana CLI + Anchor + Node already installed; ~30 min from a clean machine.
 
 ## Repo layout
@@ -13,8 +11,7 @@ Built by Team 7 (Mancer x Superteam Scholarship).
 ```
 mancer-vesting/
 ├── programs/vesting/   # Anchor program (Rust)              — owner: Lana
-├── clients/ts/         # Off-chain Merkle tooling (TS)      — owner: Lana
-├── apps/web/           # Frontend dApp                       — owner: Geral
+├── apps/web/           # Frontend dApp + Merkle tooling      — owner: Geral
 ├── tests/              # ts-mocha integration tests
 ├── .github/workflows/  # CI: anchor build + anchor test
 ├── Anchor.toml
@@ -28,8 +25,7 @@ mancer-vesting/
 | Area                | Owner | Notes                                       |
 | ------------------- | ----- | ------------------------------------------- |
 | `programs/vesting/` | Lana  | Anchor program, instructions, state, math   |
-| `clients/ts/`       | Lana  | Leaf encoder, Merkle builder, proof helpers |
-| `apps/web/`         | Geral | Frontend stack, wallet adapter, UX          |
+| `apps/web/`         | Geral | Frontend stack, wallet adapter, Merkle tooling |
 | Root configs, CI    | Joint | Workspace files, GitHub Actions             |
 
 ## Architecture (Week 3 scaffold)
