@@ -31,7 +31,11 @@ mancer-vesting/
 
 ## Current status
 
-**Fully implemented.** All 12 instruction handlers (including `create_stream` and `withdraw` for single-recipient streams), schedule math (`vested`, `get_vested_amount`), and Merkle proof verification (`verify_merkle_proof`) are live with real logic. The program compiles, deploys, and passes 57 tests on devnet (56 pass, 1 gracefully skipped due to a devnet infrastructure limitation). State structs, error codes (31 variants), and events (9 types) are fully defined. `leaf_hash()` is byte-verified against the TS encoder.
+**Fully implemented and deployed to devnet.** All 12 instruction handlers (including `create_stream` and `withdraw` for single-recipient streams), schedule math (`vested`, `get_vested_amount`), and Merkle proof verification (`verify_merkle_proof`) are live with real logic. State structs, error codes (31 variants), and events (9 types) are fully defined. `leaf_hash()` is byte-verified against the TS encoder.
+
+**Test results:**
+- Local validator (`anchor test`): 57 passing, 6 known failures (4 setClock timing + 2 error-code mismatches — pending fix), 3 skipped (setClock not available)
+- Devnet (live): 44 passing, 12 stale-PDA failures (persistent state from prior runs), 8 skipped
 
 | Instruction          | Role                                                              |
 | -------------------- | ----------------------------------------------------------------- |
@@ -81,12 +85,12 @@ solana-keygen new -o target/deploy/vesting-keypair.json --no-bip39-passphrase
 
 ```bash
 anchor build           # produces target/idl/vesting.json + target/types/vesting.ts
-anchor test            # expected: 57 passing (56 pass + 1 graceful skip on devnet)
+anchor test            # local validator: 57 passing, 6 known failures (pending fix)
 ```
 
 ## Devnet
 
-Program is deployed at `G6iaigUdi2btFwUc2N65twfxwA8Ew5uKKhKJ5RJa8wvu`. The latest deployment uses a ~447KB allocation (the original deployment at slot 460511260 used 92KB).
+Program is deployed at `G6iaigUdi2btFwUc2N65twfxwA8Ew5uKKhKJ5RJa8wvu`. Latest upgrade at slot 461219566 (~447KB allocation). Tested on devnet: 44/56 tests pass (12 failures due to stale PDA state from prior runs — use `solana-test-validator --reset` for clean local runs).
 
 ```bash
 solana program show G6iaigUdi2btFwUc2N65twfxwA8Ew5uKKhKJ5RJa8wvu --url devnet

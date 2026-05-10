@@ -3,7 +3,7 @@
 This document describes the on-chain program at `programs/vesting/`. All instructions and math modules are **LIVE** and fully implemented.
 
 Program ID: `G6iaigUdi2btFwUc2N65twfxwA8Ew5uKKhKJ5RJa8wvu`
-Deployed: devnet (latest deployment uses ~447KB allocation; original deployment at slot 460511260). Keypair at `target/deploy/vesting-keypair.json`.
+Deployed: devnet (latest upgrade at slot 461219566, ~447KB allocation). Keypair at `target/deploy/vesting-keypair.json`.
 
 ## File map
 
@@ -151,4 +151,17 @@ The TS client library (`clients/ts/`) provides leaf encoding and Merkle tree con
 - `CampaignRecipient`, `PreparedCampaign` — types for campaign preparation
 - Golden vector gate verifies cross-language hash match
 
-Integration tests in `tests/` cover T1-T5 (core scenarios), T6-T25 (supplementary/error paths), T26-T41 (error paths), golden vector gate, and 10 security exploit tests -- 57 tests total. Run with `anchor test`.
+Integration tests in `tests/` cover T6-T55 (supplementary/error paths), golden vector gate, and 10 security exploit tests -- 63 tests total.
+
+**Test results (local validator):** 57 passing, 6 known failures (pending fix), 3 skipped.
+- T17/T18/T25/T55: `setClock` time-manipulation tests return wrong vested amounts (validator clock doesn't hold at set value)
+- T19: `withdraw_unvested` non-creator expects `Unauthorized` (6005) but gets different error
+- T48: over-claim expects `OverClaim` (6017) but gets different error code
+
+Run with `anchor test --provider.cluster localnet` or start a persistent validator:
+```bash
+solana-test-validator --reset --quiet &
+anchor program deploy --provider.cluster localnet target/deploy/vesting.so
+ANCHOR_PROVIDER_URL=http://localhost:8899 ANCHOR_WALLET=~/.config/solana/id.json \
+  pnpm exec ts-mocha -p ./tsconfig.json -t 1000000 'tests/**/*.spec.ts'
+```

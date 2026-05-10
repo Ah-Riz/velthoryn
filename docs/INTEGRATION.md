@@ -2,7 +2,7 @@
 
 Audience: Geral and anyone building against the on-chain program from TypeScript.
 
-> **Status:** All 12 instruction handlers are fully implemented with real logic. The program is deployed and tested on devnet with 57 passing tests (56 pass + 1 graceful skip). Merkle leaf hashing is live and byte-verified against the TS encoder.
+> **Status:** All 12 instruction handlers are fully implemented with real logic. The program is deployed on devnet (latest upgrade slot 461219566) and tested: 57/63 passing on local validator (6 known failures pending fix), 44/56 passing on devnet (12 stale-PDA failures). Merkle leaf hashing is live and byte-verified against the TS encoder.
 
 ## What you need
 
@@ -233,7 +233,7 @@ Field shapes in `programs/vesting/src/events.rs`.
 
 ## Devnet
 
-Program is deployed on devnet at `G6iaigUdi2btFwUc2N65twfxwA8Ew5uKKhKJ5RJa8wvu` (latest deployment uses ~447KB allocation; original deployment was at slot 460511260 with 92KB).
+Program is deployed on devnet at `G6iaigUdi2btFwUc2N65twfxwA8Ew5uKKhKJ5RJa8wvu` (latest upgrade slot 461219566, ~447KB allocation).
 
 ```bash
 solana config set --url devnet
