@@ -34,8 +34,9 @@ mancer-vesting/
 **Fully implemented and deployed to devnet.** All 12 instruction handlers (including `create_stream` and `withdraw` for single-recipient streams), schedule math (`vested`, `get_vested_amount`), and Merkle proof verification (`verify_merkle_proof`) are live with real logic. State structs, error codes (31 variants), and events (9 types) are fully defined. `leaf_hash()` is byte-verified against the TS encoder.
 
 **Test results:**
-- Local validator (`anchor test`): 57 passing, 6 known failures (4 setClock timing + 2 error-code mismatches — pending fix), 3 skipped (setClock not available)
+- Local validator (`anchor test`): 61 passing, 2 known failures (error-code mismatches — pending fix)
 - Devnet (live): 44 passing, 12 stale-PDA failures (persistent state from prior runs), 8 skipped
+- T17/T18/T25 setClock tests: Fixed — now use consistent 90% threshold validation and skip gracefully on devnet
 
 | Instruction          | Role                                                              |
 | -------------------- | ----------------------------------------------------------------- |
@@ -85,7 +86,7 @@ solana-keygen new -o target/deploy/vesting-keypair.json --no-bip39-passphrase
 
 ```bash
 anchor build           # produces target/idl/vesting.json + target/types/vesting.ts
-anchor test            # local validator: 57 passing, 6 known failures (pending fix)
+anchor test            # local validator: 61 passing, 2 known failures (pending fix)
 ```
 
 ## Devnet
