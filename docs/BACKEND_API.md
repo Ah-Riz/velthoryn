@@ -67,6 +67,8 @@ u64/i64 values use PostgreSQL `bigint` (native 64-bit). JSONB for proof storage 
 | `total_supply` | BIGINT NOT NULL | u64, native PostgreSQL bigint |
 | `total_claimed` | BIGINT NOT NULL DEFAULT 0 | Tracked from Claimed events |
 | `cancellable` | BOOLEAN NOT NULL DEFAULT false | |
+| `cancel_authority` | TEXT | Cancel authority pubkey (base58) or NULL |
+| `pause_authority` | TEXT | Pause authority pubkey (base58) or NULL |
 | `cancelled_at` | BIGINT | Unix timestamp or NULL |
 | `paused` | BOOLEAN NOT NULL DEFAULT false | |
 | `created_at` | BIGINT NOT NULL | Unix timestamp |

@@ -4,19 +4,25 @@ import {
   type Idl,
   BN,
 } from "@coral-xyz/anchor";
-import { Connection, PublicKey, type Signer } from "@solana/web3.js";
-
-// Replace with generated IDL from `anchor build`
-// import IDL from "./idl.json";
+import { Connection, PublicKey } from "@solana/web3.js";
+import type { WalletContextState } from "@solana/wallet-adapter-react";
+import IDL from "./idl.json";
 
 const PROGRAM_ID = new PublicKey(
   "G6iaigUdi2btFwUc2N65twfxwA8Ew5uKKhKJ5RJa8wvu",
 );
 
-export function getProvider(connection: Connection, wallet: Signer) {
+export function getProvider(
+  connection: Connection,
+  wallet: WalletContextState,
+): AnchorProvider {
   return new AnchorProvider(connection, wallet as never, {
     commitment: "confirmed",
   });
+}
+
+export function getProgram(provider: AnchorProvider): Program {
+  return new Program(IDL as Idl, provider);
 }
 
 export function derivePda(
@@ -29,4 +35,4 @@ export function derivePda(
   return PublicKey.findProgramAddressSync(seedBuffers, programId);
 }
 
-export { PROGRAM_ID, BN };
+export { PROGRAM_ID, BN, IDL };

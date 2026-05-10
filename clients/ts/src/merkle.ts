@@ -164,3 +164,7 @@ export function verifyProof(
   }
   return hash.equals(root);
 }
+
+export function proofAsArrays(proof: Buffer[]): number[][] {
+  return proof.map((buf) => Array.from(buf));
+}

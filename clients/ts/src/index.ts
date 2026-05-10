@@ -9,7 +9,7 @@ export {
 
 export type { VestingLeaf, ReleaseType as ReleaseTypeValue } from "./leaf";
 
-export { VestingMerkleTree, MAX_TREE_DEPTH, verifyProof } from "./merkle";
+export { VestingMerkleTree, MAX_TREE_DEPTH, verifyProof, proofAsArrays } from "./merkle";
 
 export {
   prepareCampaign,
