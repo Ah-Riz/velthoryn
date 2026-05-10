@@ -1,10 +1,10 @@
 # TDD — Mancer Vesting Protocol (Lana's Scope)
 
 **Author:** Lana — smart-contract / backend lead
-**Status:** Week 4 complete — all sections implemented and tested (12 instructions, 57 tests)
+**Status:** Week 4 complete — all sections implemented and tested (12 instructions, 63 tests). Deployed to devnet (slot 461219566). 57/63 passing on local validator (6 known failures pending fix).
 **Companion docs:** `docs/PRD_LANA.md`, `docs/SECURITY.md`, `docs/PROGRAM.md`
 
-This document is the implementation blueprint. All sections have been implemented and verified with 57 passing tests on devnet (20 supplementary, 5 core integration, 10 security exploit, 4 golden vector, plus 11 Rust unit tests).
+This document is the implementation blueprint. All sections have been implemented and verified with 63 tests (51 supplementary, 10 security exploit, 2 smoke, plus 4 golden vector and 11 Rust unit tests). Local validator: 57 passing, 6 known failures (4 setClock timing + 2 error-code mismatches), 3 skipped.
 
 ---
 
