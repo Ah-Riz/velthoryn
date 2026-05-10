@@ -5,18 +5,26 @@ use anchor_spl::token::{Mint, Token, TokenAccount, Transfer};
 use crate::errors::VestingError;
 use crate::events::Claimed;
 use crate::math::merkle::leaf_hash;
-use crate::math::merkle::verify_merkle_proof;
 use crate::math::schedule;
 use crate::state::{ClaimRecord, VestingLeaf, VestingTree};
 
+#[derive(AnchorSerialize, AnchorDeserialize, Clone, InitSpace)]
+pub struct WithdrawArgs {
+    pub release_type: u8,
+    pub start_time: i64,
+    pub cliff_time: i64,
+    pub end_time: i64,
+    pub milestone_idx: u8,
+}
+
 #[derive(Accounts)]
-#[instruction(leaf: VestingLeaf, _proof: Vec<[u8; 32]>)]
-pub struct Claim<'info> {
+pub struct Withdraw<'info> {
     #[account(mut)]
     pub beneficiary: Signer<'info>,
 
     #[account(
         mut,
+        constraint = vesting_tree.leaf_count == 1 @ VestingError::NotSingleStream,
         seeds = [b"tree",
                  vesting_tree.creator.as_ref(),
                  vesting_tree.mint.as_ref(),
@@ -59,12 +67,23 @@ pub struct Claim<'info> {
     pub system_program: Program<'info, System>,
 }
 
-pub fn handler(ctx: Context<Claim>, leaf: VestingLeaf, proof: Vec<[u8; 32]>) -> Result<()> {
+pub fn handler(ctx: Context<Withdraw>, args: WithdrawArgs) -> Result<()> {
     let tree = &ctx.accounts.vesting_tree;
     let tree_key = tree.key();
 
-    // Validation order per SECURITY.md section 2.3
     require!(!tree.paused, VestingError::CampaignPaused);
+
+    let leaf = VestingLeaf {
+        leaf_index: 0,
+        beneficiary: ctx.accounts.beneficiary.key(),
+        amount: tree.total_supply,
+        release_type: args.release_type,
+        start_time: args.start_time,
+        cliff_time: args.cliff_time,
+        end_time: args.end_time,
+        milestone_idx: args.milestone_idx,
+    };
+
     require!(
         ctx.accounts.beneficiary.key() == leaf.beneficiary,
         VestingError::UnauthorizedClaimer
@@ -73,15 +92,12 @@ pub fn handler(ctx: Context<Claim>, leaf: VestingLeaf, proof: Vec<[u8; 32]>) -> 
         leaf.start_time <= leaf.cliff_time && leaf.cliff_time <= leaf.end_time,
         VestingError::InvalidSchedule
     );
-    require!(leaf.release_type <= 2, VestingError::InvalidScheduleType);
+    require!(args.release_type <= 2, VestingError::InvalidScheduleType);
 
     let hash = leaf_hash(&leaf);
-    require!(
-        verify_merkle_proof(hash, &proof, leaf.leaf_index, tree.merkle_root),
-        VestingError::InvalidProof
-    );
+    require!(hash == tree.merkle_root, VestingError::InvalidProof);
 
-    // First-touch init of ClaimRecord (step 6 per SECURITY.md)
+    // First-touch init of ClaimRecord
     let cr = &mut ctx.accounts.claim_record;
     if cr.beneficiary == Pubkey::default() {
         cr.tree = tree_key;
@@ -92,7 +108,7 @@ pub fn handler(ctx: Context<Claim>, leaf: VestingLeaf, proof: Vec<[u8; 32]>) -> 
         cr.bump = ctx.bumps.claim_record;
     }
 
-    // Milestone guard (step 7 per SECURITY.md)
+    // Milestone guard
     if leaf.release_type == 2 {
         let byte_idx = leaf.milestone_idx as usize / 8;
         let bit_idx = leaf.milestone_idx as usize % 8;
@@ -174,7 +190,7 @@ pub fn handler(ctx: Context<Claim>, leaf: VestingLeaf, proof: Vec<[u8; 32]>) -> 
     emit!(Claimed {
         tree: tree_key,
         beneficiary: ctx.accounts.beneficiary.key(),
-        leaf_index: leaf.leaf_index,
+        leaf_index: 0,
         amount: claimable,
         total_claimed_by_user: cr.claimed_amount,
         total_claimed_overall: new_total,

@@ -1,25 +1,30 @@
 use anchor_lang::prelude::*;
 use anchor_spl::associated_token::AssociatedToken;
-use anchor_spl::token::{Mint, Token, TokenAccount};
+use anchor_spl::token::{Mint, Token, TokenAccount, Transfer};
 
 use crate::errors::VestingError;
-use crate::events::CampaignCreated;
-use crate::state::VestingTree;
+use crate::events::{CampaignCreated, CampaignFunded};
+use crate::math::merkle::leaf_hash;
+use crate::state::{VestingLeaf, VestingTree};
 
 #[derive(AnchorSerialize, AnchorDeserialize, Clone, InitSpace)]
-pub struct CreateCampaignArgs {
+pub struct CreateStreamArgs {
     pub campaign_id: u64,
-    pub merkle_root: [u8; 32],
-    pub leaf_count: u32,
-    pub total_supply: u64,
+    pub beneficiary: Pubkey,
+    pub amount: u64,
+    pub release_type: u8,
+    pub start_time: i64,
+    pub cliff_time: i64,
+    pub end_time: i64,
+    pub milestone_idx: u8,
     pub cancellable: bool,
     pub cancel_authority: Option<Pubkey>,
     pub pause_authority: Option<Pubkey>,
 }
 
 #[derive(Accounts)]
-#[instruction(args: CreateCampaignArgs)]
-pub struct CreateCampaign<'info> {
+#[instruction(args: CreateStreamArgs)]
+pub struct CreateStream<'info> {
     #[account(mut)]
     pub creator: Signer<'info>,
 
@@ -47,6 +52,13 @@ pub struct CreateCampaign<'info> {
     )]
     pub vault: Account<'info, TokenAccount>,
 
+    #[account(
+        mut,
+        constraint = source_ata.mint == mint.key() @ VestingError::MintMismatch,
+        constraint = source_ata.owner == creator.key() @ VestingError::Unauthorized,
+    )]
+    pub source_ata: Account<'info, TokenAccount>,
+
     pub mint: Account<'info, Mint>,
 
     pub token_program: Program<'info, Token>,
@@ -55,10 +67,13 @@ pub struct CreateCampaign<'info> {
     pub rent: Sysvar<'info, Rent>,
 }
 
-pub fn handler(ctx: Context<CreateCampaign>, args: CreateCampaignArgs) -> Result<()> {
-    require!(args.merkle_root != [0u8; 32], VestingError::EmptyRoot);
-    require!(args.leaf_count > 0, VestingError::EmptyCampaign);
-    require!(args.total_supply > 0, VestingError::ZeroAmount);
+pub fn handler(ctx: Context<CreateStream>, args: CreateStreamArgs) -> Result<()> {
+    require!(args.amount > 0, VestingError::ZeroAmount);
+    require!(
+        args.start_time <= args.cliff_time && args.cliff_time <= args.end_time,
+        VestingError::InvalidSchedule
+    );
+    require!(args.release_type <= 2, VestingError::InvalidScheduleType);
     if args.cancellable {
         require!(
             args.cancel_authority.is_some(),
@@ -66,15 +81,28 @@ pub fn handler(ctx: Context<CreateCampaign>, args: CreateCampaignArgs) -> Result
         );
     }
 
+    let leaf = VestingLeaf {
+        leaf_index: 0,
+        beneficiary: args.beneficiary,
+        amount: args.amount,
+        release_type: args.release_type,
+        start_time: args.start_time,
+        cliff_time: args.cliff_time,
+        end_time: args.end_time,
+        milestone_idx: args.milestone_idx,
+    };
+
+    let merkle_root = leaf_hash(&leaf);
+
     let tree = &mut ctx.accounts.vesting_tree;
     tree.creator = ctx.accounts.creator.key();
     tree.mint = ctx.accounts.mint.key();
     tree.vault = ctx.accounts.vault.key();
     tree.vault_authority = ctx.accounts.vault_authority.key();
     tree.campaign_id = args.campaign_id;
-    tree.merkle_root = args.merkle_root;
-    tree.leaf_count = args.leaf_count;
-    tree.total_supply = args.total_supply;
+    tree.merkle_root = merkle_root;
+    tree.leaf_count = 1;
+    tree.total_supply = args.amount;
     tree.total_claimed = 0;
     tree.cancellable = args.cancellable;
     tree.cancel_authority = args.cancel_authority;
@@ -88,9 +116,26 @@ pub fn handler(ctx: Context<CreateCampaign>, args: CreateCampaignArgs) -> Result
         tree: tree.key(),
         creator: tree.creator,
         mint: tree.mint,
-        total_supply: args.total_supply,
-        leaf_count: args.leaf_count,
+        total_supply: args.amount,
+        leaf_count: 1,
         cancellable: args.cancellable,
+    });
+
+    // Transfer tokens from creator to vault
+    let cpi_accounts = Transfer {
+        from: ctx.accounts.source_ata.to_account_info(),
+        to: ctx.accounts.vault.to_account_info(),
+        authority: ctx.accounts.creator.to_account_info(),
+    };
+    let cpi_ctx = CpiContext::new(ctx.accounts.token_program.key(), cpi_accounts);
+    anchor_spl::token::transfer(cpi_ctx, args.amount)?;
+
+    let vault_balance_after = ctx.accounts.vault.amount;
+
+    emit!(CampaignFunded {
+        tree: tree.key(),
+        amount: args.amount,
+        vault_balance_after,
     });
 
     Ok(())
