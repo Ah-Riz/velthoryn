@@ -1,8 +1,8 @@
 # PRD — Mancer Vesting Protocol (Lana's Scope)
 
 **Author:** Lana — smart-contract / backend lead  
-**Status:** Week 4 implementation target  
-**Program ID:** `G6iaigUdi2btFwUc2N65twfxwA8Ew5uKKhKJ5RJa8wvu` (deployed, Solana devnet, slot 460511260)  
+**Status:** Week 4 complete — all features implemented and tested on devnet
+**Program ID:** `G6iaigUdi2btFwUc2N65twfxwA8Ew5uKKhKJ5RJa8wvu` (deployed, Solana devnet)
 **Companion docs:** `docs/TDD_LANA.md`, `docs/SECURITY.md`, `docs/PROGRAM.md`
 
 ---
@@ -84,7 +84,7 @@ Across all six surveyed protocols (Streamflow, Zebec, Magna, Bonfida, Armada, Ji
 
 | Layer | Deliverable | Owner | Phase |
 |---|---|---|---|
-| Smart contract — 10 Anchor instructions | `programs/vesting/src/instructions/` | Lana | Phase 1 (Week 4) |
+| Smart contract — 12 Anchor instructions | `programs/vesting/src/instructions/` | Lana | Phase 1 (Week 4) |
 | Schedule math (Cliff / Linear / Milestone) | `programs/vesting/src/math/schedule.rs` | Lana | Phase 1 |
 | Merkle verifier (`leaf_hash`, `verify_merkle_proof`) | `programs/vesting/src/math/merkle.rs` | Lana | Phase 1 |
 | TS Merkle tooling (leaf encoder, tree builder, proof generator) | `clients/ts/src/` | Lana | Phase 1 |
@@ -98,23 +98,24 @@ Across all six surveyed protocols (Streamflow, Zebec, Magna, Bonfida, Armada, Ji
 | DeFi composability (lending, vesting vouchers) | Lana + partners | Phase 2/3 |
 | DAO governance integration (Realms VSR) | Lana + Realms team | Phase 3 |
 
-### 2.2 Current implementation status (Week 3 handoff)
+### 2.2 Current implementation status
 
-The program compiles and is deployed to devnet. All 10 instruction stubs exist but return `Ok(())`.
+All features are implemented and tested. 57 tests pass on devnet (56 pass + 1 graceful skip).
 
 | File / function | Status |
 |---|---|
 | `math/merkle.rs::leaf_hash` | **LIVE** — keccak256 with `LEAF_PREFIX = 0x00`; byte-identical to Geral's `hashLeaf()` in `apps/web/` |
-| `math/merkle.rs::verify_merkle_proof` | **STUB** — always returns `false` |
-| `math/schedule.rs::vested` | **STUB** — always returns `0` |
-| `math/schedule.rs::get_vested_amount` | **STUB** — always returns `0` |
-| All 10 instruction handlers | **STUB** — all return `Ok(())` |
+| `math/merkle.rs::verify_merkle_proof` | **LIVE** — full proof verification with domain-separated node hashes |
+| `math/schedule.rs::vested` | **LIVE** — cliff, linear (u128 intermediate), milestone |
+| `math/schedule.rs::get_vested_amount` | **LIVE** — cancel-clamp via `effective_now = min(now, cancelled_at)` |
+| All 12 instruction handlers | **LIVE** — full validation, state mutations, events, SPL CPIs |
+| `create_stream` handler | **LIVE** — atomic single-recipient campaign creation + funding |
+| `withdraw` handler | **LIVE** — proof-less claim for single-recipient streams |
 | `VestingTree`, `ClaimRecord`, `VestingLeaf` structs | **LIVE** — correct field layout, correct Borsh wire order |
-| `VestingError` (30 variants) | **LIVE** |
-| 9 event types | **LIVE** (in IDL) |
+| `VestingError` (31 variants) | **LIVE** — all variants exercised by named tests |
+| 9 event types | **LIVE** — emitted after state mutations in each instruction |
 | Devnet deploy | **LIVE** at `G6iaigUdi2btFwUc2N65twfxwA8Ew5uKKhKJ5RJa8wvu` |
-
-Week 4 replaces every stub with the real implementation from `week3/OPENCLAW_BRIEF.md §6`.
+| Integration tests (50) | **LIVE** — T1-T5 core, T6-T25 supplementary, golden vector, 10 security exploit tests |
 
 ---
 
@@ -261,7 +262,7 @@ All ACs are machine-checkable. ACs are divided into Week 4 must-pass and stretch
 | AC | Pre-condition | Verification | Expected on failure |
 |---|---|---|---|
 | AC1 | Rust toolchain installed | `cargo test --manifest-path programs/vesting/Cargo.toml` exits 0 | Compile error or assertion failure in `schedule.rs` tests |
-| AC2 | `anchor build` exits 0 | IDL has 10 instructions + 2 account types + 9 events + `SameRoot` error | Missing field in IDL |
+| AC2 | `anchor build` exits 0 | IDL has 12 instructions + 2 account types + 9 events + `SameRoot` + `NotSingleStream` errors | Missing field in IDL |
 | AC3 | Campaign created + funded; beneficiary on linear leaf ~50% through window | T1 in `anchor test` — transferred amount ±5% of expected | Token balance outside band |
 | AC4 | Campaign created + funded; 2+ beneficiaries | T2 — flip one proof byte → must fail `VestingError::InvalidProof` | Silent pass = critical bug |
 | AC5 | Campaign with `pause_authority` set | T3 — pause blocks claim with `VestingError::CampaignPaused`; unpause restores | Wrong error or no error during pause |

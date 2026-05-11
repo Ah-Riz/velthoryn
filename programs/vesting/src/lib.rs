@@ -23,6 +23,10 @@ pub mod vesting {
         instructions::create_campaign::handler(ctx, args)
     }
 
+    pub fn create_stream(ctx: Context<CreateStream>, args: CreateStreamArgs) -> Result<()> {
+        instructions::create_stream::handler(ctx, args)
+    }
+
     pub fn fund_campaign(ctx: Context<FundCampaign>, amount: u64) -> Result<()> {
         instructions::fund_campaign::handler(ctx, amount)
     }
@@ -45,6 +49,10 @@ pub mod vesting {
         new_leaf_count: u32,
     ) -> Result<()> {
         instructions::update_root::handler(ctx, new_root, new_leaf_count)
+    }
+
+    pub fn withdraw(ctx: Context<Withdraw>, args: WithdrawArgs) -> Result<()> {
+        instructions::withdraw::handler(ctx, args)
     }
 
     pub fn withdraw_unvested(ctx: Context<WithdrawUnvested>) -> Result<()> {

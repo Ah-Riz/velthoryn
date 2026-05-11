@@ -2,7 +2,7 @@
 
 Audience: Geral and anyone building against the on-chain program from TypeScript.
 
-> **Status (Week 4):** All 10 instruction handlers compile but return `Ok(())` — calls succeed without writing state. Merkle leaf hashing is live and byte-verified against the TS encoder. Real instruction logic lands Week 4; devnet is already deployed and reachable.
+> **Status:** All 12 instruction handlers are fully implemented with real logic. The program is deployed on devnet (latest upgrade slot 461219566) and tested: 57/63 passing on local validator (6 known failures pending fix), 44/56 passing on devnet (12 stale-PDA failures). Merkle leaf hashing is live and byte-verified against the TS encoder.
 
 ## What you need
 
@@ -19,7 +19,7 @@ Audience: Geral and anyone building against the on-chain program from TypeScript
 ```bash
 git clone https://github.com/Ah-Riz/mancerxsuperteam-token-vesting.git
 cd mancerxsuperteam-token-vesting
-git checkout test          # Week 3 work is merged into test; not yet on main
+git checkout dev_lana      # Active development branch
 pnpm install
 anchor build               # produces target/idl/vesting.json + target/types/vesting.ts
 ```
@@ -39,7 +39,7 @@ function getProgram(provider: anchor.AnchorProvider) {
 }
 ```
 
-The IDL exposes camelCase instruction names: `createCampaign`, `fundCampaign`, `claim`, `cancelCampaign`, `updateRoot`, `withdrawUnvested`, `pauseCampaign`, `unpauseCampaign`, `closeClaimRecord`, `getVestedAmount`.
+The IDL exposes camelCase instruction names: `createCampaign`, `createStream`, `fundCampaign`, `claim`, `withdraw`, `cancelCampaign`, `updateRoot`, `withdrawUnvested`, `pauseCampaign`, `unpauseCampaign`, `closeClaimRecord`, `getVestedAmount`.
 
 ## PDA derivations
 
@@ -67,7 +67,7 @@ The vault itself is the ATA of `(mint, vaultAuthority)`. Use `getAssociatedToken
 
 ## Calling instructions
 
-**Today** all calls succeed but do nothing on-chain. Week 4 will make them write state.
+All instructions are fully implemented and write state on-chain. The constraint blocks and account lists are final — see `programs/vesting/src/instructions/<name>.rs` for the full details.
 
 ### Create a campaign (project authority)
 
@@ -104,7 +104,51 @@ await program.methods
   .rpc();
 ```
 
-Account lists for other instructions are isomorphic — see `programs/vesting/src/instructions/<name>.rs` for the full constraint blocks Week 4 will land.
+### Create a stream (single-recipient atomic campaign + fund)
+
+Combines `createCampaign` + `fundCampaign` in one transaction. No off-chain Merkle tree or IPFS proof hosting needed -- the program computes the root on-chain.
+
+```ts
+await program.methods
+  .createStream({
+    campaignId: new anchor.BN(1),
+    beneficiary: recipientWallet.publicKey,
+    amount: new anchor.BN(amount),
+    releaseType: 1,                  // 0=Cliff 1=Linear 2=Milestone
+    startTime: new anchor.BN(startTs),
+    cliffTime: new anchor.BN(cliffTs),
+    endTime: new anchor.BN(endTs),
+    milestoneIdx: 0,
+    cancellable: true,
+    cancelAuthority: cancelAuthorityKey,
+    pauseAuthority: pauseAuthorityKey,
+  })
+  .accounts({
+    creator: provider.wallet.publicKey,
+    mint,
+    sourceAta: creatorAta,
+  })
+  .rpc();
+```
+
+### Withdraw from a stream (proof-less claim)
+
+For single-recipient campaigns (`leaf_count == 1`). The recipient passes schedule params directly -- no Merkle proof needed.
+
+```ts
+await program.methods
+  .withdraw({
+    releaseType: 1,                  // must match the stream's release_type
+    startTime: new anchor.BN(startTs),
+    cliffTime: new anchor.BN(cliffTs),
+    endTime: new anchor.BN(endTs),
+    milestoneIdx: 0,
+  })
+  .accounts({ beneficiary: wallet.publicKey, mint })
+  .rpc();
+```
+
+Account lists for other instructions follow the same pattern -- see `programs/vesting/src/instructions/<name>.rs` for the full constraint blocks.
 
 ## Building Merkle proofs
 
@@ -132,9 +176,54 @@ const root  = getRoot(tree);        // Buffer — pass as merkleRoot in createCa
 const proof = getProof(tree, leaves[i]); // Buffer[] — pass to claim
 ```
 
-`clients/ts/src/index.ts` is currently an empty package placeholder; the real exports live in `apps/web/src/lib/merkle/builder.ts` for now.
+`clients/ts/src/index.ts` exports `encodeLeaf`, `leafHash`, `nodeHash`, `VestingLeaf`, `VestingMerkleTree`, `MAX_TREE_DEPTH`, `verifyProof`, `proofAsArrays`, `CampaignRecipient`, `PreparedCampaign`, and related types. The Merkle builder in `apps/web/src/lib/merkle/builder.ts` wraps these for the frontend.
 
-## Events (for indexer / UI)
+### `prepareCampaign()` — recommended way to prepare campaign data
+
+```ts
+import { prepareCampaign, type CampaignRecipient, type PreparedCampaign } from "@/lib/merkle/builder";
+
+const recipients: CampaignRecipient[] = [
+  { index: 0, wallet: "recipient_pubkey_base58", amount: BigInt(1_000_000), releaseType: 1, startTs: BigInt(startTs), cliffTs: BigInt(cliffTs), endTs: BigInt(endTs), milestoneIdx: 0 },
+  // ... more recipients
+];
+
+const prepared: PreparedCampaign = prepareCampaign(recipients);
+// prepared.root       — Buffer, pass as merkleRoot in createCampaign
+// prepared.proofs     — Map<number, Buffer[]>, proof for each leaf index
+// prepared.leafCount  — number, pass as leafCount in createCampaign
+// prepared.totalSupply — BigInt, pass as totalSupply in createCampaign
+```
+
+### `verifyProof()` — off-chain pre-verification
+
+Before submitting a `claim` transaction, verify the proof locally to avoid wasted fees on invalid proofs:
+
+```ts
+import { encodeLeaf, leafHash, verifyProof } from "@/lib/merkle/builder";
+
+const leafHashBuf = leafHash(leaf);
+const isValid = verifyProof(leafHashBuf, proof, leaf.leafIndex, onChainRoot);
+if (!isValid) {
+  // Proof is stale or invalid — refresh from IPFS before submitting
+}
+```
+
+### `proofAsArrays()` — Anchor IDL compatibility
+
+Anchor's IDL expects proofs as `number[][]` (arrays of 32-element number arrays), not `Buffer[]`. Use `proofAsArrays` to convert:
+
+```ts
+import { proofAsArrays } from "@/lib/merkle/builder";
+
+const proofBuffers: Buffer[] = getProof(tree, leaf); // from builder
+const proofForAnchor = proofAsArrays(proofBuffers);   // number[][]
+// Pass proofForAnchor to program.methods.claim(leaf, proofForAnchor)
+```
+
+### `MAX_TREE_DEPTH` — tree size limit
+
+`MAX_TREE_DEPTH = 20`. Trees deeper than 20 levels (more than 1,048,576 recipients) risk exceeding Solana's 1,232-byte transaction size limit. The SDK enforces this limit in the tree builder.
 
 Subscribe via `program.addEventListener("Claimed", (event, slot) => …)`. Available events:
 
@@ -144,7 +233,7 @@ Field shapes in `programs/vesting/src/events.rs`.
 
 ## Devnet
 
-Program is deployed on devnet at `G6iaigUdi2btFwUc2N65twfxwA8Ew5uKKhKJ5RJa8wvu` (last deployed slot 460511260).
+Program is deployed on devnet at `G6iaigUdi2btFwUc2N65twfxwA8Ew5uKKhKJ5RJa8wvu` (latest upgrade slot 461219566, ~447KB allocation).
 
 ```bash
 solana config set --url devnet

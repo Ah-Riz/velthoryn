@@ -15,8 +15,8 @@ vesting = "G6iaigUdi2btFwUc2N65twfxwA8Ew5uKKhKJ5RJa8wvu"
 url = "https://api.apr.dev"
 
 [provider]
-cluster = "localnet"
+cluster = "devnet"
 wallet = "~/.config/solana/id.json"
 
 [scripts]
-test = "pnpm exec ts-mocha -p ./tsconfig.json -t 1000000 tests/**/*.ts"
+test = "pnpm exec ts-mocha -p ./tsconfig.json -t 1000000 'tests/**/*.spec.ts'"

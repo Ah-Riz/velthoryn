@@ -1,6 +1,6 @@
 import { MerkleTree } from "merkletreejs";
 import keccak256 from "keccak256";
-import { decode as bs58decode } from "bs58";
+import bs58 from "bs58";
 
 // Anti second-preimage attack: same byte tags as Jito's distributor
 // Ref: research-week2.md §6.3
@@ -24,7 +24,7 @@ export function encodeLeaf(leaf: VestingLeaf): Buffer {
   const buf = Buffer.alloc(70);
 
   buf.writeUInt32LE(leaf.leafIndex, 0);
-  Buffer.from(bs58decode(leaf.beneficiary)).copy(buf, 4);
+  Buffer.from(bs58.decode(leaf.beneficiary)).copy(buf, 4);
   buf.writeBigUInt64LE(leaf.amount, 36);
   buf.writeUInt8(leaf.releaseType, 44);
   buf.writeBigInt64LE(leaf.startTs, 45);

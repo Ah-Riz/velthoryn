@@ -64,4 +64,6 @@ pub enum VestingError {
 
     #[msg("ClaimRecord cannot be closed yet (not fully claimed and grace period active)")]
     CannotClose,
+    #[msg("This instruction only works on single-recipient streams")]
+    NotSingleStream,
 }

@@ -2,7 +2,7 @@ name: Lint
 
 on:
   push:
-    branches: [main, dev_geral]
+    branches: [main, dev_geral, dev_lana]
   pull_request:
     branches: [main]
 
@@ -33,3 +33,15 @@ jobs:
           -A unused_imports
           -A ambiguous_glob_reexports
           -A clippy::diverging_sub_expression
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: "pnpm"
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: Next.js lint
+        run: cd apps/web && pnpm lint

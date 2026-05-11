@@ -83,3 +83,36 @@ jobs:
 
       - name: anchor test
         run: anchor test
+
+  # ── Web backend: vitest (zero secrets, all mocked) ────────────────────
+
+  web-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: "pnpm"
+      - run: pnpm install --frozen-lockfile
+      - run: cd apps/web && pnpm test
+
+  # ── Web backend: next build (dummy env vars, no secrets) ──────────────
+
+  web-build:
+    runs-on: ubuntu-latest
+    needs: web-test
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: "pnpm"
+      - run: pnpm install --frozen-lockfile
+      - run: cd apps/web && pnpm build
+        env:
+          DATABASE_URL: "postgresql://ci:ci@localhost:5432/ci"
+          NEXT_PUBLIC_RPC_ENDPOINT: "https://api.devnet.solana.com"
+          ADMIN_API_KEY: "ci-test-key"

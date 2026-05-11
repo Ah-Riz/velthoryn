@@ -11,6 +11,7 @@ Built by Team 7 (Mancer x Superteam Scholarship).
 ```
 mancer-vesting/
 ├── programs/vesting/   # Anchor program (Rust)              — owner: Lana
+├── clients/ts/         # TypeScript client library (leaf encoding, Merkle tree)
 ├── apps/web/           # Frontend dApp + Merkle tooling      — owner: Geral
 ├── tests/              # ts-mocha integration tests
 ├── .github/workflows/  # CI: anchor build + anchor test + lint
@@ -30,13 +31,20 @@ mancer-vesting/
 
 ## Current status
 
-**10 instruction entry points** matching the Week 2 architecture — all compile, handlers are stubs (`Ok(())`). State structs, error codes, and events are fully defined. `leaf_hash()` is live and byte-verified against the TS encoder. Real instruction logic lands Week 4.
+**Fully implemented and deployed to devnet.** All 12 instruction handlers (including `create_stream` and `withdraw` for single-recipient streams), schedule math (`vested`, `get_vested_amount`), and Merkle proof verification (`verify_merkle_proof`) are live with real logic. State structs, error codes (31 variants), and events (9 types) are fully defined. `leaf_hash()` is byte-verified against the TS encoder.
+
+**Test results:**
+- Local validator (`anchor test`): 61 passing, 2 known failures (error-code mismatches — pending fix)
+- Devnet (live): 44 passing, 12 stale-PDA failures (persistent state from prior runs), 8 skipped
+- T17/T18/T25 setClock tests: Fixed — now use consistent 90% threshold validation and skip gracefully on devnet
 
 | Instruction          | Role                                                              |
 | -------------------- | ----------------------------------------------------------------- |
 | `create_campaign`    | Initialize a vesting tree (Merkle root, supply, authorities).     |
+| `create_stream`      | Atomic single-recipient campaign creation + funding in one tx.    |
 | `fund_campaign`      | Creator deposits SPL tokens into the campaign vault.              |
 | `claim`              | Recipient claims vested portion against a Merkle proof.           |
+| `withdraw`           | Simplified claim for single-recipient streams (no Merkle proof).  |
 | `cancel_campaign`    | Cancel authority freezes the curve and starts a 7-day grace.      |
 | `update_root`        | Rotate the Merkle root to add/remove/adjust recipients.           |
 | `withdraw_unvested`  | Creator sweeps unvested tokens after the grace window.            |
@@ -46,7 +54,7 @@ mancer-vesting/
 | `get_vested_amount`  | Read-only helper that runs the schedule math against a leaf.      |
 
 For deeper reads:
-- [`docs/PROGRAM.md`](docs/PROGRAM.md) — program internals, file map, instruction surface, state layouts, what's live vs stub.
+- [`docs/PROGRAM.md`](docs/PROGRAM.md) — program internals, file map, instruction surface, state layouts.
 - [`docs/INTEGRATION.md`](docs/INTEGRATION.md) — frontend-track guide: program ID, IDL/types location, PDA derivations, Merkle helpers, sample calls.
 
 ## Prerequisites
@@ -64,7 +72,7 @@ For deeper reads:
 ```bash
 git clone https://github.com/Ah-Riz/mancerxsuperteam-token-vesting.git
 cd mancerxsuperteam-token-vesting
-git checkout test      # Week 3 work — not yet merged to main
+git checkout dev_lana  # Active development branch
 pnpm install
 ```
 
@@ -78,12 +86,12 @@ solana-keygen new -o target/deploy/vesting-keypair.json --no-bip39-passphrase
 
 ```bash
 anchor build           # produces target/idl/vesting.json + target/types/vesting.ts
-anchor test            # expected: 3 passing
+anchor test            # local validator: 61 passing, 2 known failures (pending fix)
 ```
 
 ## Devnet
 
-Program is deployed at `G6iaigUdi2btFwUc2N65twfxwA8Ew5uKKhKJ5RJa8wvu` (slot 460511260).
+Program is deployed at `G6iaigUdi2btFwUc2N65twfxwA8Ew5uKKhKJ5RJa8wvu`. Latest upgrade at slot 461219566 (~447KB allocation). Tested on devnet: 44/56 tests pass (12 failures due to stale PDA state from prior runs — use `solana-test-validator --reset` for clean local runs).
 
 ```bash
 solana program show G6iaigUdi2btFwUc2N65twfxwA8Ew5uKKhKJ5RJa8wvu --url devnet

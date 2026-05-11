@@ -1,17 +1,17 @@
 # Vesting Program — Internals
 
-This document describes the on-chain program at `programs/vesting/`. Items marked **STUB** return `Ok(())` (or `0` / `false`) — shape matches the Week 2 architecture, behaviour does not yet. Items marked **LIVE** are fully implemented.
+This document describes the on-chain program at `programs/vesting/`. All instructions and math modules are **LIVE** and fully implemented.
 
 Program ID: `G6iaigUdi2btFwUc2N65twfxwA8Ew5uKKhKJ5RJa8wvu`
-Deployed: devnet (slot 460511260). Keypair at `target/deploy/vesting-keypair.json`.
+Deployed: devnet (latest upgrade at slot 461219566, ~447KB allocation). Keypair at `target/deploy/vesting-keypair.json`.
 
 ## File map
 
 ```
 programs/vesting/src/
-├── lib.rs                  # #[program] dispatcher — wires the 10 entry points
-├── constants.rs            # GRACE_PERIOD_SECS, MAX_MILESTONES, LEAF_PREFIX, NODE_PREFIX
-├── errors.rs               # VestingError enum (30 variants, full set per architecture)
+├── lib.rs                  # #[program] dispatcher — wires the 12 entry points
+├── constants.rs            # GRACE_PERIOD_SECS
+├── errors.rs               # VestingError enum (31 variants, full set per architecture)
 ├── events.rs               # 9 event types (CampaignCreated, Claimed, RootUpdated, …)
 ├── state/
 │   ├── mod.rs              # re-exports
@@ -20,28 +20,32 @@ programs/vesting/src/
 │   └── leaf.rs             # VestingLeaf — Borsh struct, NOT an account (lives in Merkle tree)
 ├── math/
 │   ├── mod.rs              # re-exports
-│   ├── schedule.rs         # vested(), get_vested_amount() — STUB: returns 0
-│   └── merkle.rs           # leaf_hash() — LIVE; verify_merkle_proof() — STUB: returns false
+│   ├── schedule.rs         # vested(), get_vested_amount() — LIVE
+│   └── merkle.rs           # leaf_hash(), verify_merkle_proof() — LIVE
 └── instructions/
     ├── mod.rs              # re-exports
-    ├── create_campaign.rs  # STUB
-    ├── fund_campaign.rs    # STUB
-    ├── claim.rs            # STUB
-    ├── cancel_campaign.rs  # STUB
-    ├── update_root.rs      # STUB
-    ├── withdraw_unvested.rs# STUB
-    ├── pause_campaign.rs   # STUB (exposes pause_handler + unpause_handler)
-    ├── close_claim_record.rs # STUB
-    └── get_vested_amount.rs  # STUB (returns 0)
+    ├── create_campaign.rs  # LIVE
+    ├── create_stream.rs    # LIVE — atomic single-recipient campaign + fund
+    ├── fund_campaign.rs    # LIVE
+    ├── claim.rs            # LIVE
+    ├── withdraw.rs         # LIVE — simplified claim for single-recipient streams
+    ├── cancel_campaign.rs  # LIVE
+    ├── update_root.rs      # LIVE
+    ├── withdraw_unvested.rs# LIVE
+    ├── pause_campaign.rs   # LIVE (exposes pause_handler + unpause_handler)
+    ├── close_claim_record.rs # LIVE
+    └── get_vested_amount.rs  # LIVE (view function)
 ```
 
 ## Instruction surface
 
-| Entry point          | Args                                                     | Role (Week 4 target) |
+| Entry point          | Args                                                     | Role |
 | -------------------- | -------------------------------------------------------- | -------------------- |
 | `create_campaign`    | `CreateCampaignArgs`                                     | Initialize a `VestingTree` PDA + token vault. Validates root, leaf_count, total_supply, cancel_authority. |
+| `create_stream`      | `CreateStreamArgs`                                       | Atomic single-recipient campaign creation + funding in one transaction. Computes Merkle root on-chain for a single-leaf tree. |
 | `fund_campaign`      | `amount: u64`                                            | Transfer SPL tokens from creator into the vault, capped at `total_supply`. |
 | `claim`              | `leaf: VestingLeaf, proof: Vec<[u8; 32]>`                | Verify proof against current root, run schedule math, transfer vested delta to beneficiary, update `ClaimRecord`. |
+| `withdraw`           | `WithdrawArgs`                                           | Simplified claim for single-recipient streams (leaf_count == 1). Reconstructs the leaf on-chain and verifies `leaf_hash == merkle_root` — no Merkle proof needed. |
 | `cancel_campaign`    | —                                                        | Cancel-authority sets `cancelled_at = now`. Starts the 7-day grace clock. |
 | `update_root`        | `new_root: [u8; 32], new_leaf_count: u32`                | Cancel-authority rotates the Merkle root (per-recipient clawback). |
 | `withdraw_unvested`  | —                                                        | After grace, creator sweeps `vault_balance − vested_total_at_cancel`. |
@@ -109,12 +113,13 @@ Total: **70 bytes** Borsh LE. **Field order is the wire order** — the TS encod
 
 ## Errors
 
-`VestingError` (30 variants) covers every checked condition. Read `programs/vesting/src/errors.rs` for the full list. Notable ones:
+`VestingError` (31 variants) covers every checked condition. Read `programs/vesting/src/errors.rs` for the full list. Notable ones:
 
 - `EmptyRoot`, `EmptyCampaign`, `ZeroAmount` — guard `create_campaign` args.
 - `InvalidProof`, `NothingToClaim`, `MilestoneAlreadyClaimed` — claim-path failures.
 - `CampaignPaused`, `CampaignCancelled`, `AlreadyCancelled` — state-toggle guards.
 - `GracePeriodActive`, `NotCancelled` — gate `withdraw_unvested`.
+- `NotSingleStream` — gates `withdraw` to single-recipient streams only.
 
 ## Events
 
@@ -122,24 +127,41 @@ Indexers watch these (`events.rs`): `CampaignCreated`, `CampaignFunded`, `Claime
 
 ## Math
 
-### `math::merkle` — LIVE / partial
+### `math::merkle` — LIVE
 
 `leaf_hash(leaf)` — **LIVE**. Computes `keccak256([LEAF_PREFIX] ++ borsh(leaf))` using `solana_keccak_hasher::hashv`. Byte-identical to the TS `hashLeaf()` in `apps/web/src/lib/merkle/builder.ts`.
 
-`verify_merkle_proof(leaf_hash, proof, index, root)` — **STUB** (returns `false`). Will walk left/right siblings driven by `index`'s low bit, prefixing each node hash with `NODE_PREFIX`.
+`verify_merkle_proof(leaf_hash, proof, index, root)` — **LIVE**. Walks left/right siblings driven by `index`'s low bit, prefixing each node hash with `NODE_PREFIX`.
 
-### `math::schedule` — STUB
+### `math::schedule` — LIVE
 
-`vested(leaf, now)` — returns `0`. Will compute Cliff (binary), Linear (proportional, `u128` multiply guarding overflow), or Milestone (binary by `cliff_time`).
+`vested(leaf, now)` — **LIVE**. Computes Cliff (binary), Linear (proportional, `u128` multiply guarding overflow), or Milestone (binary by `cliff_time`).
 
-`get_vested_amount(leaf, cancelled_at, now)` — returns `0`. Will clamp `now` against `cancelled_at` so post-cancel `claim` calls see a frozen curve.
+`get_vested_amount(leaf, cancelled_at, now)` — **LIVE**. Clamps `now` against `cancelled_at` so post-cancel `claim` calls see a frozen curve.
 
-## Where Week 4 picks up
+## TS Client & Integration Tests
 
-For each instruction:
-1. Replace the minimal `Accounts` block (currently `Signer + Program<System>`) with the full constraint block from `OPENCLAW_BRIEF.md` §6.15+.
-2. Replace `Ok(())` with the real handler body.
-3. Implement `verify_merkle_proof` and `math::schedule::vested` / `get_vested_amount`.
-4. For `claim`, wire `crate::math::{schedule, merkle}`.
+The TS client library (`clients/ts/`) provides leaf encoding and Merkle tree construction:
+- `encodeLeaf`, `leafHash`, `nodeHash` — byte-identical to on-chain Rust
+- `VestingMerkleTree` — builds Merkle trees with index-based proofs
+- `MAX_TREE_DEPTH` — constant (20), maximum recommended tree depth
+- `verifyProof()` — standalone proof verification for off-chain pre-verification
+- `proofAsArrays()` — converts Buffer[] proofs to number[][] for Anchor IDL compatibility
+- `prepareCampaign()` — recommended way to prepare campaign data (builds tree, returns root + proof set)
+- `CampaignRecipient`, `PreparedCampaign` — types for campaign preparation
+- Golden vector gate verifies cross-language hash match
 
-For tests, expand `tests/vesting.spec.ts` using integration scenarios from the brief §10. The TS Merkle helpers are already real (`apps/web/src/lib/merkle/builder.ts`) — use them in tests directly or wait for `clients/ts/` to re-export them.
+Integration tests in `tests/` cover T6-T55 (supplementary/error paths), golden vector gate, and 10 security exploit tests -- 63 tests total.
+
+**Test results (local validator):** 57 passing, 6 known failures (pending fix), 3 skipped.
+- T17/T18/T25/T55: `setClock` time-manipulation tests return wrong vested amounts (validator clock doesn't hold at set value)
+- T19: `withdraw_unvested` non-creator expects `Unauthorized` (6005) but gets different error
+- T48: over-claim expects `OverClaim` (6017) but gets different error code
+
+Run with `anchor test --provider.cluster localnet` or start a persistent validator:
+```bash
+solana-test-validator --reset --quiet &
+anchor program deploy --provider.cluster localnet target/deploy/vesting.so
+ANCHOR_PROVIDER_URL=http://localhost:8899 ANCHOR_WALLET=~/.config/solana/id.json \
+  pnpm exec ts-mocha -p ./tsconfig.json -t 1000000 'tests/**/*.spec.ts'
+```

@@ -1,9 +1,9 @@
 # PDD — Mancer Vesting Protocol
 
 **Author:** Lana — smart-contract / backend lead  
-**Status:** Week 4 reference  
-**Date:** 2026-05-08  
-**Program ID:** `G6iaigUdi2btFwUc2N65twfxwA8Ew5uKKhKJ5RJa8wvu` (deployed, Solana devnet, slot 460511260)  
+**Status:** Week 4 complete — all features implemented and tested on devnet
+**Date:** 2026-05-08
+**Program ID:** `G6iaigUdi2btFwUc2N65twfxwA8Ew5uKKhKJ5RJa8wvu` (deployed, Solana devnet)
 **Framework:** Anchor 1.0.0
 
 **Companion docs:**
@@ -36,7 +36,7 @@ Three principles govern every design decision in this protocol:
 ### §1.3 Scope
 
 **In scope (Phase 1):**
-- 10 instructions: `create_campaign`, `fund_campaign`, `claim`, `cancel_campaign`, `update_root`, `withdraw_unvested`, `pause_campaign`, `unpause_campaign`, `close_claim_record`, `get_vested_amount`
+- 12 instructions: `create_campaign`, `create_stream`, `fund_campaign`, `claim`, `withdraw`, `cancel_campaign`, `update_root`, `withdraw_unvested`, `pause_campaign`, `unpause_campaign`, `close_claim_record`, `get_vested_amount`
 - 3 schedule types: cliff (release_type=0), linear (release_type=1), milestone (release_type=2)
 - Root rotation with cancel_authority gating
 - Cancellation with 7-day grace period and unvested-token sweep
@@ -279,7 +279,7 @@ The `VestingLeaf` is NOT an on-chain account. It is a 70-byte Borsh little-endia
 | `milestone_idx` | `u8` | 69 | 1 | Index into ClaimRecord.milestone_bitmap; only meaningful for release_type=2 |
 | **Total** | | | **70** | |
 
-**Schedule validation** (`InvalidSchedule`, error 6011): The program enforces `start_time <= cliff_time <= end_time` on every `claim`. Leaf data supplied by the claimant is untrusted until the Merkle proof verifies; the schedule check runs after proof verification.
+**Schedule validation** (`InvalidSchedule`, error 6011): The program enforces `start_time <= cliff_time <= end_time` on every `claim`. Leaf data supplied by the claimant is untrusted until the Merkle proof verifies; the schedule check runs before proof verification.
 
 **Canonical Borsh LE** means integers are little-endian and no padding bytes are inserted between fields. The off-chain TypeScript serializer must match this layout exactly. See `TDD_LANA.md §4` for the golden-vector test requirement.
 
@@ -1156,7 +1156,7 @@ Transfer fees in Token-2022 extensions cause the vault-to-beneficiary transfer t
 | proptest / cargo-fuzz fuzzing harness | CI integration | Property-based tests for schedule math edge cases; fuzzing of Borsh deserialization paths |
 | Lending protocol integration | DeFi partner specification | Uses `get_vested_amount` CPI; requires collateral accounting design on lender side |
 | DAO governance — Realms VSR plugin | Realms VSR plugin spec | Weight votes by `get_vested_amount`; requires VSR plugin development outside this program |
-| Mainnet deployment | Security audit completion | Audit scope: all 10 instructions, Merkle implementation, CEI order, bump caching |
+| Mainnet deployment | Security audit completion | Audit scope: all 12 instructions, Merkle implementation, CEI order, bump caching |
 
 ---
 
@@ -1211,9 +1211,8 @@ Transfer fees in Token-2022 extensions cause the vault-to-beneficiary transfer t
 | Constant | Value | Source |
 |---|---|---|
 | GRACE_PERIOD_SECS | 604,800 (7 days) | `constants.rs` |
-| MAX_MILESTONES | 255 | `constants.rs` |
-| LEAF_PREFIX | 0x00 | `constants.rs` |
-| NODE_PREFIX | 0x01 | `constants.rs` |
+| LEAF_PREFIX | 0x00 | `math/merkle.rs` |
+| NODE_PREFIX | 0x01 | `math/merkle.rs` |
 | VestingTree INIT_SPACE | 274 bytes (total: 282 with discriminator) | `state/vesting_tree.rs` |
 | ClaimRecord INIT_SPACE | 113 bytes (total: 121 with discriminator) | `state/claim_record.rs` |
 | VestingLeaf serialized size | 70 bytes (Borsh LE) | `state/leaf.rs` |
@@ -1221,7 +1220,7 @@ Transfer fees in Token-2022 extensions cause the vault-to-beneficiary transfer t
 | Creator setup cost | ~0.005 SOL (fixed, any N) | `PRD_LANA.md §NFR-1` |
 | Compute budget (typical claim) | < 200,000 CU | `PRD_LANA.md §NFR-2` |
 | Program ID | G6iaigUdi2btFwUc2N65twfxwA8Ew5uKKhKJ5RJa8wvu | `Anchor.toml`, `lib.rs` |
-| Network | Solana devnet, slot 460511260 | Deployment record |
+| Network | Solana devnet (latest deployment uses 400KB allocation) | Deployment record |
 | Anchor version | 1.0.0 | `Cargo.toml` |
 
 ---
