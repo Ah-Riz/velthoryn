@@ -1,4 +1,4 @@
-# Security Design — Mancer Vesting Protocol
+# Security Design — Velthoryn Protocol
 
 **Author:** Lana — smart-contract / backend lead
 **Status:** Week 4 complete — all items implemented and tested on devnet (12 instructions, 31 error variants)

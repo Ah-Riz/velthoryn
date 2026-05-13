@@ -4,7 +4,7 @@
 
 ## Overview
 
-Mancer's vesting program offers two instruction paths for setting up token distributions. Both produce the same on-chain `VestingTree` account, but serve different scales and use cases.
+Velthoryn's vesting program offers two instruction paths for setting up token distributions. Both produce the same on-chain `VestingTree` account, but serve different scales and use cases.
 
 ## Feature Comparison
 

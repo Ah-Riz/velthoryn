@@ -1,15 +1,15 @@
-# Mancer Vesting
+# Velthoryn
 
 Solana token-distribution protocol combining Merkle-tree compression with full vesting (cliff / linear / milestone), per-recipient clawback via root rotation, and a 7-day campaign-wide grace clawback.
 
-Built by Team 7 (Mancer x Superteam Scholarship).
+Built by Team 7 (Velthoryn x Superteam Scholarship).
 
 > **Setup time**: ~10 min from clone to a green test on a machine with Rust + Solana CLI + Anchor + Node already installed; ~30 min from a clean machine.
 
 ## Repo layout
 
 ```
-mancer-vesting/
+velthoryn/
 ├── programs/vesting/   # Anchor program (Rust)              — owner: Lana
 ├── clients/ts/         # TypeScript client library (leaf encoding, Merkle tree)
 ├── apps/web/           # Frontend dApp + Merkle tooling      — owner: Geral

@@ -263,7 +263,7 @@ For `create_campaign`: leafCount=N, leaves array has N entries with full proofs.
 ### Campaign Creation (create_campaign / create_stream)
 
 ```
-1. Frontend calls prepareCampaign(recipients) from @mancer-vesting/client
+1. Frontend calls prepareCampaign(recipients) from @velthoryn/client
 2. Frontend sends create_campaign OR create_stream tx to Solana
 3. On success, frontend POSTs /api/campaigns with full data
 4. API validates, inserts into campaigns + root_versions + leaves tables

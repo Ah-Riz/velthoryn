@@ -1,4 +1,4 @@
-# PDD — Mancer Vesting Protocol
+# PDD — Velthoryn Protocol
 
 **Author:** Lana — smart-contract / backend lead  
 **Status:** Week 4 complete — all features implemented and tested on devnet
@@ -19,7 +19,7 @@
 
 ### §1.1 Protocol Purpose
 
-Mancer is a non-custodial, Merkle-compressed SPL token vesting protocol on Solana. It enables a single creator to vest tokens to an unlimited number of beneficiaries at a fixed on-chain cost of approximately 0.005 SOL, regardless of recipient count. Recipients self-authenticate via wallet signature combined with a Merkle inclusion proof, then pull their claimable tokens directly from a PDA-controlled vault.
+Velthoryn is a non-custodial, Merkle-compressed SPL token vesting protocol on Solana. It enables a single creator to vest tokens to an unlimited number of beneficiaries at a fixed on-chain cost of approximately 0.005 SOL, regardless of recipient count. Recipients self-authenticate via wallet signature combined with a Merkle inclusion proof, then pull their claimable tokens directly from a PDA-controlled vault.
 
 The protocol supports three schedule types — cliff, linear, and milestone — which can be mixed freely within a single campaign. All schedule types are parameterized within the off-chain leaf structure; the on-chain program evaluates the schedule at claim time against the current clock.
 
@@ -342,9 +342,9 @@ The beneficiary temporarily fronts ~0.0009 SOL; this is the only on-chain cost t
 |---|---|---|
 | Streamflow | 1 PDA per stream | ~$3,720 |
 | Jito Distributor | 1 Merkle root | ~$0.20 total |
-| **Mancer (this protocol)** | 1 Merkle root + 1 vault PDA | **~$0.42 total (fixed)** |
+| **Velthoryn (this protocol)** | 1 Merkle root + 1 vault PDA | **~$0.42 total (fixed)** |
 
-Mancer's creator-side cost does not grow with recipient count. Adding a recipient 10,001 to a 10,000-recipient campaign costs 0 additional SOL for the creator. The only marginal cost is off-chain storage (IPFS, negligible).
+Velthoryn's creator-side cost does not grow with recipient count. Adding a recipient 10,001 to a 10,000-recipient campaign costs 0 additional SOL for the creator. The only marginal cost is off-chain storage (IPFS, negligible).
 
 ### §6.4 Compute Budget
 
@@ -896,7 +896,7 @@ This prevents two issues:
 
 ### §11.1 Data Availability Model
 
-The on-chain Merkle root commits to the recipient set, but the actual leaf data (beneficiary addresses, amounts, schedules) lives off-chain in the Merkle tree structure. In the Mancer deployment, this data is pinned to IPFS by Geral (frontend lead) using Pinata.
+The on-chain Merkle root commits to the recipient set, but the actual leaf data (beneficiary addresses, amounts, schedules) lives off-chain in the Merkle tree structure. In the Velthoryn deployment, this data is pinned to IPFS by Geral (frontend lead) using Pinata.
 
 The protocol makes no on-chain guarantees about data availability. If the off-chain data is lost or unavailable:
 - Beneficiaries cannot construct their proofs.

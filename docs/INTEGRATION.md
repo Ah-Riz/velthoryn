@@ -18,7 +18,7 @@ Audience: Geral and anyone building against the on-chain program from TypeScript
 
 ```bash
 git clone https://github.com/Ah-Riz/mancerxsuperteam-token-vesting.git
-cd mancerxsuperteam-token-vesting
+cd mancerxsuperteam-token-vesting  # repo retains original name
 git checkout dev_lana      # Active development branch
 pnpm install
 anchor build               # produces target/idl/vesting.json + target/types/vesting.ts

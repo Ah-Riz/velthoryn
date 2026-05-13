@@ -1,7 +1,7 @@
 [package]
 name = "vesting"
 version = "0.1.0"
-description = "Mancer Vesting — Merkle-compressed Solana token distribution with vesting and clawback"
+description = "Velthoryn — Merkle-compressed Solana token distribution with vesting and clawback"
 edition = "2021"
 license = "MIT"
 

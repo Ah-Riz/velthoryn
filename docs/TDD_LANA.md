@@ -1,4 +1,4 @@
-# TDD — Mancer Vesting Protocol (Lana's Scope)
+# TDD — Velthoryn Protocol (Lana's Scope)
 
 **Author:** Lana — smart-contract / backend lead
 **Status:** Week 4 complete — all sections implemented and tested (12 instructions, 63 tests). Deployed to devnet (slot 461219566). 57/63 passing on local validator (6 known failures pending fix).

@@ -1,4 +1,4 @@
-# Devnet Test Results — Mancer Vesting
+# Devnet Test Results — Velthoryn
 
 **Date:** 2026-05-13
 **Network:** devnet (https://api.devnet.solana.com)

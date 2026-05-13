@@ -1,4 +1,4 @@
-# PRD — Mancer Vesting Protocol (Lana's Scope)
+# PRD — Velthoryn Protocol (Lana's Scope)
 
 **Author:** Lana — smart-contract / backend lead  
 **Status:** Week 4 complete — all features implemented and tested on devnet
@@ -38,9 +38,9 @@ Every Solana vesting protocol except Jito's distributor charges a storage fee pe
 | Bonfida | 1 PDA per recipient | ~$0.20 | ~$1,990 |
 | Armada | 1 PDA per grant + option token | ~$0.20–$0.43 | ~$1,990–$4,250 |
 | **Jito Distributor** | **1 Merkle root for the whole campaign** | **~$0 marginal** | **~$0.20 total** |
-| **Mancer (this protocol)** | **1 Merkle root + 1 vault PDA** | **~$0 marginal** | **~$0.42 total** |
+| **Velthoryn (this protocol)** | **1 Merkle root + 1 vault PDA** | **~$0 marginal** | **~$0.42 total** |
 
-Mancer's creator-side cost is fixed at ~0.005 SOL:
+Velthoryn's creator-side cost is fixed at ~0.005 SOL:
 - `VestingTree` PDA (8 + 282 bytes): ~0.0029 SOL
 - Vault ATA (165 bytes): ~0.00204 SOL
 - Total: ~0.005 SOL = ~$0.42 at $85/SOL — independent of recipient count
@@ -49,7 +49,7 @@ Mancer's creator-side cost is fixed at ~0.005 SOL:
 
 Jito's distributor is the only other Merkle-compressed distribution protocol on Solana. It is the reference for our cost model. But it is explicitly a one-shot airdrop primitive:
 
-| Capability | Jito Distributor | Mancer |
+| Capability | Jito Distributor | Velthoryn |
 |---|---|---|
 | Merkle compression (flat cost) | Yes | Yes |
 | Cliff vesting | Yes (single window) | Yes (per leaf) |
@@ -63,7 +63,7 @@ Jito's distributor is the only other Merkle-compressed distribution protocol on 
 | **Frontend / UI** | **No (CLI only)** | **Yes (Geral's track)** |
 | **DeFi composability via `get_vested_amount` CPI** | **No** | **Yes (Phase 2)** |
 
-What Mancer adds on top of Jito: milestone support, per-leaf heterogeneous schedules, multi-campaign from one creator, per-recipient clawback via root rotation, campaign-wide cancel with grace period, emergency pause, and a full event surface for indexer-driven dashboards.
+What Velthoryn adds on top of Jito: milestone support, per-leaf heterogeneous schedules, multi-campaign from one creator, per-recipient clawback via root rotation, campaign-wide cancel with grace period, emergency pause, and a full event surface for indexer-driven dashboards.
 
 ### 1.3 Locked tokens sit as dead capital (Gap 2 — Phase 2 mandate)
 
