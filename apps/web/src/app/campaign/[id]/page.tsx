@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback, use } from "react";
 import dynamic from "next/dynamic";
-import { useWallet, useConnection } from "@solana/wallet-adapter-react";
+import { useWallet } from "@solana/wallet-adapter-react";
 import { PublicKey } from "@solana/web3.js";
 
 const WalletMultiButton = dynamic(
@@ -65,7 +65,6 @@ function progressPercent(vested: bigint, total: bigint): number {
 export default function CampaignPage({ params }: { params: Promise<{ id: string }> }) {
   const { id: treeAddress } = use(params);
   const { publicKey } = useWallet();
-  const { connection } = useConnection();
   const program = useVestingProgram();
 
   const [treeState, setTreeState] = useState<TreeState | null>(null);
