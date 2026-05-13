@@ -15,7 +15,7 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en">
-      <body>
+      <body suppressHydrationWarning>
         <QueryProvider>
           <WalletProvider>{children}</WalletProvider>
         </QueryProvider>
