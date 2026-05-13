@@ -242,6 +242,27 @@ solana program show G6iaigUdi2btFwUc2N65twfxwA8Ew5uKKhKJ5RJa8wvu
 
 For local dev, `anchor test` boots an embedded validator (Anchor 1.0 LiteSVM) with the program preloaded. Point your frontend at `http://127.0.0.1:8899`.
 
+## Frontend Pages (Week 4)
+
+Two functional UI pages now exist for devnet-ready interaction:
+
+### Create Stream — `/campaign/create`
+
+Full form for creating single-beneficiary vesting streams. Fields: campaign ID, token mint, beneficiary wallet, amount, release type (cliff/linear/milestone), start/cliff/end times, cancellable toggle. Derives all PDAs client-side and submits `createStream` instruction.
+
+### Withdraw — `/campaign/[treeAddress]`
+
+Recipient dashboard for claiming vested tokens. Fetches `VestingTree` account on-chain, computes vested amount client-side using the same math as `schedule.rs`, shows progress bar and claimable amount. Submits `withdraw` instruction.
+
+### Frontend Tests (Vitest)
+
+38 unit tests covering:
+- Vesting math (cliff/linear/milestone, cancel clamp, claimable) — mirrors Rust `schedule.rs`
+- PDA derivation (VestingTree, VaultAuthority, ClaimRecord)
+- Merkle tree (encodeLeaf, hashLeaf, golden vector gate)
+
+Run with `npx vitest run` from `apps/web/`.
+
 ## Where to ask
 
 - On-chain bugs / instruction questions → Lana (`programs/vesting/`).
