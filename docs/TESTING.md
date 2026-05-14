@@ -2,7 +2,10 @@
 
 ## Test Suite Overview
 
-63 tests across 5 files — **all passing**.
+**264 tests total** — all passing.
+
+- On-chain (Anchor): 63 tests across 5 files
+- Frontend (Vitest): 201 tests across 16 files
 
 | Test File | Tests | Purpose |
 |-----------|-------|---------|
@@ -85,6 +88,35 @@ describe("clock test", () => {
   // ... test assertions
 });
 ```
+
+## Frontend Tests (Vitest)
+
+```bash
+cd apps/web
+pnpm test              # 201 passing
+pnpm test -- --reporter=verbose  # detailed output
+```
+
+| Test File | Tests | Purpose |
+|-----------|-------|---------|
+| `tests/api/backend.test.ts` | 76 | API routes — campaigns, claims, proofs, beneficiary, admin sync |
+| `tests/math/vesting.test.ts` | 23 | Vesting math — linear, cliff, milestone, cancel clamp, edge cases |
+| `tests/api/bug-fix-validation.test.ts` | 14 | Input validation — address format, amount bounds, date logic |
+| `tests/anchor/pda.test.ts` | 10 | PDA derivation — VestingTree, VaultAuthority, ClaimRecord seeds |
+| `tests/lib/adapters.test.ts` | 10 | Anchor adapter utils — account parsing, type conversion |
+| `tests/lib/anchor-client.test.ts` | 9 | Anchor client — program init, instruction building |
+| `tests/lib/auth.test.ts` | 9 | Auth — admin key validation, signature verification |
+| `tests/lib/sync-engine.test.ts` | 8 | Indexer sync engine — claim event processing, DB upsert |
+| `tests/hooks/useCampaignList.test.ts` | 8 | Hook — campaign list fetch, loading/error/success states |
+| `tests/hooks/useClaimHistory.test.ts` | 7 | Hook — claim history, pagination, filtering |
+| `tests/hooks/useProofLookup.test.ts` | 6 | Hook — proof fetch, cache, error handling |
+| `tests/merkle/builder.test.ts` | 5 | Merkle — encodeLeaf, hashLeaf, buildTree, getProof, golden vector |
+| `tests/hooks/useBeneficiaryCampaigns.test.ts` | 5 | Hook — campaigns by beneficiary wallet |
+| `tests/lib/store.test.ts` | 4 | Zustand store — selectedCampaignId, modal state |
+| `tests/hooks/useCampaignDetail.test.ts` | 4 | Hook — single campaign fetch, account parsing |
+| `tests/hooks/useVestingProgram.test.ts` | 3 | Hook — program instance, provider connection |
+
+---
 
 ## Test Isolation
 
