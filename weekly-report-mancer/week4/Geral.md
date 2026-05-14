@@ -248,13 +248,37 @@ Lana's API routes (`apps/web/src/app/api/`) import `drizzle-orm` but it's not in
 
 ---
 
+## Deliverable — Links to Code
+
+| Type | Link |
+|---|---|
+| GitHub Repository | [Ah-Riz/mancerxsuperteam-token-vesting](https://github.com/Ah-Riz/mancerxsuperteam-token-vesting) |
+| Development Branch | [`dev_geral`](https://github.com/Ah-Riz/mancerxsuperteam-token-vesting/tree/dev_geral) |
+| Create Stream Page | [`apps/web/src/app/campaign/create/page.tsx`](https://github.com/Ah-Riz/mancerxsuperteam-token-vesting/blob/dev_geral/apps/web/src/app/campaign/create/page.tsx) |
+| Withdraw Page | [`apps/web/src/app/campaign/[id]/page.tsx`](https://github.com/Ah-Riz/mancerxsuperteam-token-vesting/blob/dev_geral/apps/web/src/app/campaign/%5Bid%5D/page.tsx) |
+| Vesting Math Tests | [`apps/web/tests/math/vesting.test.ts`](https://github.com/Ah-Riz/mancerxsuperteam-token-vesting/blob/dev_geral/apps/web/tests/math/vesting.test.ts) |
+| PDA Derivation Tests | [`apps/web/tests/anchor/pda.test.ts`](https://github.com/Ah-Riz/mancerxsuperteam-token-vesting/blob/dev_geral/apps/web/tests/anchor/pda.test.ts) |
+| Merkle Builder Tests | [`apps/web/tests/merkle/builder.test.ts`](https://github.com/Ah-Riz/mancerxsuperteam-token-vesting/blob/dev_geral/apps/web/tests/merkle/builder.test.ts) |
+| Frontend PRD | [`docs/PRD_GERAL.md`](https://github.com/Ah-Riz/mancerxsuperteam-token-vesting/blob/dev_geral/docs/PRD_GERAL.md) |
+| Frontend PDD | [`docs/PDD_GERAL.md`](https://github.com/Ah-Riz/mancerxsuperteam-token-vesting/blob/dev_geral/docs/PDD_GERAL.md) |
+| Frontend TDD | [`docs/TDD_GERAL.md`](https://github.com/Ah-Riz/mancerxsuperteam-token-vesting/blob/dev_geral/docs/TDD_GERAL.md) |
+| Frontend Security Doc | [`docs/SECURITY_GERAL.md`](https://github.com/Ah-Riz/mancerxsuperteam-token-vesting/blob/dev_geral/docs/SECURITY_GERAL.md) |
+| CI/CD Lint Workflow | [`.github/workflows/lint.yml`](https://github.com/Ah-Riz/mancerxsuperteam-token-vesting/blob/dev_geral/.github/workflows/lint.yml) |
+| Devnet Program | Program ID: `G6iaigUdi2btFwUc2N65twfxwA8Ew5uKKhKJ5RJa8wvu` |
+| Devnet Create TX | [`5n7obCd6CqrhYVZzVPcAPKc7LqF1Gh7E2ZLcmytTmyuHsKC4jSvZpgSyQVgwbeMJKK8vnTGqBHzkGJhgrNWpVtpA`](https://explorer.solana.com/tx/5n7obCd6CqrhYVZzVPcAPKc7LqF1Gh7E2ZLcmytTmyuHsKC4jSvZpgSyQVgwbeMJKK8vnTGqBHzkGJhgrNWpVtpA?cluster=devnet) |
+| Devnet Withdraw TX | [`36FePkNJx6tX3WwUSByyKQfY3zzuer8DFeKNReeYZTbUyzW4kDLbhA2d9TqjKukunH1cqerCyrX3ENDotY873bqG`](https://explorer.solana.com/tx/36FePkNJx6tX3WwUSByyKQfY3zzuer8DFeKNReeYZTbUyzW4kDLbhA2d9TqjKukunH1cqerCyrX3ENDotY873bqG?cluster=devnet) |
+| Demo Screenshots | [`docs/screenshots/proof/`](https://github.com/Ah-Riz/mancerxsuperteam-token-vesting/tree/dev_geral/docs/screenshots/proof) — create.png, claim.png, claim_success.png |
+
+---
+
 ## Status — What works and what doesn't
 
 ### Working
 
 | Item | Evidence |
 |---|---|
-| 38 Vitest tests pass | `npx vitest run` — 3 test files, 38 tests, 0 failures |
+| 201 Vitest tests pass | `pnpm test` — 16 test files, 201 tests, 0 failures |
+| ESLint passes | `pnpm lint` — 0 errors, 14 warnings (all `no-unused-vars` in Lana's code) |
 | Create Stream page works | `/campaign/create` — full form, tested on devnet with real tokens |
 | Withdraw page works | `/campaign/[treeAddress]` — fetches on-chain state, claim successful on devnet |
 | Devnet demo complete | Create stream → wait → claim all tokens — full flow verified |
@@ -265,7 +289,8 @@ Lana's API routes (`apps/web/src/app/api/`) import `drizzle-orm` but it's not in
 | Wallet connection works | WalletMultiButton + wallet-standard auto-detect |
 | Anchor provider wired | `useVestingProgram()` returns Program instance |
 | PRD/PDD/TDD/SECURITY docs complete | 4 documents, ~1,450 lines total |
-| INTEGRATION.md updated | Added Week 4 UI section and test section |
+| API input validation | Base58 address validation + fromSlot validation on API routes |
+| CI/CD pipeline | Lint workflow: Clippy → ESLint → Vitest → Next.js build on all dev pushes + PRs to main/test |
 
 ### Not yet implemented (Week 5-6 scope)
 
@@ -277,7 +302,20 @@ Lana's API routes (`apps/web/src/app/api/`) import `drizzle-orm` but it's not in
 | Cancel/Pause admin UI | Week 5 (after cancel_stream instruction) |
 | Campaign list page | Week 6 |
 | E2E tests | Week 6 |
-| Backend API integration (drizzle-orm) | Depends on Lana fixing deps |
+
+---
+
+## Blockers — What's stuck or what I need
+
+| Blocker | Impact | Status |
+|---|---|---|
+| ESLint 10 incompatibility | `eslint-plugin-react@7.37.5` crashes with ESLint 10 (`getFilename` removed). CI lint fails on merge. | **Resolved** — Pinned ESLint to `~9.39.4`, regenerated lockfile on both `dev_geral` and `test` branches. |
+| `@testing-library/react` missing | Hook tests (`useBeneficiaryCampaigns`, etc.) fail with import error. | **Resolved** — Added as dev dependency. |
+| `extractAnchorEventData` not exported | `sync-engine.test.ts` fails — function exists but was not exported. | **Resolved** — Added `export` keyword. |
+| Stale test references | `bug-fix-validation.test.ts` references `syncAllEvents` (renamed to `syncClaimEvents`) and `parseRootUpdatedEvent`/`ROOT_UPDATED_DISCRIMINATOR` (non-existent). | **Resolved** — Renamed references, removed tests for non-existent functions. |
+| API routes lack input validation | Routes return 500 instead of 400 for invalid addresses/params. Tests expect validation that didn't exist. | **Resolved** — Added base58 address validation and fromSlot validation to beneficiary and claims routes. |
+| Lint workflow trigger scope | Lint only triggered on push to `main`/`dev_geral`/`dev_lana`. Missing `test` branch and other branches. | **Resolved** — Updated to trigger on all dev branch pushes + PRs to `main`/`test`. |
+| No remaining blockers | All CI checks pass (lint + tests). | — |
 
 ---
 
@@ -285,22 +323,23 @@ Lana's API routes (`apps/web/src/app/api/`) import `drizzle-orm` but it's not in
 
 | Metric | Value |
 |---|---|
+| Vitest test files | 16 |
+| Vitest tests passing | 201 / 201 (0 failures) |
+| ESLint errors | 0 |
 | Frontend documents created | 4 (PRD, PDD, TDD, SECURITY) |
 | Total documentation lines | ~1,450 |
-| Vitest test files | 3 |
-| Vitest tests passing | 38 / 38 |
-| Test suites | Vesting math (17), PDA derivation (10), Merkle (11) |
+| Frontend test suites (Geral) | Vesting math (17), PDA derivation (10), Merkle (11) = 38 tests |
+| Total frontend codebase | ~6,254 lines (src + tests) |
 | UI pages implemented | 2 (Create Stream, Withdraw) |
-| UI page total lines | ~500 (with error handling) |
 | Anchor instructions wired in UI | 2 (`createStream`, `withdraw`) |
 | PDA types tested | 3 (VestingTree, VaultAuthority, ClaimRecord) |
 | Release types supported in UI | 3 (Cliff, Linear, Milestone) |
 | TypeScript errors (my files) | 0 |
-| Modified files | 2 (page.tsx × 2) |
-| New files | 6 (4 docs + 2 test files) |
-| Updated files | 1 (INTEGRATION.md) |
-| Week 3 tests still passing | 11 / 11 (Merkle builder) |
+| CI/CD workflows configured | 2 (`lint.yml`, `ci.yml`) |
+| CI checks per push | 4 (Clippy, ESLint, Vitest, Next.js build) |
+| API routes with input validation | 2 (beneficiary campaigns, campaign claims) |
 | Wallet adapters bundled | 0 (wallet-standard auto-detect) |
 | Devnet transactions verified | 2 (create_stream + withdraw) |
 | Screenshots captured | 4 (create, claim popup, claim success, anchor test) |
-| Bugs found + fixed during testing | 3 (hydration, ATA init, dynamic import) |
+| Bugs found + fixed | 6 (hydration, ATA init, dynamic import, ESLint 10 compat, stale tests, missing validation) |
+| Commits on `dev_geral` | 20+ |
