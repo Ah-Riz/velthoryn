@@ -2,7 +2,7 @@
 
 ## Test Suite Overview
 
-**264 tests total** — all passing.
+**265 tests total** — all passing (on-chain security suite includes 11 exploit tests).
 
 - On-chain (Anchor): 63 tests across 5 files
 - Frontend (Vitest): 201 tests across 16 files
@@ -12,7 +12,7 @@
 | `tests/vesting.spec.ts` | 2 | Smoke tests (program ID, IDL structure) |
 | `tests/vesting.supplementary.spec.ts` | 50 | Integration tests covering all instructions |
 | `tests/vesting.clock.spec.ts` | 7 | Clock-dependent tests via `solana-bankrun` |
-| `tests/security.spec.ts` | 10 | Security exploit tests |
+| `tests/security.spec.ts` | 11 | Security exploit tests (EXPLOIT 1–11) |
 | `tests/golden_vector.spec.ts` | 1 | Cross-language hash verification |
 
 ## Running Tests

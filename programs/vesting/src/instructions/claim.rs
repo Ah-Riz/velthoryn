@@ -2,10 +2,10 @@ use anchor_lang::prelude::*;
 use anchor_spl::associated_token::AssociatedToken;
 use anchor_spl::token::{Mint, Token, TokenAccount, Transfer};
 
+use crate::constants::MAX_MERKLE_PROOF_LEN;
 use crate::errors::VestingError;
 use crate::events::Claimed;
-use crate::math::merkle::leaf_hash;
-use crate::math::merkle::verify_merkle_proof;
+use crate::math::merkle::{leaf_hash, max_proof_len_for_leaf_count, verify_merkle_proof};
 use crate::math::schedule;
 use crate::state::{ClaimRecord, VestingLeaf, VestingTree};
 
@@ -74,6 +74,15 @@ pub fn handler(ctx: Context<Claim>, leaf: VestingLeaf, proof: Vec<[u8; 32]>) -> 
         VestingError::InvalidSchedule
     );
     require!(leaf.release_type <= 2, VestingError::InvalidScheduleType);
+
+    require!(
+        proof.len() <= MAX_MERKLE_PROOF_LEN,
+        VestingError::ProofTooLong
+    );
+    require!(
+        proof.len() <= max_proof_len_for_leaf_count(tree.leaf_count),
+        VestingError::ProofTooLong
+    );
 
     let hash = leaf_hash(&leaf);
     require!(

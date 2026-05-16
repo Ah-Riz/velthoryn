@@ -95,3 +95,10 @@ jobs:
 
       - name: anchor test
         run: anchor test --skip-local-validator
+
+      - name: Trident fuzz smoke
+        run: |
+          cargo build-sbf
+          cd trident-tests
+          cargo build --release --bin fuzz_vesting
+          FUZZING_METRICS=1 ./target/release/fuzz_vesting

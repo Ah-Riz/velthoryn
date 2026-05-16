@@ -39,6 +39,7 @@ const ERR = {
   NothingToClaim: 6015,
   InsufficientVault: 6016,
   GracePeriodActive: 6026,
+  CannotClose: 6027,
 } as const;
 
 // ---------------------------------------------------------------------------
@@ -848,6 +849,129 @@ describe("vesting clock-dependent tests (bankrun)", () => {
       expect.fail("EXPLOIT 4 SUCCEEDED: claim after vault withdrawal should have been rejected");
     } catch (e) {
       expectAnchorError(e, ERR.InsufficientVault);
+    }
+  });
+
+  it("EXPLOIT 11: partial withdraw then close then withdraw cannot double-pay", async () => {
+    const { context, provider, program, creator, cancelAuthority } = freshCtx();
+    const AMOUNT = 1_000_000;
+    const beneficiary = await makeBeneficiaryTx(provider);
+
+    const { mint } = await createTestMintTx(provider, creator.publicKey);
+    await fundCreatorAtaTx(provider, mint, creator.publicKey, AMOUNT);
+
+    const [treePda] = await treePDA(PROGRAM_ID, creator.publicKey, mint, 907);
+    const [vaultAuthPda] = await vaultAuthorityPDA(PROGRAM_ID, treePda);
+    const [crPda] = await claimRecordPDA(PROGRAM_ID, treePda, beneficiary.publicKey);
+    const vault = getAssociatedTokenAddressSync(mint, vaultAuthPda, true);
+    const beneficiaryAta = await createBeneficiaryAta(
+      provider,
+      mint,
+      beneficiary.publicKey,
+    );
+
+    const now = await bankrunNow(context);
+    const start = now - 500;
+    const cliff = now - 500;
+    const end = now + 500;
+    const withdrawArgs = {
+      releaseType: 1,
+      startTime: new BN(start),
+      cliffTime: new BN(cliff),
+      endTime: new BN(end),
+      milestoneIdx: 0,
+    };
+
+    await program.methods
+      .createStream({
+        campaignId: new BN(907),
+        beneficiary: beneficiary.publicKey,
+        amount: new BN(AMOUNT),
+        releaseType: 1,
+        startTime: new BN(start),
+        cliffTime: new BN(cliff),
+        endTime: new BN(end),
+        milestoneIdx: 0,
+        cancellable: true,
+        cancelAuthority: cancelAuthority.publicKey,
+        pauseAuthority: null,
+      })
+      .accounts({
+        creator: creator.publicKey,
+        vestingTree: treePda,
+        vaultAuthority: vaultAuthPda,
+        vault,
+        sourceAta: getAssociatedTokenAddressSync(mint, creator.publicKey),
+        mint,
+      })
+      .signers([creator])
+      .rpc();
+
+    const beforeFirst = (await getAccount(provider.connection, beneficiaryAta))
+      .amount;
+
+    await program.methods
+      .withdraw(withdrawArgs)
+      .accounts({
+        beneficiary: beneficiary.publicKey,
+        vestingTree: treePda,
+        claimRecord: crPda,
+        vaultAuthority: vaultAuthPda,
+        vault,
+        beneficiaryAta,
+        mint,
+      })
+      .signers([beneficiary])
+      .rpc();
+
+    const firstPayout = Number(
+      (await getAccount(provider.connection, beneficiaryAta)).amount -
+        beforeFirst,
+    );
+    expect(firstPayout).to.be.greaterThan(0);
+    expect(firstPayout).to.be.lessThan(AMOUNT);
+
+    try {
+      await program.methods
+        .closeClaimRecord()
+        .accounts({
+          beneficiary: beneficiary.publicKey,
+          vestingTree: treePda,
+          claimRecord: crPda,
+        })
+        .signers([beneficiary])
+        .rpc();
+      expect.fail(
+        "EXPLOIT 11 SUCCEEDED: premature close after partial withdraw should be rejected",
+      );
+    } catch (e) {
+      expectAnchorError(e, ERR.CannotClose);
+    }
+
+    const beforeSecond = (await getAccount(provider.connection, beneficiaryAta))
+      .amount;
+
+    try {
+      await program.methods
+        .withdraw(withdrawArgs)
+        .accounts({
+          beneficiary: beneficiary.publicKey,
+          vestingTree: treePda,
+          claimRecord: crPda,
+          vaultAuthority: vaultAuthPda,
+          vault,
+          beneficiaryAta,
+          mint,
+        })
+        .signers([beneficiary])
+        .rpc();
+      const secondPayout = Number(
+        (await getAccount(provider.connection, beneficiaryAta)).amount -
+          beforeSecond,
+      );
+      expect(secondPayout).to.equal(0);
+    } catch (e) {
+      expectAnchorError(e, ERR.NothingToClaim);
     }
   });
 });

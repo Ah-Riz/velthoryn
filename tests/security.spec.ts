@@ -52,6 +52,7 @@ const ERR = {
   UnauthorizedClaimer: 6010,
   CannotClose: 6027,
   InsufficientVault: 6016,
+  ProofTooLong: 6029,
 } as const;
 
 // ---------------------------------------------------------------------------
@@ -247,6 +248,69 @@ describe("security exploit attempts (should all be blocked)", () => {
       expect.fail("EXPLOIT 3 SUCCEEDED: forged proof should have been rejected");
     } catch (e) {
       expectAnchorError(e, ERR.InvalidProof);
+    }
+  });
+
+  // -------------------------------------------------------------------------
+  // EXPLOIT 4: Oversized Merkle proof (CU griefing / depth bound)
+  // -------------------------------------------------------------------------
+  it("EXPLOIT 4: Merkle proof longer than allowed -> ProofTooLong", async () => {
+    const beneficiary0 = await makeBeneficiary(provider);
+    const beneficiary1 = await makeBeneficiary(provider);
+    const AMOUNT = 2_000_000;
+
+    const t = await createTimeHelpers(provider.connection);
+    const cliff = t.past(100);
+    const end = t.future(900);
+
+    const leaf0: VestingLeaf = {
+      leafIndex: 0,
+      beneficiary: beneficiary0.publicKey,
+      amount: new BN(1_000_000),
+      releaseType: ReleaseType.Linear,
+      startTime: new BN(cliff),
+      cliffTime: new BN(cliff),
+      endTime: new BN(end),
+      milestoneIdx: 0,
+    };
+    const leaf1: VestingLeaf = {
+      leafIndex: 1,
+      beneficiary: beneficiary1.publicKey,
+      amount: new BN(1_000_000),
+      releaseType: ReleaseType.Linear,
+      startTime: new BN(cliff),
+      cliffTime: new BN(cliff),
+      endTime: new BN(end),
+      milestoneIdx: 0,
+    };
+
+    const { mint, tree, treePda, vaultAuthPda, vault } = await createAndFundCampaign(
+      { provider, program, creator, cancelAuthority, pauseAuthority },
+      704,
+      [leaf0, leaf1],
+      AMOUNT,
+    );
+
+    const validProof = tree.proof(0);
+    const oversizedProof = [
+      ...validProof,
+      ...Array.from({ length: 32 }, () => Buffer.alloc(32, 0xaa)),
+    ];
+
+    try {
+      await issueClaim(
+        { program },
+        leaf0,
+        oversizedProof,
+        beneficiary0,
+        treePda,
+        vaultAuthPda,
+        vault,
+        mint,
+      );
+      expect.fail("EXPLOIT 4 SUCCEEDED: oversized proof should have been rejected");
+    } catch (e) {
+      expectAnchorError(e, ERR.ProofTooLong);
     }
   });
 
@@ -614,6 +678,147 @@ describe("security exploit attempts (should all be blocked)", () => {
       expect.fail("EXPLOIT 10 SUCCEEDED: premature close should have been rejected");
     } catch (e) {
       expectAnchorError(e, ERR.CannotClose);
+    }
+  });
+
+  // -------------------------------------------------------------------------
+  // EXPLOIT 11: withdraw -> close claim record -> withdraw again (double payout)
+  // Without total_entitled on withdraw first-touch, close passes and re-init
+  // resets claimed_amount so the same vested tranche pays out twice.
+  // -------------------------------------------------------------------------
+  it("EXPLOIT 11: withdraw then close then withdraw again -> CannotClose or NothingToClaim", async () => {
+    const CAMPAIGN_ID = 811;
+    const AMOUNT = 1_000_000;
+
+    const mint = await createTestMint(provider, creator.publicKey);
+    await fundCreatorAta(provider, mint, creator.publicKey, AMOUNT);
+    const beneficiary = await makeBeneficiary(provider);
+    const t = await createTimeHelpers(provider.connection);
+
+    const [treePda] = await treePDA(
+      PROGRAM_ID,
+      creator.publicKey,
+      mint,
+      CAMPAIGN_ID,
+    );
+    const [vaultAuthPda] = await vaultAuthorityPDA(PROGRAM_ID, treePda);
+    const [crPda] = await claimRecordPDA(
+      PROGRAM_ID,
+      treePda,
+      beneficiary.publicKey,
+    );
+    const vault = getAssociatedTokenAddressSync(mint, vaultAuthPda, true);
+    const beneficiaryAta = getAssociatedTokenAddressSync(
+      mint,
+      beneficiary.publicKey,
+    );
+
+    const cliff = t.past(500);
+    const end = t.future(500);
+    const withdrawArgs = {
+      releaseType: 1,
+      startTime: new BN(cliff),
+      cliffTime: new BN(cliff),
+      endTime: new BN(end),
+      milestoneIdx: 0,
+    };
+
+    await program.methods
+      .createStream({
+        campaignId: new BN(CAMPAIGN_ID),
+        beneficiary: beneficiary.publicKey,
+        amount: new BN(AMOUNT),
+        releaseType: 1,
+        startTime: new BN(cliff),
+        cliffTime: new BN(cliff),
+        endTime: new BN(end),
+        milestoneIdx: 0,
+        cancellable: true,
+        cancelAuthority: cancelAuthority.publicKey,
+        pauseAuthority: null,
+      })
+      .accounts({
+        creator: creator.publicKey,
+        vestingTree: treePda,
+        vaultAuthority: vaultAuthPda,
+        vault,
+        sourceAta: getAssociatedTokenAddressSync(mint, creator.publicKey),
+        mint,
+      })
+      .signers([creator])
+      .rpc();
+
+    const beforeFirst = (
+      await getAccount(provider.connection, beneficiaryAta)
+    ).amount;
+
+    await program.methods
+      .withdraw(withdrawArgs)
+      .accounts({
+        beneficiary: beneficiary.publicKey,
+        vestingTree: treePda,
+        claimRecord: crPda,
+        vaultAuthority: vaultAuthPda,
+        vault,
+        beneficiaryAta,
+        mint,
+      })
+      .signers([beneficiary])
+      .rpc();
+
+    const afterFirst = (
+      await getAccount(provider.connection, beneficiaryAta)
+    ).amount;
+    const firstPayout = Number(afterFirst - beforeFirst);
+    expect(firstPayout).to.be.greaterThan(0);
+    expect(firstPayout).to.be.lessThan(AMOUNT);
+
+    try {
+      await program.methods
+        .closeClaimRecord()
+        .accounts({
+          beneficiary: beneficiary.publicKey,
+          vestingTree: treePda,
+          claimRecord: crPda,
+        })
+        .signers([beneficiary])
+        .rpc();
+      expect.fail(
+        "EXPLOIT 11 SUCCEEDED: premature close after partial withdraw should be rejected",
+      );
+    } catch (e) {
+      expectAnchorError(e, ERR.CannotClose);
+    }
+
+    const beforeSecond = (
+      await getAccount(provider.connection, beneficiaryAta)
+    ).amount;
+
+    try {
+      await program.methods
+        .withdraw(withdrawArgs)
+        .accounts({
+          beneficiary: beneficiary.publicKey,
+          vestingTree: treePda,
+          claimRecord: crPda,
+          vaultAuthority: vaultAuthPda,
+          vault,
+          beneficiaryAta,
+          mint,
+        })
+        .signers([beneficiary])
+        .rpc();
+      const afterSecond = (
+        await getAccount(provider.connection, beneficiaryAta)
+      ).amount;
+      const secondPayout = Number(afterSecond - beforeSecond);
+      expect(
+        secondPayout,
+        "second withdraw after blocked close must not pay again for same tranche",
+      ).to.equal(0);
+    } catch (e) {
+      // NothingToClaim is also acceptable if close somehow left state consistent
+      expectAnchorError(e, ERR.NothingToClaim);
     }
   });
 });
