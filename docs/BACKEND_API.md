@@ -1,6 +1,6 @@
 # Backend API + Database Architecture — Phase 2 Design
 
-**Status:** Design complete, implementation pending
+**Status:** Implemented, deployed at [velthoryn.vercel.app](https://velthoryn.vercel.app/)
 **Owner:** Lana
 **Companion docs:** `PRD_LANA.md`, `INTEGRATION.md`, `PROGRAM.md`
 
@@ -386,18 +386,21 @@ No SDK changes needed. API accepts serialized form of what `prepareCampaign()` p
 ## 8. Environment Variables
 
 ```env
-# Solana RPC
-NEXT_PUBLIC_RPC_ENDPOINT=https://devnet.helius-rpc.com/?api-key=YOUR_KEY
-
-# IPFS (Pinata)
-PINATA_API_KEY=
-PINATA_SECRET_API_KEY=
-PINATA_GATEWAY_URL=https://gateway.pinata.cloud
-
 # Database (Supabase)
 DATABASE_URL=postgresql://postgres:[YOUR-PASSWORD]@db.[PROJECT-REF].supabase.co:5432/postgres
 
-# Supabase (for client-side Auth + Storage, Phase 2)
+# Solana RPC
+NEXT_PUBLIC_RPC_ENDPOINT=https://devnet.helius-rpc.com/?api-key=YOUR_KEY
+
+# Supabase Auth + Storage
 NEXT_PUBLIC_SUPABASE_URL=https://[PROJECT-REF].supabase.co
 NEXT_PUBLIC_SUPABASE_ANON_KEY=
+
+# Admin API key for protected endpoints
+ADMIN_API_KEY=
+API_KEY=
+
+# IPFS (Pinata)
+PINATA_JWT=
+PINATA_GATEWAY_URL=https://gateway.pinata.cloud
 ```

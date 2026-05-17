@@ -12,9 +12,8 @@ Built by Team 7 (Velthoryn x Superteam Scholarship).
 velthoryn/
 ├── programs/vesting/   # Anchor program (Rust)              — owner: Lana
 ├── clients/ts/         # TypeScript client library (leaf encoding, Merkle tree)
-├── apps/web/           # Frontend dApp + Merkle tooling      — owner: Geral
+├── apps/web/           # Next.js dApp + API routes + Merkle   — owner: Lana (API), Geral (UI)
 ├── tests/              # ts-mocha integration tests
-├── .github/workflows/  # CI: anchor build + anchor test + lint
 ├── .github/workflows/  # CI: anchor build + anchor test + lint
 ├── Anchor.toml
 ├── Cargo.toml
@@ -27,15 +26,15 @@ velthoryn/
 | Area                | Owner | Notes                                       |
 | ------------------- | ----- | ------------------------------------------- |
 | `programs/vesting/` | Lana  | Anchor program, instructions, state, math   |
-| `apps/web/`         | Geral | Frontend stack, wallet adapter, Merkle tooling |
-| `apps/web/`         | Geral | Frontend stack, wallet adapter, Merkle tooling |
+| `apps/web/`         | Geral | Frontend UI, wallet adapter                |
+| `apps/web/api/`     | Lana  | Backend API routes, DB, merkle pipeline    |
 | Root configs, CI    | Joint | Workspace files, GitHub Actions             |
 
 ## Current status
 
 **Fully implemented and deployed to devnet.** All 12 instruction handlers (including `create_stream` and `withdraw` for single-recipient streams), schedule math (`vested`, `get_vested_amount`), and Merkle proof verification (`verify_merkle_proof`) are live with real logic. State structs, error codes (31 variants), and events (9 types) are fully defined. `leaf_hash()` is byte-verified against the TS encoder.
 
-**Test results: 65/65 PASS** (stream checklist: T58 50% withdraw, T59 double-withdraw guard)
+**Test results: 74/74 SC tests PASS, 208/208 FE tests PASS** (stream checklist: T58 50% withdraw, T59 double-withdraw guard)
 - Devnet: 58+ passing; clock-dependent cases run on bankrun
 - Localnet (bankrun): `tests/vesting.clock.spec.ts` — T17–T20, T25, T47, T55–T59, EXPLOIT 4
 
@@ -54,7 +53,6 @@ See [`docs/STREAM_MODEL.md`](docs/STREAM_MODEL.md) (tutorial `Stream` PDA vs cam
 | `pause_campaign`     | Temporarily block claims.                                         |
 | `unpause_campaign`   | Resume a paused campaign.                                         |
 | `close_claim_record` | Reclaim rent on a fully-claimed `ClaimRecord` PDA.                |
-| `get_vested_amount`  | Read-only helper that runs the schedule math against a leaf.      |
 | `get_vested_amount`  | Read-only helper that runs the schedule math against a leaf.      |
 
 For deeper reads:
@@ -104,16 +102,37 @@ Next.js 15 dApp with wallet integration, vesting stream creation, and token clai
 
 ```bash
 cd apps/web
+cp .env.example .env   # fill in your keys
 pnpm dev               # http://localhost:3000
-pnpm test              # 38 Vitest tests (vesting math, PDA derivation, Merkle)
+pnpm test              # 208 Vitest tests
 ```
 
-Routes:
+### Pages
+
 - `/` — Landing page
 - `/campaign/create` — Create a vesting stream (calls `createStream`)
 - `/campaign/[treeAddress]` — View stream & claim tokens (calls `withdraw`)
 
 Wallet connection uses wallet-standard auto-detect (Phantom/Solflare/Backpack). Set `NEXT_PUBLIC_RPC_ENDPOINT` to override the default devnet RPC.
+
+### Backend API Routes
+
+| Route | Method | Purpose |
+|---|---|---|
+| `/api/campaigns` | POST | Create campaign + root version + leaves |
+| `/api/campaigns` | GET | List with filters, pagination |
+| `/api/campaigns/[treeAddress]` | GET | Campaign detail + analytics |
+| `/api/campaigns/[treeAddress]/proof` | GET | Leaf + merkle proof for beneficiary |
+| `/api/campaigns/[treeAddress]/claims` | GET | Claim history |
+| `/api/campaigns/[treeAddress]/root-versions` | GET | Root version history |
+| `/api/beneficiary/[address]/campaigns` | GET | All campaigns for address |
+| `/api/admin/sync` | POST | Indexer: backfill claim events (auth: x-admin-key) |
+
+See [`docs/BACKEND_API.md`](docs/BACKEND_API.md) for full API documentation.
+
+### Vercel Deployment
+
+Deployed at [velthoryn.vercel.app](https://velthoryn.vercel.app/). Root directory: `apps/web/`. Required env vars: see `apps/web/.env.example`.
 
 Frontend docs: [`docs/PRD_GERAL.md`](docs/PRD_GERAL.md), [`docs/PDD_GERAL.md`](docs/PDD_GERAL.md), [`docs/TDD_GERAL.md`](docs/TDD_GERAL.md), [`docs/SECURITY_GERAL.md`](docs/SECURITY_GERAL.md).
 
