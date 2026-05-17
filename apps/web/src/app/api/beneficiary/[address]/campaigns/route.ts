@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { eq, sql, desc } from "drizzle-orm";
+import { sql } from "drizzle-orm";
 import { db } from "@/lib/db";
-import { campaigns, leaves, rootVersions } from "@/lib/db/schema";
 
 // ---------------------------------------------------------------------------
 // GET /api/beneficiary/:address/campaigns

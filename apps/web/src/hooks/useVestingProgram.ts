@@ -12,5 +12,6 @@ export function useVestingProgram() {
     if (!wallet.connected || !wallet.publicKey) return null;
     const provider = getProvider(connection, wallet);
     return getProgram(provider);
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- wallet is stale; derived props are stable
   }, [connection, wallet.connected, wallet.publicKey]);
 }

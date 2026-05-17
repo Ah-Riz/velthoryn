@@ -22,7 +22,6 @@
     "bs58": "^6.0.0",
     "drizzle-orm": "^0.39.0",
     "keccak256": "^1.0.6",
-    "merkletreejs": "^0.4.0",
     "next": "^15.0.0",
     "postgres": "^3.4.0",
     "react": "^19.0.0",

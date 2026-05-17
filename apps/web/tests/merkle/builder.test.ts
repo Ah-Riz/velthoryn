@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { hashLeaf, buildTree, getRoot, getProof, type VestingLeaf } from "../../src/lib/merkle/builder";
+import { hashLeaf, buildTree, getRoot, getProof, verifyProof, type VestingLeaf } from "../../src/lib/merkle/builder";
 
 // Day 1 Week 3 test gate: TS keccak256(LEAF_PREFIX || encodedLeaf) must equal Rust golden hex.
 // Ref: research-week2.md §6.3 + §10.2
@@ -41,14 +41,12 @@ describe("merkle builder", () => {
     expect(root.every((b) => b === 0)).toBe(false);
   });
 
-  it("getProof verifies against root (JS-only round-trip)", () => {
-    const { MerkleTree } = require("merkletreejs");
-    const keccak256 = require("keccak256").default ?? require("keccak256");
+  it("getProof verifies against root (using verifyProof)", () => {
     const tree = buildTree([FIXTURE]);
     const proof = getProof(tree, FIXTURE);
     const root = getRoot(tree);
-    const leafHash = hashLeaf(FIXTURE);
-    const valid = MerkleTree.verify(proof, leafHash, root, keccak256);
+    const leafHashBuf = hashLeaf(FIXTURE);
+    const valid = verifyProof(leafHashBuf, proof, 0, root);
     expect(valid).toBe(true);
   });
 
