@@ -2,17 +2,18 @@
 
 ## Test Suite Overview
 
-**264 tests total** — all passing.
+**265 tests total** — all passing (on-chain security suite includes 11 exploit tests).
 
-- On-chain (Anchor): 63 tests across 5 files
-- Frontend (Vitest): 201 tests across 16 files
+- On-chain (Anchor): 70 tests across 5 files
+- Frontend (Vitest): 208 tests across 19 files
+- Trident fuzz: smoke test in CI (`trident-tests/fuzz_vesting`)
 
 | Test File | Tests | Purpose |
 |-----------|-------|---------|
 | `tests/vesting.spec.ts` | 2 | Smoke tests (program ID, IDL structure) |
-| `tests/vesting.supplementary.spec.ts` | 50 | Integration tests covering all instructions |
-| `tests/vesting.clock.spec.ts` | 7 | Clock-dependent tests via `solana-bankrun` |
-| `tests/security.spec.ts` | 10 | Security exploit tests |
+| `tests/vesting.supplementary.spec.ts` | 47 | Integration tests covering all instructions |
+| `tests/vesting.clock.spec.ts` | 11 | Clock-dependent tests via `solana-bankrun` |
+| `tests/security.spec.ts` | 11 | Security exploit tests (EXPLOIT 1–11) |
 | `tests/golden_vector.spec.ts` | 1 | Cross-language hash verification |
 
 ## Running Tests
@@ -21,14 +22,14 @@
 
 ```bash
 anchor test
-# Expected: 56 passing, 7 skipped (clock-dependent)
+# Expected: all passing (clock-dependent tests use bankrun, no skips)
 ```
 
 ### Clock-Dependent Tests (bankrun)
 
 ```bash
 pnpm exec ts-mocha -p ./tsconfig.json -t 1000000 tests/vesting.clock.spec.ts
-# Expected: 7/7 PASS (~600ms)
+# Expected: 11/11 PASS (~600ms)
 ```
 
 These use `solana-bankrun` + `anchor-bankrun` for deterministic clock control via `context.setClock()`. No external validator needed — bankrun runs an embedded `solana-program-test` instance.
@@ -42,12 +43,13 @@ These use `solana-bankrun` + `anchor-bankrun` for deterministic clock control vi
 | T47 | close_claim_record after grace period | +604800s |
 | T55 | Cancel-time clamped withdraw | +500s for cancel, +2000s for withdraw |
 | EXPLOIT 4 | Claim after vault drained | +604800s |
+| EXPLOIT 11 | withdraw → close → withdraw (double payout) | Various |
 
 ### Devnet
 
 ```bash
 ANCHOR_PROVIDER_URL=https://api.devnet.solana.com anchor test --skip-local-validator
-# Expected: 56 passing, 7 skipped
+# Expected: all passing
 ```
 
 Clock-dependent tests skip gracefully on devnet since `setClock` is unavailable on public clusters.
@@ -93,7 +95,7 @@ describe("clock test", () => {
 
 ```bash
 cd apps/web
-pnpm test              # 201 passing
+pnpm test              # 208 passing
 pnpm test -- --reporter=verbose  # detailed output
 ```
 
@@ -115,6 +117,9 @@ pnpm test -- --reporter=verbose  # detailed output
 | `tests/lib/store.test.ts` | 4 | Zustand store — selectedCampaignId, modal state |
 | `tests/hooks/useCampaignDetail.test.ts` | 4 | Hook — single campaign fetch, account parsing |
 | `tests/hooks/useVestingProgram.test.ts` | 3 | Hook — program instance, provider connection |
+| `tests/datetime.test.ts` | 1 | Date/time formatting utilities |
+| `tests/stream-persist.test.ts` | 1 | Stream state persistence |
+| `tests/vesting-errors.test.ts` | 5 | Error formatting and mapping |
 
 ---
 

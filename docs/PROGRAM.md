@@ -11,8 +11,8 @@ Deployed: devnet (latest upgrade at slot 461219566, ~447KB allocation). Keypair 
 ```
 programs/vesting/src/
 ├── lib.rs                  # #[program] dispatcher — wires the 12 entry points
-├── constants.rs            # GRACE_PERIOD_SECS
-├── errors.rs               # VestingError enum (31 variants, full set per architecture)
+├── constants.rs            # GRACE_PERIOD_SECS, MAX_MERKLE_PROOF_LEN
+├── errors.rs               # VestingError enum (31 variants including ProofTooLong)
 ├── events.rs               # 9 event types (CampaignCreated, Claimed, RootUpdated, …)
 ├── state/
 │   ├── mod.rs              # re-exports
@@ -52,7 +52,7 @@ programs/vesting/src/
 | `withdraw_unvested`  | —                                                        | After grace, creator sweeps `vault_balance − vested_total_at_cancel`. |
 | `pause_campaign`     | —                                                        | Pause-authority blocks claims. |
 | `unpause_campaign`   | — (shares Accounts with pause_campaign)                  | Resume a paused campaign. |
-| `close_claim_record` | `expected_total: u64`                                    | Reclaim rent on a finished `ClaimRecord`. |
+| `close_claim_record` | —                                                        | Reclaim rent on a finished `ClaimRecord`. Checks `total_entitled > 0 && claimed_amount >= total_entitled` or post-grace. |
 | `get_vested_amount`  | `leaf: VestingLeaf, cancelled_at: Option<i64>, now: i64` | Read-only helper that runs schedule math (returns u64). |
 
 Args are defined alongside their instruction (`CreateCampaignArgs` lives in `instructions/create_campaign.rs`).
@@ -89,11 +89,14 @@ PDA seeds: `["tree", creator, mint, campaign_id.to_le_bytes()]`.
 | `beneficiary`      | `Pubkey`    | Must equal `claim.signer`. |
 | `tree`             | `Pubkey`    | The `VestingTree` it belongs to. |
 | `claimed_amount`   | `u64`       | Cumulative claimed by this beneficiary. Survives root rotation. |
+| `total_entitled`   | `u64`       | Set once on first claim/withdraw. Total leaf amount. Used by `close_claim_record` to verify full vesting without trusting a caller-supplied value. |
 | `milestone_bitmap` | `[u8; 32]`  | One bit per milestone index for milestone-type leaves. |
 | `last_claim_at`    | `i64`       | For analytics / UX. |
 | `bump`             | `u8`        | PDA bump cache. |
 
 PDA seeds: `["claim", tree.key(), beneficiary]`.
+
+> **Migration warning:** `total_entitled` is a layout-breaking change. Existing on-chain ClaimRecords predating this field cannot be deserialized correctly and require a migration (e.g. `realloc` + fill, or close + re-claim). See `programs/vesting/src/state/claim_record.rs`.
 
 ### `VestingLeaf` (off-chain, in the Merkle tree)
 
@@ -135,9 +138,11 @@ Notable variants:
 
 - `EmptyRoot`, `EmptyCampaign`, `ZeroAmount` — guard `create_campaign` args.
 - `InvalidProof`, `NothingToClaim`, `MilestoneAlreadyClaimed` — claim-path failures.
+- `ProofTooLong` (6029) — Merkle proof exceeds `MAX_MERKLE_PROOF_LEN` or `max_proof_len_for_leaf_count` (VEL-009).
 - `CampaignPaused`, `CampaignCancelled`, `AlreadyCancelled` — state-toggle guards.
 - `GracePeriodActive`, `NotCancelled` — gate `withdraw_unvested`.
 - `NotSingleStream` — gates `withdraw` to single-recipient streams only.
+- `CannotClose` — `close_claim_record` guard: requires `total_entitled > 0 && claimed_amount >= total_entitled` or post-grace.
 
 ## Events
 
@@ -150,6 +155,8 @@ Indexers watch these (`events.rs`): `CampaignCreated`, `CampaignFunded`, `Claime
 `leaf_hash(leaf)` — **LIVE**. Computes `keccak256([LEAF_PREFIX] ++ borsh(leaf))` using `solana_keccak_hasher::hashv`. Byte-identical to the TS `hashLeaf()` in `apps/web/src/lib/merkle/builder.ts`.
 
 `verify_merkle_proof(leaf_hash, proof, index, root)` — **LIVE**. Walks left/right siblings driven by `index`'s low bit, prefixing each node hash with `NODE_PREFIX`.
+
+`max_proof_len_for_leaf_count(leaf_count)` — **LIVE**. Returns `ceil(log2(leaf_count))` for leaf_count > 1, else 0. Used by `claim` to reject oversized proofs. Cap at `MAX_MERKLE_PROOF_LEN = 32`.
 
 ### `math::schedule` — LIVE
 
@@ -169,12 +176,10 @@ The TS client library (`clients/ts/`) provides leaf encoding and Merkle tree con
 - `CampaignRecipient`, `PreparedCampaign` — types for campaign preparation
 - Golden vector gate verifies cross-language hash match
 
-Integration tests in `tests/` cover T6-T55 (supplementary/error paths), golden vector gate, and 10 security exploit tests -- 63 tests total.
+Integration tests in `tests/` cover T6-T55 (supplementary/error paths), golden vector gate, and 11 security exploit tests (EXPLOIT 1–11) — 70 tests total.
 
-**Test results (local validator):** 57 passing, 6 known failures (pending fix), 3 skipped.
-- T17/T18/T25/T55: `setClock` time-manipulation tests return wrong vested amounts (validator clock doesn't hold at set value)
-- T19: `withdraw_unvested` non-creator expects `Unauthorized` (6005) but gets different error
-- T48: over-claim expects `OverClaim` (6017) but gets different error code
+**Test results (local validator):** All passing. Clock-dependent tests use `solana-bankrun` for deterministic time control.
+- Trident fuzz smoke: `trident-tests/fuzz_vesting` runs in CI after `anchor test`
 
 Run with `anchor test --provider.cluster localnet` or start a persistent validator:
 ```bash

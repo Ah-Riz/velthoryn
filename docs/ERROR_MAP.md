@@ -15,6 +15,7 @@ This table maps common **bootcamp / tutorial** names to the on-chain variants an
 | Invalid times | `InvalidSchedule` | 6011 | `0x177b` | `start > cliff` or `cliff > end` | T30 |
 | Campaign paused | `CampaignPaused` | 6009 | `0x1779` | `withdraw` while `paused` | T45 |
 | Multi-recipient on `withdraw` | `NotSingleStream` | 6028 | `0x178c` | `leaf_count != 1` | T40 |
+| Oversized Merkle proof | `ProofTooLong` | 6029 | `0x178d` | `proof.len() > 32` or `proof.len() > ceil(log2(leaf_count))` | EXPLOIT 4 |
 
 ## Full error list
 

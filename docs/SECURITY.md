@@ -1,9 +1,25 @@
 # Security Design — Velthoryn Protocol
 
 **Author:** Lana — smart-contract / backend lead
-**Status:** Week 4 complete — all items implemented and tested on devnet (12 instructions, 31 error variants)
-**Companion docs:** `docs/TDD_LANA.md`, `docs/PROGRAM.md`
+**Status:** Security audit complete — VEL-001/009/010 remediated, 12 instructions, 31 error variants, 265 tests passing
+**Companion docs:** `docs/TDD_LANA.md`, `docs/PROGRAM.md`, `docs/AUDIT_REPORT.md`, `docs/MATURITY_REPORT.md`
 **External reference:** [Helius: A Hitchhiker's Guide to Solana Program Security](https://www.helius.dev/blog/a-hitchhikers-guide-to-solana-program-security)
+
+---
+
+## §0 Security Audit Results (2026-05-17)
+
+Security review performed using Solana six-pattern checklist, manual instruction review, and Trident fuzz testing. Full report: [`docs/AUDIT_REPORT.md`](AUDIT_REPORT.md). Maturity assessment: [`docs/MATURITY_REPORT.md`](MATURITY_REPORT.md).
+
+| ID | Severity | Issue | Status |
+|----|----------|-------|--------|
+| **VEL-001** | HIGH | Double payout on stream campaigns via `withdraw → close_claim_record → withdraw` | **Fixed** — `total_entitled` set on first-touch in `withdraw`; `close_claim_record` requires `total_entitled > 0` |
+| **VEL-009** | LOW | Unbounded Merkle proof length in `claim` (CU griefing) | **Fixed** — `MAX_MERKLE_PROOF_LEN = 32` + `max_proof_len_for_leaf_count()` enforced on-chain; API validators cap at 32 |
+| **VEL-010** | LOW | Timing-unsafe admin API key comparison (`===` on strings) | **Fixed** — `verifyAdminKey` uses SHA-256 + `crypto.timingSafeEqual` |
+
+**Toolchain:** `cargo audit` — 0 vulnerabilities; `cargo geiger` — 0 `unsafe` in vesting crate; `cargo tarpaulin` — 6.68% in-crate (instruction handlers exercised by TS integration tests). **Code maturity:** 2.8 / 4.0 (Trail of Bits framework).
+
+**Migration note:** `ClaimRecord.total_entitled` is a layout-breaking change. Existing on-chain ClaimRecords predating this field cannot be deserialized and require a migration (`realloc` + fill, or close + re-claim). See `programs/vesting/src/state/claim_record.rs`.
 
 ---
 
@@ -189,7 +205,7 @@ A reentrant call — if it were possible through a malicious CPI chain — would
 | **Proof forgery** | Attacker submits a leaf not in the tree | Validation 5 (`verify_merkle_proof`) → `InvalidProof`. Root is stored on-chain and only updatable by `cancel_authority`. |
 | **Second-preimage on Merkle** | Attacker crafts an internal node hash equal to a leaf hash, presents it as a leaf | `LEAF_PREFIX = 0x00` and `NODE_PREFIX = 0x01` make leaf and node hash domains disjoint. A value computed with `NODE_PREFIX` cannot match a value computed with `LEAF_PREFIX`. |
 | **Cross-campaign proof replay** | Valid proof from campaign A submitted against campaign B | `ClaimRecord` PDA seeds include `vesting_tree.key()` — the record is bound to a specific campaign. Campaign B has its own `merkle_root`; the proof fails verification. |
-| **Double-claim (linear/cliff)** | Alice calls `claim` twice before state updates | `claimed_amount` incremented and `total_claimed` updated before the CPI. Second call computes `claimable = total_vested.saturating_sub(claimed_amount) = 0` → `NothingToClaim`. |
+| **Double-claim (linear/cliff)** | Alice calls `claim` twice before state updates | `claimed_amount` incremented and `total_claimed` updated before the CPI. Second call computes `claimable = total_vested.saturating_sub(claimed_amount) = 0` → `NothingToClaim`. `total_entitled` set on first-touch prevents premature `close_claim_record`. |
 | **Double-claim (milestone)** | Alice calls `claim` for the same milestone twice | Bitmap bit set before the CPI. Second call reads the bit already set → `MilestoneAlreadyClaimed`. |
 | **OverClaim (total accounting)** | Series of partial claims accumulates beyond `total_supply` | `total_claimed.checked_add(claimable) <= total_supply` → `OverClaim`. `checked_add` prevents silent overflow. |
 | **Arithmetic overflow (linear math)** | `leaf.amount * elapsed` overflows u64 for large amounts and long durations | Cast to `u128` before multiplication. `u64::MAX * i64::MAX` fits in u128. |
@@ -199,7 +215,7 @@ A reentrant call — if it were possible through a malicious CPI chain — would
 | **Reentrancy via CPI** | Malicious token mock calls back into `claim` during the transfer | State is fully updated before the CPI (steps 1–4 above). A reentrant `claim` call finds `claimed_amount` already incremented → `NothingToClaim`. |
 | **Sandwich on ClaimRecord creation** | Two concurrent first-claims for the same beneficiary race on `ClaimRecord` init | One wins the PDA allocation; the other fails with Anchor's re-init error. The winning tx's handler detects first touch via `cr.beneficiary == Pubkey::default()` and seeds identity fields atomically. The second tx retries and finds the record already populated. |
 | **`_proof` naming** | The `_proof` parameter is declared in the `#[instruction]` attribute with a leading underscore. This is intentional: Anchor uses instruction parameters to resolve PDAs that depend on them, but `_proof` is not a PDA seed. The leading underscore signals to Anchor's parser not to treat this as an account discriminant while still making the value available to the handler. |
-| **Large proof vectors** | A 32-level tree has a 32-element proof (32 × 32 = 1,024 bytes). Combined with the other accounts in the `Claim` context, this approaches Solana's 1,232-byte transaction size limit. | Recommended maximum tree depth: 20 levels (2^20 = 1,048,576 recipients; proof = 640 bytes). Trees deeper than 20 levels risk hitting the transaction size limit when `vault_authority`, `claim_record`, `vault`, `beneficiary_ata`, and `mint` account metas are included. The off-chain tree builder must enforce this limit. |
+| **Large proof vectors** | A 32-level tree has a 32-element proof (32 × 32 = 1,024 bytes). Combined with the other accounts in the `Claim` context, this approaches Solana's 1,232-byte transaction size limit. | **On-chain:** `claim` rejects `proof.len() > 32` and `proof.len() > ceil(log2(leaf_count))` → `ProofTooLong` (6029). Recommended maximum tree depth: 20 levels (2^20 = 1,048,576 recipients; proof = 640 bytes) for transaction size. Off-chain tree builder and API validators must stay within the same bounds. |
 
 ---
 
@@ -229,7 +245,7 @@ Simplified claiming path for campaigns created by `create_stream` (or any campai
 | **Multi-recipient abuse** | Attacker calls `withdraw` on a multi-recipient campaign to bypass Merkle proof | `constraint = vesting_tree.leaf_count == 1` → `NotSingleStream` |
 | **Signer substitution** | Alice calls `withdraw` on Bob's stream | `beneficiary.key() == leaf.beneficiary` → `UnauthorizedClaimer` |
 | **Schedule tampering** | Attacker submits different schedule params than the original stream | `leaf_hash(reconstructed_leaf) == merkle_root` → `InvalidProof`. The root was set at stream creation; any mismatch in `release_type`, `start_time`, `cliff_time`, `end_time`, or `milestone_idx` causes the hash to differ. |
-| **Double-claim** | Same protections as `claim` — `claimed_amount` tracked in `ClaimRecord` | `NothingToClaim` on second call (linear/cliff); `MilestoneAlreadyClaimed` for milestones |
+| **Double-claim** | Same protections as `claim` — `claimed_amount` tracked in `ClaimRecord` | `NothingToClaim` on second call (linear/cliff); `MilestoneAlreadyClaimed` for milestones. `total_entitled` set on first-touch (VEL-001 fix) prevents `close → re-init → withdraw` double payout. |
 | **OverClaim** | Same as `claim` — `total_claimed.checked_add(claimable) <= total_supply` | `OverClaim` |
 | **CEI violation** | CPI before state mutation | All mutations happen before the SPL token CPI, same order as `claim` |
 
@@ -286,7 +302,8 @@ Simplified claiming path for campaigns created by `create_stream` (or any campai
 | Attack | Description | Mitigation |
 |---|---|---|
 | **Close someone else's record** | Attacker closes Bob's record to grief him | `has_one = beneficiary` — only the record owner can close; rent goes to them |
-| **Premature close** | Close before fully claimed, erasing unclaimed portion | `claimed_amount >= expected_total || post_grace` — at least one condition must be true → `CannotClose` |
+| **Premature close** | Close before fully claimed, erasing unclaimed portion | `total_entitled > 0 && claimed_amount >= total_entitled` (fully claimed) OR `post_grace` (after 7-day grace) — at least one condition must be true → `CannotClose` |
+| **Close → re-init double payout** (VEL-001) | Beneficiary closes claim record, `init_if_needed` re-creates it with `claimed_amount = 0`, beneficiary withdraws again | `total_entitled` is set on first-touch by both `claim` and `withdraw`. The `total_entitled > 0` guard in `close_claim_record` prevents closing a record that was never properly initialized through these paths. |
 
 ---
 
@@ -304,7 +321,7 @@ Cross-checked against the Helius Hitchhiker's Guide to Solana Program Security.
 | **Integer overflow** | `checked_add/sub` on `total_claimed`, `claimed_amount`; `u128` intermediate in linear math; `saturating_sub` on claimable delta | Manual — every arithmetic path must use checked variants |
 | **Reentrancy** | All state mutations happen before the SPL token CPI in `claim`, `withdraw`, and `withdraw_unvested` | Manual — CEI order must be maintained |
 | **`init` vs `init_if_needed`** | `init` on `VestingTree` (uniqueness — one per campaign); `init_if_needed` on `ClaimRecord` (re-entered for partial claims) and beneficiary ATA | Manual — must not use `init_if_needed` where uniqueness is required |
-| **Double-spend (linear)** | `claimed_amount` incremented before CPI; second call computes claimable = 0 | Manual — update-before-CPI order must be maintained |
+| **Double-spend (linear)** | `claimed_amount` incremented before CPI; `total_entitled` set on first-touch; second call computes claimable = 0 | Manual — update-before-CPI order must be maintained; `total_entitled` guards `close_claim_record` (VEL-001) |
 | **Double-spend (milestone)** | Bitmap bit set before CPI | Manual |
 | **OverClaim** | `checked_add` + `require!(new_total <= total_supply)` before CPI | Manual |
 | **Frontrunning** | Seeds include `creator.key()`; UI verifies post-creation | Partial mitigation — no on-chain fix for MEV; UI must verify |
@@ -349,6 +366,8 @@ These are accepted risks for the MVP. Each has a severity rating and a mitigatio
 
 **Detection:** Property-based fuzzing. Run `proptest` (or a similar framework) asserting: (1) a proof generated for any leaf at any index always verifies on-chain, (2) mutating any single byte of the proof fails verification, (3) mutating any field of the leaf fails verification. The golden-vector test (`tests/golden_vector.spec.ts`) is a necessary but not sufficient gate.
 
+**Post-audit progress (VEL-009):** On-chain proof length is now bounded by `MAX_MERKLE_PROOF_LEN = 32` and `max_proof_len_for_leaf_count()`. Trident fuzz harness (`trident-tests/fuzz_vesting/`) covers state-transition sequences. Property-based Merkle fuzzing remains a Phase 2 item.
+
 **Phase 2 fix:** Engage a Solana-specialized audit firm to fuzz `verify_merkle_proof` and the TS tree builder. Add `cargo-fuzz` corpus for the on-chain verifier.
 
 ---
@@ -384,12 +403,13 @@ Complete these before engaging an audit firm.
 - [ ] P0: `cargo clippy --workspace -D warnings` exits 0 with no suppressed lints
 - [ ] P0: No `todo!()`, `unimplemented!()`, `#[allow(unused)]`, or `unwrap()` in production code (tests excepted)
 - [x] P1: All `VestingError` variants are triggered by at least one named test
-- [x] P0: `programs/vesting/src/math/merkle.rs` `verify_merkle_proof` returns correct results for: single-leaf tree (empty proof), 2-leaf tree, 3-leaf odd tree (duplicate last leaf), 4-leaf tree (`verify_three_leaf` + `tests/golden_vector.spec.ts` 3-leaf gate)
+- [x] P0: `programs/vesting/src/math/merkle.rs` `verify_merkle_proof` returns correct results for: single-leaf tree (empty proof), 2-leaf tree, 3-leaf odd tree (duplicate last leaf), 4-leaf tree, `max_proof_len_for_leaf_count` edge cases (0, 1, 2, u32::MAX)
 - [ ] P1: Large tree (1,000 leaves via property test) — optional hardening before audit
 
 ### Test coverage
 - [x] P0: `cargo test` green — schedule unit tests pass
-- [x] P0: `anchor test` green — 57 tests pass on devnet (56 pass + 1 graceful skip): T1–T5 (core), T6–T25 (supplementary), T26–T41 (error paths), golden vector gate, and 10 security exploit tests
+- [x] P0: `anchor test` green — 265 tests passing: T1–T55 (supplementary/error paths), 11 security exploit tests, clock-dependent bankrun tests, golden vector gate
+- [x] P0: Trident fuzz smoke passes in CI (`trident-tests/fuzz_vesting`)
 - [x] P0: Golden vector gate passes with `GOLDEN_HASH` env var set (Rust and TS produce byte-identical leaf hashes)
 - [x] P1: Every instruction has at least one happy-path integration test
 - [x] P1: Every instruction has at least one failure-path test (wrong signer, bad constraint, etc.)
@@ -411,6 +431,8 @@ Complete these before engaging an audit firm.
 - [ ] P0: `target/idl/vesting.json` committed and matches source
 - [ ] P1: Test suite runs in CI (GitHub Actions) on a clean runner
 - [x] P1: Devnet program ID documented and reachable
+- [x] P1: Security audit report published (`docs/AUDIT_REPORT.md`)
+- [x] P1: Code maturity assessment published (`docs/MATURITY_REPORT.md`)
 
 ### Audit firm selection guidance
 
