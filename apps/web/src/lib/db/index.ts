@@ -8,7 +8,7 @@ const client = postgres(
   connectionString ?? "postgresql://unconfigured:unconfigured@localhost:1/unconfigured",
   {
     max: 1,
-    ssl: connectionString ? "require" : undefined,
+    ssl: connectionString ? { rejectUnauthorized: false } : undefined,
     idle_timeout: connectionString ? 20 : 1,
     connect_timeout: connectionString ? 10 : 1,
   },
