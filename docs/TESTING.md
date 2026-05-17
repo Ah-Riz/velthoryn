@@ -18,11 +18,21 @@
 
 ## Running Tests
 
-### Full Suite (local validator)
+### Full Suite (localnet — recommended)
+
+Use a **persistent** `solana-test-validator`. `anchor test` alone can flake on Solana CLI 3.x (`Blockhash not found` mid-suite).
+
+```bash
+pnpm test:localnet
+# Starts validator if needed, anchor build, then 74/74 passing (~2m)
+```
+
+CI runs the same flow with `TEST_SKIP_BUILD=1` after `anchor build` (see `.github/workflows/ci.yml`).
+
+Legacy one-shot (may flake):
 
 ```bash
 anchor test
-# Expected: all passing (clock-dependent tests use bankrun, no skips)
 ```
 
 ### Clock-Dependent Tests (bankrun)
@@ -47,12 +57,21 @@ These use `solana-bankrun` + `anchor-bankrun` for deterministic clock control vi
 
 ### Devnet
 
+Program must be deployed at `G6iaigUdi2btFwUc2N65twfxwA8Ew5uKKhKJ5RJa8wvu`. Wallet needs devnet SOL (`solana airdrop 2 --url devnet`).
+
 ```bash
-ANCHOR_PROVIDER_URL=https://api.devnet.solana.com anchor test --skip-local-validator
-# Expected: all passing
+pnpm test:devnet
+# RPC tests on devnet; clock suite still uses bankrun (11 tests, no RPC clock warp)
 ```
 
-Clock-dependent tests skip gracefully on devnet since `setClock` is unavailable on public clusters.
+Equivalent:
+
+```bash
+ANCHOR_PROVIDER_URL=https://api.devnet.solana.com \
+  anchor test --skip-local-validator --skip-build
+```
+
+Tests that call `setClock` on the public RPC skip on devnet (see `skipIfClockNotAdvanced` in supplementary specs). Bankrun clock tests always run locally inside `vesting.clock.spec.ts`.
 
 ## Test Infrastructure
 

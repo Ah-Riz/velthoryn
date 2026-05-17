@@ -1,10 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
+import { verifyAdminKey } from "@/lib/auth";
 import { syncClaimEvents } from "@/lib/indexer/claim-events";
 
 export async function POST(request: NextRequest) {
-  const adminKey = request.headers.get("x-admin-key");
-  if (!process.env.ADMIN_API_KEY || adminKey !== process.env.ADMIN_API_KEY) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const authError = verifyAdminKey(request);
+  if (authError) {
+    return authError;
   }
 
   try {

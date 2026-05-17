@@ -66,4 +66,7 @@ pub enum VestingError {
     CannotClose,
     #[msg("This instruction only works on single-recipient streams")]
     NotSingleStream,
+
+    #[msg("Merkle proof exceeds maximum allowed length for this campaign")]
+    ProofTooLong,
 }

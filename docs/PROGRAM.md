@@ -181,7 +181,7 @@ Integration tests in `tests/` cover T6-T55 (supplementary/error paths), golden v
 **Test results (local validator):** All passing. Clock-dependent tests use `solana-bankrun` for deterministic time control.
 - Trident fuzz smoke: `trident-tests/fuzz_vesting` runs in CI after `anchor test`
 
-Run with `anchor test --provider.cluster localnet` or start a persistent validator:
+Run with `pnpm test:localnet` (recommended) or start a persistent validator manually:
 ```bash
 solana-test-validator --reset --quiet &
 anchor program deploy --provider.cluster localnet target/deploy/vesting.so

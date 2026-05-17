@@ -26,7 +26,10 @@ pub fn handler(ctx: Context<CloseClaimRecord>) -> Result<()> {
     let cr = &ctx.accounts.claim_record;
     let tree = &ctx.accounts.vesting_tree;
 
-    let fully_claimed = cr.claimed_amount >= cr.total_entitled;
+    // total_entitled must be set (claim/withdraw first-touch); blocks close after
+    // withdraw-only records that never stored entitlement (double-withdraw via re-init).
+    let fully_claimed =
+        cr.total_entitled > 0 && cr.claimed_amount >= cr.total_entitled;
     let post_grace = match tree.cancelled_at {
         Some(c) => {
             let grace_end = c.checked_add(GRACE_PERIOD_SECS).ok_or(VestingError::Overflow)?;
