@@ -125,7 +125,13 @@ Total: **70 bytes** Borsh LE. **Field order is the wire order** — the TS encod
 
 ## Errors
 
-`VestingError` (31 variants) covers every checked condition. Read `programs/vesting/src/errors.rs` for the full list. Notable ones:
+`VestingError` (31 variants) covers every checked condition. Read `programs/vesting/src/errors.rs` for the full list.
+
+**Tutorial / checklist mapping:** see [`docs/ERROR_MAP.md`](ERROR_MAP.md) (e.g. `InsufficientBalance` → `InsufficientVault`, `UnauthorizedWithdraw` → `UnauthorizedClaimer`).
+
+**Single-recipient “stream” model:** see [`docs/STREAM_MODEL.md`](STREAM_MODEL.md).
+
+Notable variants:
 
 - `EmptyRoot`, `EmptyCampaign`, `ZeroAmount` — guard `create_campaign` args.
 - `InvalidProof`, `NothingToClaim`, `MilestoneAlreadyClaimed` — claim-path failures.

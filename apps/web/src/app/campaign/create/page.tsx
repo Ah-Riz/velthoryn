@@ -9,9 +9,17 @@ const WalletMultiButton = dynamic(
   () => import("@solana/wallet-adapter-react-ui").then((m) => m.WalletMultiButton),
   { ssr: false },
 );
+import Link from "next/link";
 import { BN } from "@coral-xyz/anchor";
 import { useVestingProgram } from "@/hooks/useVestingProgram";
 import { derivePda } from "@/lib/anchor/client";
+import { formatVestingError } from "@/lib/anchor/errors";
+import { datetimeLocalToUnix } from "@/lib/stream/datetime";
+import {
+  buildCreateStreamIndexPayload,
+  indexStreamCampaign,
+  saveStreamScheduleLocal,
+} from "@/lib/stream/persist";
 
 const RELEASE_TYPES = [
   { value: 0, label: "Cliff", desc: "Full unlock at cliff time" },
@@ -20,7 +28,7 @@ const RELEASE_TYPES = [
 ] as const;
 
 function toUnixTs(dateStr: string): number {
-  return Math.floor(new Date(dateStr).getTime() / 1000);
+  return datetimeLocalToUnix(dateStr);
 }
 
 export default function CreateStreamPage() {
@@ -39,7 +47,10 @@ export default function CreateStreamPage() {
   const [milestoneIdx, setMilestoneIdx] = useState("0");
 
   const [txStatus, setTxStatus] = useState<
-    { type: "idle" } | { type: "loading" } | { type: "success"; sig: string } | { type: "error"; msg: string }
+    | { type: "idle" }
+    | { type: "loading" }
+    | { type: "success"; sig: string; treeAddress: string }
+    | { type: "error"; msg: string }
   >({ type: "idle" });
 
   async function handleSubmit(e: React.FormEvent) {
@@ -53,9 +64,12 @@ export default function CreateStreamPage() {
       const mintKey = new PublicKey(mintAddress);
       const amountBN = new BN(amount);
       const campaignIdBN = new BN(campaignId);
-      const startTs = new BN(toUnixTs(startTime));
-      const cliffTs = new BN(toUnixTs(cliffTime));
-      const endTs = new BN(toUnixTs(endTime));
+      const startUnix = toUnixTs(startTime);
+      const cliffUnix = toUnixTs(cliffTime);
+      const endUnix = toUnixTs(endTime);
+      const startTs = new BN(startUnix);
+      const cliffTs = new BN(cliffUnix);
+      const endTs = new BN(endUnix);
 
       const [vestingTree] = derivePda([
         "tree",
@@ -93,39 +107,41 @@ export default function CreateStreamPage() {
         })
         .rpc();
 
-      setTxStatus({ type: "success", sig });
+      const treeAddress = vestingTree.toBase58();
+      const schedule = {
+        releaseType,
+        startTime: startUnix,
+        cliffTime: cliffUnix,
+        endTime: endUnix,
+        milestoneIdx: Number(milestoneIdx),
+      };
+      saveStreamScheduleLocal(treeAddress, schedule);
+
+      try {
+        const payload = buildCreateStreamIndexPayload({
+          treeAddress,
+          creator: publicKey.toBase58(),
+          mint: mintKey.toBase58(),
+          campaignId: Number(campaignId),
+          beneficiary: beneficiaryKey.toBase58(),
+          amount,
+          releaseType,
+          startTime: startUnix,
+          cliffTime: cliffUnix,
+          endTime: endUnix,
+          milestoneIdx: Number(milestoneIdx),
+          cancellable,
+          cancelAuthority: cancellable ? publicKey.toBase58() : null,
+        });
+        await indexStreamCampaign(payload);
+      } catch (indexErr) {
+        console.warn("Campaign index POST failed (stream still on-chain):", indexErr);
+      }
+
+      setTxStatus({ type: "success", sig, treeAddress });
     } catch (err: unknown) {
-      const msg = parseAnchorError(err);
-      setTxStatus({ type: "error", msg });
+      setTxStatus({ type: "error", msg: formatVestingError(err) });
     }
-  }
-
-  function parseAnchorError(err: unknown): string {
-    const raw = err instanceof Error ? err.message : String(err);
-
-    if (raw.includes("AccountNotInitialized") && raw.includes("source_ata")) {
-      return "Your wallet doesn't have a token account for this mint. Transfer tokens to your wallet first, or create the token account using: spl-token create-account <MINT> --url devnet";
-    }
-    if (raw.includes("AccountNotInitialized")) {
-      return `Account not initialized: one of the required accounts doesn't exist on-chain yet. ${raw}`;
-    }
-    if (raw.includes("InsufficientFunds") || raw.includes("0x1")) {
-      return "Insufficient SOL for transaction fees. Airdrop devnet SOL: solana airdrop 2 --url devnet";
-    }
-    if (raw.includes("ZeroAmount") || raw.includes("0x1770")) {
-      return "Amount must be greater than zero.";
-    }
-    if (raw.includes("InvalidSchedule") || raw.includes("0x1771")) {
-      return "Invalid schedule: start_time must be ≤ cliff_time ≤ end_time.";
-    }
-    if (raw.includes("MintMismatch") || raw.includes("0x1774")) {
-      return "Token mint address doesn't match the source token account.";
-    }
-    if (raw.includes("User rejected")) {
-      return "Transaction cancelled by user.";
-    }
-
-    return raw;
   }
 
   return (
@@ -276,11 +292,17 @@ export default function CreateStreamPage() {
           </button>
 
           {txStatus.type === "success" && (
-            <div className="p-4 bg-green-900/30 border border-green-700 rounded-lg">
+            <div className="p-4 bg-green-900/30 border border-green-700 rounded-lg space-y-2">
               <p className="text-green-400 font-medium">Stream created!</p>
-              <p className="text-xs text-gray-400 mt-1 font-mono break-all">
+              <p className="text-xs text-gray-400 font-mono break-all">
                 tx: {txStatus.sig}
               </p>
+              <Link
+                href={`/campaign/${txStatus.treeAddress}`}
+                className="inline-block text-sm text-purple-400 hover:text-purple-300 underline"
+              >
+                Open stream → claim tokens
+              </Link>
             </div>
           )}
 

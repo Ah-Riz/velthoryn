@@ -713,6 +713,157 @@ describe("vesting clock-dependent tests (bankrun)", () => {
     expect(Number(vaultBal.amount)).to.equal(0);
   });
 
+  it("T58: withdraw at exactly 50% unlocks 50% of stream amount", async () => {
+    const { context, provider, program, creator, cancelAuthority } = freshCtx();
+    const AMOUNT = 10_000;
+    const beneficiary = await makeBeneficiaryTx(provider);
+
+    const { mint } = await createTestMintTx(provider, creator.publicKey);
+    await fundCreatorAtaTx(provider, mint, creator.publicKey, AMOUNT);
+
+    const [treePda] = await treePDA(PROGRAM_ID, creator.publicKey, mint, 906);
+    const [vaultAuthPda] = await vaultAuthorityPDA(PROGRAM_ID, treePda);
+    const [crPda] = await claimRecordPDA(PROGRAM_ID, treePda, beneficiary.publicKey);
+    const vault = getAssociatedTokenAddressSync(mint, vaultAuthPda, true);
+    const beneficiaryAta = await createBeneficiaryAta(provider, mint, beneficiary.publicKey);
+
+    const now = await bankrunNow(context);
+    const start = now;
+    const cliff = now;
+    const end = now + 1000;
+
+    await program.methods
+      .createStream({
+        campaignId: new BN(906),
+        beneficiary: beneficiary.publicKey,
+        amount: new BN(AMOUNT),
+        releaseType: 1,
+        startTime: new BN(start),
+        cliffTime: new BN(cliff),
+        endTime: new BN(end),
+        milestoneIdx: 0,
+        cancellable: true,
+        cancelAuthority: cancelAuthority.publicKey,
+        pauseAuthority: null,
+      })
+      .accounts({
+        creator: creator.publicKey,
+        vestingTree: treePda,
+        vaultAuthority: vaultAuthPda,
+        vault,
+        sourceAta: getAssociatedTokenAddressSync(mint, creator.publicKey),
+        mint,
+      })
+      .signers([creator])
+      .rpc();
+
+    await warpClock(context, start + 500);
+
+    await program.methods
+      .withdraw({
+        releaseType: 1,
+        startTime: new BN(start),
+        cliffTime: new BN(cliff),
+        endTime: new BN(end),
+        milestoneIdx: 0,
+      })
+      .accounts({
+        beneficiary: beneficiary.publicKey,
+        vestingTree: treePda,
+        claimRecord: crPda,
+        vaultAuthority: vaultAuthPda,
+        vault,
+        beneficiaryAta,
+        mint,
+      })
+      .signers([beneficiary])
+      .rpc();
+
+    const bal = await getAccount(provider.connection, beneficiaryAta);
+    expect(Number(bal.amount)).to.equal(5000);
+  });
+
+  it("T59: immediate second withdraw rejects with NothingToClaim", async () => {
+    const { context, provider, program, creator, cancelAuthority } = freshCtx();
+    const AMOUNT = 10_000;
+    const beneficiary = await makeBeneficiaryTx(provider);
+
+    const { mint } = await createTestMintTx(provider, creator.publicKey);
+    await fundCreatorAtaTx(provider, mint, creator.publicKey, AMOUNT);
+
+    const [treePda] = await treePDA(PROGRAM_ID, creator.publicKey, mint, 907);
+    const [vaultAuthPda] = await vaultAuthorityPDA(PROGRAM_ID, treePda);
+    const [crPda] = await claimRecordPDA(PROGRAM_ID, treePda, beneficiary.publicKey);
+    const vault = getAssociatedTokenAddressSync(mint, vaultAuthPda, true);
+    const beneficiaryAta = await createBeneficiaryAta(provider, mint, beneficiary.publicKey);
+
+    const now = await bankrunNow(context);
+    const start = now;
+    const cliff = now;
+    const end = now + 1000;
+
+    await program.methods
+      .createStream({
+        campaignId: new BN(907),
+        beneficiary: beneficiary.publicKey,
+        amount: new BN(AMOUNT),
+        releaseType: 1,
+        startTime: new BN(start),
+        cliffTime: new BN(cliff),
+        endTime: new BN(end),
+        milestoneIdx: 0,
+        cancellable: true,
+        cancelAuthority: cancelAuthority.publicKey,
+        pauseAuthority: null,
+      })
+      .accounts({
+        creator: creator.publicKey,
+        vestingTree: treePda,
+        vaultAuthority: vaultAuthPda,
+        vault,
+        sourceAta: getAssociatedTokenAddressSync(mint, creator.publicKey),
+        mint,
+      })
+      .signers([creator])
+      .rpc();
+
+    await warpClock(context, start + 250);
+
+    const withdrawAccounts = {
+      beneficiary: beneficiary.publicKey,
+      vestingTree: treePda,
+      claimRecord: crPda,
+      vaultAuthority: vaultAuthPda,
+      vault,
+      beneficiaryAta,
+      mint,
+    };
+    const withdrawArgs = {
+      releaseType: 1,
+      startTime: new BN(start),
+      cliffTime: new BN(cliff),
+      endTime: new BN(end),
+      milestoneIdx: 0,
+    };
+
+    await program.methods
+      .withdraw(withdrawArgs)
+      .accounts(withdrawAccounts)
+      .signers([beneficiary])
+      .rpc();
+
+    try {
+      await program.methods
+        .withdraw(withdrawArgs)
+        .accounts(withdrawAccounts)
+        .signers([beneficiary])
+        .rpc();
+      expect.fail("should have thrown NothingToClaim");
+    } catch (e) {
+      expectAnchorError(e, ERR.NothingToClaim);
+    }
+  });
+
   it("T47: close_claim_record after grace period succeeds", async () => {
     const { context, provider, program, creator, cancelAuthority, pauseAuthority } = freshCtx();
     const beneficiary = await makeBeneficiaryTx(provider);

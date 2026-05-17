@@ -11,7 +11,11 @@ const WalletMultiButton = dynamic(
 );
 import { BN } from "@coral-xyz/anchor";
 import { useVestingProgram } from "@/hooks/useVestingProgram";
+import { useProofLookup } from "@/hooks/useProofLookup";
 import { derivePda } from "@/lib/anchor/client";
+import { formatVestingError } from "@/lib/anchor/errors";
+import { unixToDatetimeLocal, datetimeLocalToUnix } from "@/lib/stream/datetime";
+import { loadStreamScheduleLocal } from "@/lib/stream/persist";
 
 type TreeState = {
   creator: PublicKey;
@@ -25,6 +29,8 @@ type TreeState = {
   createdAt: BN;
   leafCount: number;
 };
+
+type ScheduleSource = "none" | "api" | "local" | "manual";
 
 function vestedAmount(
   amount: bigint,
@@ -62,6 +68,29 @@ function progressPercent(vested: bigint, total: bigint): number {
   return Number((vested * 100n) / total);
 }
 
+function applyScheduleToForm(
+  leaf: {
+    releaseType: number;
+    startTime: number;
+    cliffTime: number;
+    endTime: number;
+    milestoneIdx: number;
+  },
+  setters: {
+    setReleaseType: (v: number) => void;
+    setStartTime: (v: string) => void;
+    setCliffTime: (v: string) => void;
+    setEndTime: (v: string) => void;
+    setMilestoneIdx: (v: string) => void;
+  },
+) {
+  setters.setReleaseType(leaf.releaseType);
+  setters.setStartTime(unixToDatetimeLocal(leaf.startTime));
+  setters.setCliffTime(unixToDatetimeLocal(leaf.cliffTime));
+  setters.setEndTime(unixToDatetimeLocal(leaf.endTime));
+  setters.setMilestoneIdx(String(leaf.milestoneIdx));
+}
+
 export default function CampaignPage({ params }: { params: Promise<{ id: string }> }) {
   const { id: treeAddress } = use(params);
   const { publicKey } = useWallet();
@@ -76,10 +105,24 @@ export default function CampaignPage({ params }: { params: Promise<{ id: string 
   const [cliffTime, setCliffTime] = useState("");
   const [endTime, setEndTime] = useState("");
   const [milestoneIdx, setMilestoneIdx] = useState("0");
+  const [scheduleSource, setScheduleSource] = useState<ScheduleSource>("none");
+  const [showManualSchedule, setShowManualSchedule] = useState(false);
 
   const [txStatus, setTxStatus] = useState<
     { type: "idle" } | { type: "loading" } | { type: "success"; sig: string } | { type: "error"; msg: string }
   >({ type: "idle" });
+
+  const isSingleLeaf = treeState?.leafCount === 1;
+  const beneficiaryKey = publicKey?.toBase58();
+  const proofQuery = useProofLookup(
+    isSingleLeaf ? treeAddress : undefined,
+    isSingleLeaf ? beneficiaryKey : undefined,
+  );
+
+  const scheduleLocked =
+    isSingleLeaf &&
+    (scheduleSource === "api" || scheduleSource === "local") &&
+    !showManualSchedule;
 
   const fetchTree = useCallback(async () => {
     if (!program) return;
@@ -111,6 +154,54 @@ export default function CampaignPage({ params }: { params: Promise<{ id: string 
     fetchTree();
   }, [fetchTree]);
 
+  useEffect(() => {
+    if (!isSingleLeaf || !publicKey) return;
+
+    if (proofQuery.data?.leaf) {
+      applyScheduleToForm(proofQuery.data.leaf, {
+        setReleaseType,
+        setStartTime,
+        setCliffTime,
+        setEndTime,
+        setMilestoneIdx,
+      });
+      setScheduleSource("api");
+      return;
+    }
+
+    if (proofQuery.isError && scheduleSource !== "api") {
+      const local = loadStreamScheduleLocal(treeAddress);
+      if (local) {
+        applyScheduleToForm(
+          {
+            releaseType: local.releaseType,
+            startTime: local.startTime,
+            cliffTime: local.cliffTime,
+            endTime: local.endTime,
+            milestoneIdx: local.milestoneIdx,
+          },
+          {
+            setReleaseType,
+            setStartTime,
+            setCliffTime,
+            setEndTime,
+            setMilestoneIdx,
+          },
+        );
+        setScheduleSource("local");
+      } else if (scheduleSource === "none") {
+        setScheduleSource("manual");
+      }
+    }
+  }, [
+    isSingleLeaf,
+    publicKey,
+    proofQuery.data,
+    proofQuery.isError,
+    treeAddress,
+    scheduleSource,
+  ]);
+
   const nowTs = BigInt(Math.floor(Date.now() / 1000));
   const totalSupply = treeState ? BigInt(treeState.totalSupply.toString()) : 0n;
   const totalClaimed = treeState ? BigInt(treeState.totalClaimed.toString()) : 0n;
@@ -118,8 +209,8 @@ export default function CampaignPage({ params }: { params: Promise<{ id: string 
     ? BigInt(treeState.cancelledAt.toString())
     : null;
 
-  const cliffTsBigint = cliffTime ? BigInt(Math.floor(new Date(cliffTime).getTime() / 1000)) : 0n;
-  const endTsBigint = endTime ? BigInt(Math.floor(new Date(endTime).getTime() / 1000)) : 0n;
+  const cliffTsBigint = cliffTime ? BigInt(datetimeLocalToUnix(cliffTime)) : 0n;
+  const endTsBigint = endTime ? BigInt(datetimeLocalToUnix(endTime)) : 0n;
 
   const vested = cliffTime && endTime
     ? vestedAmount(totalSupply, releaseType, cliffTsBigint, endTsBigint, cancelledAtBigint, nowTs)
@@ -144,9 +235,11 @@ export default function CampaignPage({ params }: { params: Promise<{ id: string 
       const { getAssociatedTokenAddressSync } = await import("@solana/spl-token");
       const beneficiaryAta = getAssociatedTokenAddressSync(treeState.mint, publicKey);
 
-      const startTs = startTime ? new BN(Math.floor(new Date(startTime).getTime() / 1000)) : new BN(0);
-      const cliffTs = new BN(Math.floor(new Date(cliffTime).getTime() / 1000));
-      const endTs = new BN(Math.floor(new Date(endTime).getTime() / 1000));
+      const startTs = startTime
+        ? new BN(datetimeLocalToUnix(startTime))
+        : new BN(0);
+      const cliffTs = new BN(datetimeLocalToUnix(cliffTime));
+      const endTs = new BN(datetimeLocalToUnix(endTime));
 
       const sig = await program.methods
         .withdraw({
@@ -170,38 +263,18 @@ export default function CampaignPage({ params }: { params: Promise<{ id: string 
       setTxStatus({ type: "success", sig });
       fetchTree();
     } catch (err: unknown) {
-      const msg = parseAnchorError(err);
-      setTxStatus({ type: "error", msg });
+      setTxStatus({ type: "error", msg: formatVestingError(err) });
     }
   }
 
-  function parseAnchorError(err: unknown): string {
-    const raw = err instanceof Error ? err.message : String(err);
-
-    if (raw.includes("NothingToClaim") || raw.includes("0x1779")) {
-      return "Nothing to claim yet. Tokens haven't vested past your last claim.";
-    }
-    if (raw.includes("CampaignPaused") || raw.includes("0x1776")) {
-      return "Campaign is paused. Contact the campaign creator.";
-    }
-    if (raw.includes("InvalidProof") || raw.includes("0x1773")) {
-      return "Invalid vesting parameters. Check your release type, cliff, and end times match the original stream.";
-    }
-    if (raw.includes("UnauthorizedClaimer") || raw.includes("0x1778")) {
-      return "You are not the beneficiary of this stream.";
-    }
-    if (raw.includes("InsufficientVault") || raw.includes("0x177a")) {
-      return "Vault has insufficient tokens. Contact the campaign creator.";
-    }
-    if (raw.includes("AccountNotInitialized")) {
-      return "Required account not found on-chain. The stream may not exist or hasn't been funded.";
-    }
-    if (raw.includes("User rejected")) {
-      return "Transaction cancelled by user.";
-    }
-
-    return raw;
-  }
+  const scheduleHint =
+    scheduleSource === "api"
+      ? "Schedule loaded from indexer."
+      : scheduleSource === "local"
+        ? "Schedule loaded from this browser (saved at create time)."
+        : isSingleLeaf
+          ? "Schedule not indexed — enter the exact parameters from when the stream was created."
+          : "Enter your vesting parameters to compute claimable amount.";
 
   return (
     <main className="max-w-2xl mx-auto p-8">
@@ -220,7 +293,6 @@ export default function CampaignPage({ params }: { params: Promise<{ id: string 
         </div>
       ) : treeState ? (
         <div className="space-y-6">
-          {/* Campaign Info */}
           <div className="bg-gray-900 border border-gray-700 rounded-lg p-6 space-y-3">
             <h2 className="text-lg font-medium mb-4">Campaign Details</h2>
             <InfoRow label="Tree Address" value={treeAddress} mono />
@@ -235,19 +307,30 @@ export default function CampaignPage({ params }: { params: Promise<{ id: string 
             } />
           </div>
 
-          {/* Vesting Schedule Input */}
           <div className="bg-gray-900 border border-gray-700 rounded-lg p-6 space-y-4">
             <h2 className="text-lg font-medium">Your Vesting Schedule</h2>
-            <p className="text-xs text-gray-500">
-              Enter your vesting parameters to compute claimable amount.
-            </p>
+            <p className="text-xs text-gray-500">{scheduleHint}</p>
+            {proofQuery.isLoading && isSingleLeaf && (
+              <p className="text-xs text-gray-400">Loading schedule…</p>
+            )}
+
+            {isSingleLeaf && scheduleLocked && (
+              <button
+                type="button"
+                onClick={() => setShowManualSchedule(true)}
+                className="text-xs text-purple-400 hover:text-purple-300 underline"
+              >
+                Advanced: edit schedule manually
+              </button>
+            )}
 
             <div>
               <label className="block text-sm text-gray-400 mb-1">Release Type</label>
               <select
                 value={releaseType}
                 onChange={(e) => setReleaseType(Number(e.target.value))}
-                className="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-2 outline-none"
+                disabled={scheduleLocked}
+                className="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-2 outline-none disabled:opacity-60"
               >
                 <option value={0}>Cliff</option>
                 <option value={1}>Linear</option>
@@ -262,7 +345,8 @@ export default function CampaignPage({ params }: { params: Promise<{ id: string 
                   type="datetime-local"
                   value={startTime}
                   onChange={(e) => setStartTime(e.target.value)}
-                  className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 outline-none text-sm"
+                  disabled={scheduleLocked}
+                  className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 outline-none text-sm disabled:opacity-60"
                 />
               </div>
               <div>
@@ -271,7 +355,8 @@ export default function CampaignPage({ params }: { params: Promise<{ id: string 
                   type="datetime-local"
                   value={cliffTime}
                   onChange={(e) => setCliffTime(e.target.value)}
-                  className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 outline-none text-sm"
+                  disabled={scheduleLocked}
+                  className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 outline-none text-sm disabled:opacity-60"
                   required
                 />
               </div>
@@ -281,7 +366,8 @@ export default function CampaignPage({ params }: { params: Promise<{ id: string 
                   type="datetime-local"
                   value={endTime}
                   onChange={(e) => setEndTime(e.target.value)}
-                  className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 outline-none text-sm"
+                  disabled={scheduleLocked}
+                  className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 outline-none text-sm disabled:opacity-60"
                   required
                 />
               </div>
@@ -296,13 +382,13 @@ export default function CampaignPage({ params }: { params: Promise<{ id: string 
                   max="255"
                   value={milestoneIdx}
                   onChange={(e) => setMilestoneIdx(e.target.value)}
-                  className="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-2 outline-none"
+                  disabled={scheduleLocked}
+                  className="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-2 outline-none disabled:opacity-60"
                 />
               </div>
             )}
           </div>
 
-          {/* Vesting Progress */}
           {cliffTime && endTime && (
             <div className="bg-gray-900 border border-gray-700 rounded-lg p-6 space-y-4">
               <h2 className="text-lg font-medium">Vesting Progress</h2>

@@ -111,12 +111,16 @@
 | T53 | claim with wrong mint rejects with MintMismatch | PASS | |
 | T54 | fund_campaign with zero amount rejects with ZeroAmount | PASS | |
 | T55 | withdraw after cancel uses cancel-time clamped amount | PASS (localnet) | Bankrun warp to 50% cancel, then past end |
+| T56 | withdraw at 25% vested unlocks 25% of stream amount | PASS | |
+| T57 | withdraw at 100% vested claims full stream amount | PASS | |
+| T58 | withdraw at 50% vested unlocks 50% of stream amount | PASS | Symmetric cliff/end window (~50% at validator now) |
+| T59 | immediate second withdraw rejects with NothingToClaim | PASS (localnet) | Bankrun — after 25% claim |
 
 ---
 
 ## Clock-Dependent Tests — Passed on Localnet via Bankrun
 
-These 7 tests need deterministic clock warping, which is not available on devnet. They pass on localnet using `solana-bankrun` + `anchor-bankrun` via `context.setClock()`. Run with:
+These tests need deterministic clock warping, which is not available on devnet. They pass on localnet using `solana-bankrun` + `anchor-bankrun` via `context.setClock()`. Run with:
 
 ```bash
 pnpm exec ts-mocha -p ./tsconfig.json -t 1000000 tests/vesting.clock.spec.ts
@@ -130,9 +134,12 @@ pnpm exec ts-mocha -p ./tsconfig.json -t 1000000 tests/vesting.clock.spec.ts
 | T25 | Withdraw partial then full (progressive) | +300s, then +800s | PASS — 3000 then 8000 cumulative |
 | T47 | close_claim_record after grace period | +604800s (7 days) | PASS — SOL rent refund |
 | T55 | Cancel-time clamped withdraw | +500s for cancel, +2000s for withdraw | PASS — received ~5000 (not 10000) |
+| T56 | Withdraw at exactly 25% vested | +250s of 1000s window | PASS — claimed 2500/10000 |
+| T58 | Withdraw at exactly 50% vested | +500s of 1000s window | PASS — claimed 5000/10000 |
+| T59 | Second withdraw when caught up | none (same clock) | PASS — NothingToClaim (6015) |
 | EXPLOIT 4 | Claim after vault drained past grace period | +604800s (7 days) | PASS — InsufficientVault error |
 
-**Test file:** `tests/vesting.clock.spec.ts` | **Runtime:** ~600ms for all 7 tests
+**Test file:** `tests/vesting.clock.spec.ts` | **Runtime:** ~1s for all bankrun clock tests
 
 ---
 
@@ -145,9 +152,9 @@ pnpm exec ts-mocha -p ./tsconfig.json -t 1000000 tests/vesting.clock.spec.ts
 | AC3 | Linear unlock math | PASS — off-chain only (T41) | PASS — on-chain 25%/30%/80% (T17, T18) |
 | AC4 | withdraw instruction works | PASS (T22) | PASS — progressive (T25) |
 | AC5 | Partial withdrawals | SKIP on devnet | PASS (T18, T25) |
-| AC6 | Cannot withdraw more than unlocked | PASS (T23) | — |
+| AC6 | Cannot withdraw more than unlocked | PASS (T23) | PASS (T59 — NothingToClaim on double withdraw) |
 | AC7 | Cannot withdraw from another's stream | PASS (T24) | — |
-| AC8 | 0%/25%/50%/100% checkpoints | PARTIAL — 0% + 100% | PASS — all checkpoints verified (T17, T55) |
+| AC8 | 0%/25%/50%/100% checkpoints | PASS — 0% (T23), 25% (T56), 50% (T58), 100% (T57) | PASS — exact 25%/50% (T56, T58) + progressive (T25) |
 | AC9 | Deployed to devnet | PASS | — |
 | AC10 | Grace period enforcement | PASS — reject before (T12) | PASS — allow after (T20, T47, EXPLOIT 4) |
 | AC11 | Cancel-time clamping | SKIP on devnet | PASS — 50% clamped (T55) |

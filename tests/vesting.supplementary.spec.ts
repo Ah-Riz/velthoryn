@@ -1235,6 +1235,77 @@ describe("vesting supplementary T6-T25", () => {
   });
 
   // -----------------------------------------------------------------------
+  // T58: withdraw at ~50% vested unlocks ~50% (create_stream path, devnet)
+  // -----------------------------------------------------------------------
+  it("T58: withdraw at 50% vested unlocks 50% of stream amount", async () => {
+    const CAMPAIGN_ID = 307;
+    const AMOUNT = 10_000;
+
+    const mint = await createTestMint(provider, creator.publicKey);
+    await fundCreatorAta(provider, mint, creator.publicKey, AMOUNT);
+    const beneficiary = await makeBeneficiary(provider);
+    const t = await createTimeHelpers(provider.connection);
+
+    const [treePda] = await treePDA(PROGRAM_ID, creator.publicKey, mint, CAMPAIGN_ID);
+    const [vaultAuthPda] = await vaultAuthorityPDA(PROGRAM_ID, treePda);
+    const [crPda] = await claimRecordPDA(PROGRAM_ID, treePda, beneficiary.publicKey);
+    const vault = getAssociatedTokenAddressSync(mint, vaultAuthPda, true);
+    const beneficiaryAta = getAssociatedTokenAddressSync(mint, beneficiary.publicKey);
+
+    const cliff = t.now - 500;
+    const end = t.now + 500;
+
+    await program.methods
+      .createStream({
+        campaignId: new BN(CAMPAIGN_ID),
+        beneficiary: beneficiary.publicKey,
+        amount: new BN(AMOUNT),
+        releaseType: 1,
+        startTime: new BN(cliff),
+        cliffTime: new BN(cliff),
+        endTime: new BN(end),
+        milestoneIdx: 0,
+        cancellable: true,
+        cancelAuthority: cancelAuthority.publicKey,
+        pauseAuthority: null,
+      })
+      .accounts({
+        creator: creator.publicKey,
+        vestingTree: treePda,
+        vaultAuthority: vaultAuthPda,
+        vault,
+        sourceAta: getAssociatedTokenAddressSync(mint, creator.publicKey),
+        mint,
+      })
+      .signers([creator])
+      .rpc();
+
+    await program.methods
+      .withdraw({
+        releaseType: 1,
+        startTime: new BN(cliff),
+        cliffTime: new BN(cliff),
+        endTime: new BN(end),
+        milestoneIdx: 0,
+      })
+      .accounts({
+        beneficiary: beneficiary.publicKey,
+        vestingTree: treePda,
+        claimRecord: crPda,
+        vaultAuthority: vaultAuthPda,
+        vault,
+        beneficiaryAta,
+        mint,
+      })
+      .signers([beneficiary])
+      .rpc();
+
+    const bal = await getAccount(provider.connection, beneficiaryAta);
+    expect(Number(bal.amount)).to.be.at.least(4900);
+    expect(Number(bal.amount)).to.be.at.most(5100);
+  });
+
+  // -----------------------------------------------------------------------
   // T24: withdraw unauthorized signer returns UnauthorizedClaimer
   // -----------------------------------------------------------------------
   it("T24: withdraw unauthorized signer returns UnauthorizedClaimer", async () => {
