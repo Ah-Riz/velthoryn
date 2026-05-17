@@ -384,7 +384,8 @@ Complete these before engaging an audit firm.
 - [ ] P0: `cargo clippy --workspace -D warnings` exits 0 with no suppressed lints
 - [ ] P0: No `todo!()`, `unimplemented!()`, `#[allow(unused)]`, or `unwrap()` in production code (tests excepted)
 - [x] P1: All `VestingError` variants are triggered by at least one named test
-- [x] P0: `programs/vesting/src/math/merkle.rs` `verify_merkle_proof` returns correct results for: single-leaf tree (empty proof), 2-leaf tree, 4-leaf tree, odd-count tree (3 leaves where the last leaf is duplicated), large tree (1,000 leaves via property test).
+- [x] P0: `programs/vesting/src/math/merkle.rs` `verify_merkle_proof` returns correct results for: single-leaf tree (empty proof), 2-leaf tree, 3-leaf odd tree (duplicate last leaf), 4-leaf tree (`verify_three_leaf` + `tests/golden_vector.spec.ts` 3-leaf gate)
+- [ ] P1: Large tree (1,000 leaves via property test) — optional hardening before audit
 
 ### Test coverage
 - [x] P0: `cargo test` green — schedule unit tests pass

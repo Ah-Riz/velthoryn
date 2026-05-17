@@ -96,6 +96,24 @@ mod tests {
         assert!(verify_merkle_proof(hashes[3], &[hashes[2], l1_0], 3, root));
     }
 
+    /// Odd-count tree: duplicate last leaf at layer 0 (matches clients/ts merkle.ts).
+    #[test]
+    fn verify_three_leaf() {
+        let leaves: Vec<VestingLeaf> = (0..3).map(make_leaf).collect();
+        let hashes: Vec<[u8; 32]> = leaves.iter().map(leaf_hash).collect();
+        let l1_0 = node_hash(hashes[0], hashes[1]);
+        let l1_1 = node_hash(hashes[2], hashes[2]);
+        let root = node_hash(l1_0, l1_1);
+
+        assert!(verify_merkle_proof(hashes[0], &[hashes[1], l1_1], 0, root));
+        assert!(verify_merkle_proof(hashes[1], &[hashes[0], l1_1], 1, root));
+        assert!(verify_merkle_proof(hashes[2], &[hashes[2], l1_0], 2, root));
+
+        let mut bad_root = root;
+        bad_root[0] ^= 0xff;
+        assert!(!verify_merkle_proof(hashes[2], &[hashes[2], l1_0], 2, bad_root));
+    }
+
     #[test]
     fn verify_tampered_proof() {
         let leaf = make_leaf(0);

@@ -7,7 +7,7 @@ import {
   VestingLeaf,
   ReleaseType,
 } from "../clients/ts/src/leaf";
-import { VestingMerkleTree } from "../clients/ts/src/merkle";
+import { VestingMerkleTree, verifyProof } from "../clients/ts/src/merkle";
 
 const RUST_GOLDEN_HEX =
   "cf2129259e55d196c624b52834eeca822036914cabe10ce39ebbfbe67270627b";
@@ -43,5 +43,29 @@ describe("golden vector gate", () => {
     const tree = new VestingMerkleTree([FIXTURE]);
     expect(tree.root.length).to.equal(32);
     expect(tree.root.equals(leafHash(FIXTURE))).to.be.true;
+  });
+
+  it("3-leaf odd tree: proofs verify for all indices (duplicate-last layer)", () => {
+    const leaves: VestingLeaf[] = [0, 1, 2].map((i) => ({
+      leafIndex: i,
+      beneficiary: PublicKey.unique(),
+      amount: new BN(1_000 + i),
+      releaseType: ReleaseType.Linear,
+      startTime: new BN(0),
+      cliffTime: new BN(0),
+      endTime: new BN(1_000),
+      milestoneIdx: 0,
+    }));
+
+    const tree = new VestingMerkleTree(leaves);
+    expect(tree.root.length).to.equal(32);
+
+    for (let i = 0; i < leaves.length; i++) {
+      const proof = tree.proof(i);
+      expect(tree.verify(i, proof)).to.be.true;
+      expect(
+        verifyProof(leafHash(leaves[i]), proof, i, tree.root),
+      ).to.be.true;
+    }
   });
 });

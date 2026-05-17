@@ -28,6 +28,8 @@ pub struct CreateStream<'info> {
     #[account(mut)]
     pub creator: Signer<'info>,
 
+    pub mint: Account<'info, Mint>,
+
     #[account(
         init,
         payer = creator,
@@ -58,8 +60,6 @@ pub struct CreateStream<'info> {
         constraint = source_ata.owner == creator.key() @ VestingError::Unauthorized,
     )]
     pub source_ata: Account<'info, TokenAccount>,
-
-    pub mint: Account<'info, Mint>,
 
     pub token_program: Program<'info, Token>,
     pub associated_token_program: Program<'info, AssociatedToken>,

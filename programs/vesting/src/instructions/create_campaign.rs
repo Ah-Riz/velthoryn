@@ -23,6 +23,8 @@ pub struct CreateCampaign<'info> {
     #[account(mut)]
     pub creator: Signer<'info>,
 
+    pub mint: Account<'info, Mint>,
+
     #[account(
         init,
         payer = creator,
@@ -46,8 +48,6 @@ pub struct CreateCampaign<'info> {
         associated_token::authority = vault_authority,
     )]
     pub vault: Account<'info, TokenAccount>,
-
-    pub mint: Account<'info, Mint>,
 
     pub token_program: Program<'info, Token>,
     pub associated_token_program: Program<'info, AssociatedToken>,

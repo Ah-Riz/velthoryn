@@ -82,6 +82,9 @@ jobs:
           fi
           anchor build
 
+      - name: Merkle unit tests
+        run: cargo test --manifest-path programs/vesting/Cargo.toml merkle -- --nocapture
+
       - name: Start local validator
         run: |
           solana-test-validator --reset --quiet &

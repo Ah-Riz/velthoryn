@@ -51,6 +51,9 @@ pub struct Withdraw<'info> {
     #[account(mut, address = vesting_tree.vault @ VestingError::WrongVault)]
     pub vault: Account<'info, TokenAccount>,
 
+    #[account(address = vesting_tree.mint @ VestingError::MintMismatch)]
+    pub mint: Account<'info, Mint>,
+
     #[account(
         init_if_needed,
         payer = beneficiary,
@@ -58,9 +61,6 @@ pub struct Withdraw<'info> {
         associated_token::authority = beneficiary,
     )]
     pub beneficiary_ata: Account<'info, TokenAccount>,
-
-    #[account(address = vesting_tree.mint @ VestingError::MintMismatch)]
-    pub mint: Account<'info, Mint>,
 
     pub token_program: Program<'info, Token>,
     pub associated_token_program: Program<'info, AssociatedToken>,

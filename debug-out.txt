@@ -1,0 +1,11 @@
+file:///home/lana/Documents/learn/mancer-scholarship/mancer-vesting/scripts/debug-create-stream.mjs:1
+const anchor = require("@coral-xyz/anchor");
+               ^
+
+ReferenceError: require is not defined in ES module scope, you can use import instead
+    at file:///home/lana/Documents/learn/mancer-scholarship/mancer-vesting/scripts/debug-create-stream.mjs:1:16
+    at ModuleJob.run (node:internal/modules/esm/module_job:430:25)
+    at async onImport.tracePromise.__proto__ (node:internal/modules/esm/loader:655:26)
+    at async asyncRunEntryPointWithESMLoader (node:internal/modules/run_main:101:5)
+
+Node.js v25.6.1

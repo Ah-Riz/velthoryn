@@ -2,7 +2,6 @@ import { BN, Program, Wallet, Idl } from "@coral-xyz/anchor";
 import { Keypair, PublicKey } from "@solana/web3.js";
 import { startAnchor, Clock, ProgramTestContext } from "solana-bankrun";
 import { BankrunProvider } from "anchor-bankrun";
-import { getAssociatedTokenAddressSync } from "@solana/spl-token";
 
 import { PROGRAM_ID } from "./setup";
 
