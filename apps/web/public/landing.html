@@ -1,0 +1,1680 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Velthoryn — Pay out tokens, on a schedule</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="Velthoryn — Solana-native token vesting and Merkle-compressed distribution. Give your team, investors, and community their tokens on a schedule.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --ink:       #0B0D12;
+    --graphite:  #11141C;
+    --ink-2:     #141823;
+    --ink-3:     #1A1F2D;
+    --line:      #1F2430;
+    --line-2:    #2A3140;
+    --silver:    #E5E7EB;
+    --silver-2:  #B4B9C5;
+    --slate:     #64748B;
+    --slate-2:   #475569;
+    --violet:    #7C3AED;
+    --violet-2:  #A78BFA;
+    --violet-d:  #4F1BB3;
+    --teal:      #14F1D9;
+    --green:     #22C55E;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; background: var(--ink); color: var(--silver); font-family: "Space Grotesk", system-ui, sans-serif; -webkit-font-smoothing: antialiased; }
+  html { scroll-behavior: smooth; scroll-padding-top: 80px; }
+  .mono { font-family: "JetBrains Mono", monospace; }
+  a { color: inherit; text-decoration: none; }
+
+  .wrap { max-width: 1320px; margin: 0 auto; padding: 0 clamp(20px, 4vw, 56px); }
+
+  /* ── Top bar ──────────────────────────────────────────────── */
+  .topbar {
+    position: sticky; top: 0; z-index: 50;
+    background: rgba(11, 13, 18, 0.78);
+    backdrop-filter: blur(12px);
+    border-bottom: 1px solid var(--line);
+  }
+  .topbar-inner {
+    display: flex; align-items: center; gap: 36px;
+    padding: 18px 0;
+  }
+  .brand { display: flex; align-items: center; gap: 12px; }
+  .brand svg { width: 34px; height: 34px; }
+  .brand .name { font-weight: 600; font-size: 18px; letter-spacing: -0.02em; }
+  .nav { display: flex; gap: 28px; }
+  .nav a { font-size: 13.5px; color: var(--silver-2); font-weight: 400; }
+  .nav a:hover { color: var(--silver); }
+  .topbar-actions { margin-left: auto; display: flex; gap: 10px; align-items: center; }
+  .btn {
+    font-family: "Space Grotesk"; font-weight: 500;
+    font-size: 13.5px;
+    padding: 9px 16px;
+    border-radius: 8px;
+    border: 1px solid transparent;
+    cursor: pointer;
+    transition: transform .1s ease, background .15s ease;
+    display: inline-flex; align-items: center; gap: 8px;
+    letter-spacing: -0.005em;
+  }
+  .btn.primary { background: var(--violet); color: white; }
+  .btn.primary:hover { background: #8b50f1; }
+  .btn.ghost { background: transparent; color: var(--silver); border-color: var(--line-2); }
+  .btn.ghost:hover { background: var(--ink-2); border-color: var(--slate-2); }
+  .btn.dark { background: var(--ink); color: var(--silver); border-color: var(--line-2); }
+  .btn .arrow { font-family: "JetBrains Mono", monospace; opacity: 0.7; }
+  .btn.waitlist-cta {
+    background: var(--violet);
+    color: white;
+    box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.04) inset;
+    position: relative;
+  }
+  .btn.waitlist-cta::before {
+    content: "";
+    position: absolute; inset: -2px;
+    border-radius: 10px;
+    background: var(--violet);
+    opacity: 0.45;
+    filter: blur(10px);
+    z-index: -1;
+    transition: opacity 0.25s;
+  }
+  .btn.waitlist-cta:hover { background: #8b50f1; }
+  .btn.waitlist-cta:hover::before { opacity: 0.75; }
+
+  /* ── HERO ─────────────────────────────────────────────────── */
+  .hero {
+    position: relative;
+    padding: 100px 0 80px;
+    overflow: hidden;
+  }
+  .hero::before {
+    content: "";
+    position: absolute; inset: 0;
+    background:
+      radial-gradient(700px 400px at 18% 30%, rgba(124, 58, 237, 0.18), transparent 60%),
+      radial-gradient(900px 600px at 90% 70%, rgba(20, 241, 217, 0.10), transparent 60%);
+    z-index: 0; pointer-events: none;
+  }
+  .hero::after {
+    content: "";
+    position: absolute; inset: 0;
+    background:
+      linear-gradient(var(--line) 1px, transparent 1px) 0 0/64px 64px,
+      linear-gradient(90deg, var(--line) 1px, transparent 1px) 0 0/64px 64px;
+    opacity: 0.4;
+    mask-image: radial-gradient(ellipse at center, black, transparent 78%);
+    z-index: 0; pointer-events: none;
+  }
+  .hero-grid {
+    position: relative; z-index: 1;
+    display: grid;
+    grid-template-columns: 1.05fr 1fr;
+    gap: 64px;
+    align-items: center;
+  }
+  .hero-left h1 {
+    font-size: clamp(48px, 5.8vw, 76px);
+    font-weight: 600;
+    letter-spacing: -0.03em;
+    line-height: 0.98;
+    margin: 0 0 28px;
+  }
+  .hero-left h1 em {
+    font-style: normal;
+    background: linear-gradient(110deg, var(--violet-2), var(--teal));
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+  }
+  .hero-left .sub {
+    font-size: 19px;
+    color: var(--silver-2);
+    line-height: 1.45;
+    max-width: 540px;
+    margin: 0 0 40px;
+  }
+  .hero-left .cta-row { display: flex; gap: 12px; align-items: center; margin-bottom: 36px; }
+  .hero-left .cta-row .btn { padding: 13px 22px; font-size: 14.5px; }
+  .hero-left .meta {
+    display: flex; gap: 28px; flex-wrap: wrap;
+    font-family: "JetBrains Mono", monospace;
+    font-size: 11.5px;
+    color: var(--slate);
+    letter-spacing: 0.06em;
+  }
+  .hero-left .meta b { color: var(--silver); font-weight: 500; }
+  .hero-left .meta div { display: flex; align-items: center; gap: 9px; }
+  .hero-left .meta i { width: 6px; height: 6px; border-radius: 50%; display: inline-block; }
+
+  /* Brand animation */
+  .brand-anim {
+    position: relative;
+    width: 100%;
+    aspect-ratio: 1 / 1;
+    max-width: 560px;
+    margin: 0 auto;
+  }
+  .brand-anim > svg { width: 100%; height: 100%; display: block; }
+  @keyframes brandRot { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+  .brand-rot { transform-box: fill-box; transform-origin: 300px 300px; animation: brandRot 80s linear infinite; }
+
+  /* ── Live campaign card ─────────────────────────────────────── */
+  .live-card {
+    background: var(--graphite);
+    border: 1px solid var(--line);
+    border-radius: 20px;
+    overflow: hidden;
+    position: relative;
+    box-shadow: 0 30px 80px -30px rgba(0,0,0,0.6), 0 0 0 1px var(--line);
+  }
+  .live-card .lc-head {
+    display: flex; align-items: center; gap: 14px;
+    padding: 16px 20px;
+    border-bottom: 1px solid var(--line);
+    background: var(--ink-2);
+  }
+  .live-card .lc-head .dot {
+    width: 8px; height: 8px; border-radius: 50%;
+    background: var(--green); box-shadow: 0 0 10px var(--green);
+    animation: pulse 1.8s ease-in-out infinite;
+  }
+  @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.35; } }
+  .live-card .lc-head .t { font-size: 13px; letter-spacing: 0.06em; }
+  .live-card .lc-head .t b { color: var(--green); font-weight: 500; }
+  .live-card .lc-head .tt {
+    margin-left: auto;
+    font-family: "JetBrains Mono", monospace;
+    font-size: 11px; color: var(--slate); letter-spacing: 0.1em;
+  }
+  .live-card .lc-body { padding: 26px 26px 28px; }
+  .lc-row {
+    display: flex; justify-content: space-between; align-items: baseline;
+    margin-bottom: 6px;
+  }
+  .lc-row .lbl { font-family: "JetBrains Mono", monospace; font-size: 11px; color: var(--slate); letter-spacing: 0.1em; }
+  .lc-row .val { font-family: "JetBrains Mono", monospace; font-size: 11.5px; color: var(--silver); letter-spacing: 0.04em; }
+  .lc-title { font-size: 22px; font-weight: 600; letter-spacing: -0.015em; margin: 16px 0 2px; }
+  .lc-chart { height: 130px; margin: 22px 0 20px; position: relative; }
+  .lc-chart svg { width: 100%; height: 100%; display: block; }
+  .lc-stats {
+    display: grid; grid-template-columns: repeat(3, 1fr);
+    gap: 0;
+    border-top: 1px solid var(--line);
+    margin-top: 6px;
+  }
+  .lc-stat {
+    padding: 18px 14px 4px;
+    border-right: 1px solid var(--line);
+  }
+  .lc-stat:last-child { border-right: none; }
+  .lc-stat .l { font-family: "JetBrains Mono", monospace; font-size: 10px; color: var(--slate); letter-spacing: 0.12em; }
+  .lc-stat .v { font-size: 20px; font-weight: 600; margin-top: 4px; letter-spacing: -0.01em; }
+  .lc-stat .v small { font-weight: 400; color: var(--slate); font-size: 13px; margin-left: 3px; }
+  .lc-recip { border-top: 1px solid var(--line); margin-top: 14px; padding-top: 14px; }
+  .recip { display: flex; align-items: center; gap: 12px; padding: 8px 0; }
+  .recip .ava { width: 22px; height: 22px; border-radius: 50%; background: linear-gradient(135deg, var(--violet), var(--teal)); flex-shrink: 0; }
+  .recip .addr { font-family: "JetBrains Mono", monospace; font-size: 11.5px; color: var(--silver); }
+  .recip .amt { margin-left: auto; font-family: "JetBrains Mono", monospace; font-size: 11.5px; color: var(--silver); }
+  .recip .stat {
+    font-family: "JetBrains Mono", monospace; font-size: 10px;
+    color: var(--slate); padding: 2px 7px; border-radius: 4px;
+    background: var(--ink); border: 1px solid var(--line);
+    letter-spacing: 0.08em;
+  }
+  .recip .stat.pending { color: var(--violet-2); border-color: rgba(124, 58, 237, 0.3); background: rgba(124, 58, 237, 0.08); }
+  .annotate { position: absolute; font-family: "JetBrains Mono", monospace; font-size: 10.5px; color: var(--slate); letter-spacing: 0.06em; pointer-events: none; }
+  .annotate b { color: var(--silver); font-weight: 500; }
+  .annotate.tl { top: -18px; left: -8px; }
+  .annotate.tr { top: -18px; right: 0; color: var(--green); }
+
+  /* ── Partners strip ─────────────────────────────────── */
+  .ticker {
+    border-top: 1px solid var(--line);
+    border-bottom: 1px solid var(--line);
+    background: var(--graphite);
+    overflow: hidden;
+    position: relative;
+    padding: 36px 0 44px;
+  }
+  .partners-label {
+    text-align: center;
+    font-family: "JetBrains Mono", monospace;
+    font-size: 11px;
+    color: var(--slate);
+    letter-spacing: 0.22em;
+    margin-bottom: 18px;
+  }
+  .ticker::before, .ticker::after {
+    content: "";
+    position: absolute;
+    top: 0; bottom: 0;
+    width: 140px;
+    z-index: 3;
+    pointer-events: none;
+  }
+  .ticker::before { left: 0; background: linear-gradient(to right, var(--graphite), transparent); }
+  .ticker::after { right: 0; background: linear-gradient(to left, var(--graphite), transparent); }
+  .partners-track {
+    display: flex;
+    align-items: center;
+    gap: 88px;
+    width: max-content;
+    padding: 18px 44px 6px;
+    animation: partnerScroll 28s linear infinite;
+  }
+  .ticker:hover .partners-track { animation-play-state: paused; }
+  .partner-item {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 64px;
+    flex-shrink: 0;
+    text-decoration: none;
+    transition: transform 0.35s cubic-bezier(0.2, 0.8, 0.2, 1), filter 0.35s;
+    filter: grayscale(0.15);
+  }
+  .partner-item img {
+    height: 56px;
+    width: auto;
+    display: block;
+    transition: filter 0.35s;
+  }
+  .partner-item.boxed img {
+    height: 56px;
+    width: 56px;
+    border-radius: 12px;
+    object-fit: cover;
+  }
+  .partner-item:hover {
+    transform: translateY(-3px) scale(1.06);
+    filter: grayscale(0);
+  }
+  .partner-item:hover img { filter: brightness(1.08) saturate(1.15); }
+  @keyframes partnerScroll {
+    from { transform: translateX(0); }
+    to { transform: translateX(-50%); }
+  }
+
+  /* ── Scroll-triggered reveal ─────────────────────────────── */
+  .reveal {
+    opacity: 0;
+    transform: translateY(28px);
+    transition: opacity 0.7s cubic-bezier(0.2, 0.8, 0.2, 1),
+                transform 0.7s cubic-bezier(0.2, 0.8, 0.2, 1);
+    will-change: opacity, transform;
+  }
+  .reveal.in { opacity: 1; transform: translateY(0); }
+  .reveal-stagger > * {
+    opacity: 0;
+    transform: translateY(20px);
+    transition: opacity 0.6s cubic-bezier(0.2, 0.8, 0.2, 1),
+                transform 0.6s cubic-bezier(0.2, 0.8, 0.2, 1);
+  }
+  .reveal-stagger.in > * { opacity: 1; transform: translateY(0); }
+  .reveal-stagger.in > *:nth-child(1) { transition-delay: 0.05s; }
+  .reveal-stagger.in > *:nth-child(2) { transition-delay: 0.18s; }
+  .reveal-stagger.in > *:nth-child(3) { transition-delay: 0.31s; }
+  .reveal-stagger.in > *:nth-child(4) { transition-delay: 0.44s; }
+  @media (prefers-reduced-motion: reduce) {
+    .reveal, .reveal-stagger > * { opacity: 1; transform: none; transition: none; }
+  }
+
+  /* ── Section pattern ─────────────────────────────────────── */
+  section.sect { padding: 120px 0; }
+  .sect-eyebrow {
+    font-family: "JetBrains Mono", monospace;
+    font-size: 11px;
+    letter-spacing: 0.18em;
+    color: var(--violet-2);
+    margin-bottom: 16px;
+    display: flex; gap: 12px; align-items: center;
+  }
+  .sect-eyebrow b { color: var(--silver); font-weight: 500; }
+  .sect-title {
+    font-size: clamp(36px, 4.4vw, 56px);
+    font-weight: 600;
+    letter-spacing: -0.025em;
+    line-height: 1.02;
+    margin: 0 0 24px;
+    max-width: 760px;
+  }
+  .sect-title em { font-style: normal; color: var(--slate); }
+  .sect-sub {
+    font-size: 18px;
+    color: var(--silver-2);
+    line-height: 1.5;
+    max-width: 640px;
+    margin: 0 0 64px;
+  }
+
+  /* ── Pillars (3 cards) ───────────────────────────────────── */
+  .pillars { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; }
+  .pillar {
+    background: var(--graphite);
+    border: 1px solid var(--line);
+    border-radius: 16px;
+    padding: 28px 28px 32px;
+    position: relative;
+    overflow: hidden;
+    transition: border-color .2s, transform .2s;
+  }
+  .pillar:hover { border-color: var(--line-2); transform: translateY(-2px); }
+  .pillar .glyph {
+    width: 64px; height: 64px;
+    background: var(--ink);
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    display: flex; align-items: center; justify-content: center;
+    margin-bottom: 24px;
+  }
+  .pillar h3 { font-size: 22px; font-weight: 600; letter-spacing: -0.015em; margin: 0 0 10px; }
+  .pillar p { color: var(--silver-2); font-size: 14.5px; line-height: 1.55; margin: 0 0 18px; }
+  .pillar .specs {
+    display: flex; gap: 10px; flex-wrap: wrap;
+    margin-top: 18px;
+    padding-top: 18px;
+    border-top: 1px solid var(--line);
+  }
+  .pillar .spec {
+    font-family: "JetBrains Mono", monospace;
+    font-size: 10.5px;
+    color: var(--silver-2);
+    background: var(--ink);
+    border: 1px solid var(--line);
+    padding: 4px 10px;
+    border-radius: 6px;
+    letter-spacing: 0.06em;
+  }
+
+  /* ── How it works ────────────────────────────────────────── */
+  .steps { display: grid; grid-template-columns: repeat(4, 1fr); gap: 0; border: 1px solid var(--line); border-radius: 16px; overflow: hidden; background: var(--graphite); }
+  .step { padding: 28px; border-right: 1px solid var(--line); position: relative; }
+  .step:last-child { border-right: none; }
+  .step .num { font-family: "JetBrains Mono", monospace; font-size: 12px; color: var(--violet-2); letter-spacing: 0.18em; margin-bottom: 18px; display: block; }
+  .step h4 { font-size: 17px; font-weight: 600; letter-spacing: -0.01em; margin: 0 0 8px; }
+  .step p { color: var(--silver-2); font-size: 13.5px; line-height: 1.5; margin: 0; }
+  .step .diag {
+    margin-top: 24px;
+    height: 88px;
+    background: var(--ink);
+    border-radius: 10px;
+    display: flex; align-items: center; justify-content: center;
+    border: 1px solid var(--line);
+  }
+  .step .diag svg { width: 80%; height: 70%; }
+
+  /* ── Stats banner ────────────────────────────────────────── */
+  .stats-banner {
+    background:
+      radial-gradient(800px 400px at 15% 50%, rgba(124, 58, 237, 0.12), transparent 60%),
+      radial-gradient(800px 400px at 85% 50%, rgba(20, 241, 217, 0.08), transparent 60%),
+      var(--graphite);
+    border: 1px solid var(--line);
+    border-radius: 20px;
+    padding: 56px 48px;
+    display: grid; grid-template-columns: repeat(4, 1fr); gap: 0;
+  }
+  .stat { padding: 0 20px; border-right: 1px solid var(--line); }
+  .stat:first-child { padding-left: 0; }
+  .stat:last-child { padding-right: 0; border-right: none; }
+  .stat .l { font-family: "JetBrains Mono", monospace; font-size: 11px; color: var(--slate); letter-spacing: 0.14em; }
+  .stat .v { font-size: 48px; font-weight: 600; letter-spacing: -0.03em; margin: 8px 0 6px; line-height: 1; }
+  .stat .v small { color: var(--slate); font-size: 22px; font-weight: 500; margin-left: 2px; }
+  .stat .delta { font-family: "JetBrains Mono", monospace; font-size: 11.5px; color: var(--green); letter-spacing: 0.04em; }
+
+  /* ── Use cases ───────────────────────────────────────────── */
+  .uc { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; }
+  .uc-card {
+    background: var(--graphite);
+    border: 1px solid var(--line);
+    border-radius: 16px;
+    padding: 28px;
+    display: flex; flex-direction: column; gap: 16px;
+    min-height: 280px;
+  }
+  .uc-card .tag {
+    align-self: flex-start;
+    font-family: "JetBrains Mono", monospace;
+    font-size: 10px;
+    letter-spacing: 0.18em;
+    padding: 5px 10px; border-radius: 5px;
+  }
+  .uc-card.violet .tag { background: rgba(124, 58, 237, 0.13); color: var(--violet-2); }
+  .uc-card.teal   .tag { background: rgba(20, 241, 217, 0.13); color: var(--teal); }
+  .uc-card.green  .tag { background: rgba(34, 197, 94, 0.13); color: var(--green); }
+  .uc-card h4 { font-size: 22px; font-weight: 600; letter-spacing: -0.015em; margin: 0; }
+  .uc-card p { color: var(--silver-2); font-size: 14px; line-height: 1.55; margin: 0; flex: 1; }
+  .uc-card .ex {
+    font-family: "JetBrains Mono", monospace;
+    font-size: 11px;
+    color: var(--slate);
+    padding-top: 16px;
+    border-top: 1px solid var(--line);
+    letter-spacing: 0.06em;
+  }
+  .uc-card .ex b { color: var(--silver); font-weight: 500; }
+
+  /* ── Demo (coming soon) ─────────────────────────────────── */
+  .demo-card {
+    position: relative;
+    border: 1px solid var(--line);
+    border-radius: 20px;
+    overflow: hidden;
+    background: var(--graphite);
+    padding: 64px 56px;
+  }
+  .demo-grid-bg {
+    position: absolute; inset: 0;
+    background:
+      radial-gradient(700px 400px at 80% 20%, rgba(124, 58, 237, 0.20), transparent 60%),
+      radial-gradient(700px 400px at 10% 90%, rgba(20, 241, 217, 0.12), transparent 60%),
+      linear-gradient(rgba(124, 58, 237, 0.06) 1px, transparent 1px) 0 0/40px 40px,
+      linear-gradient(90deg, rgba(124, 58, 237, 0.06) 1px, transparent 1px) 0 0/40px 40px;
+    mask-image: radial-gradient(ellipse at center, black, transparent 75%);
+    pointer-events: none;
+  }
+  .demo-content {
+    position: relative; z-index: 1;
+    display: grid;
+    grid-template-columns: 1.15fr 1fr;
+    gap: 56px;
+    align-items: center;
+  }
+  .demo-content > *:not(.demo-mark) { grid-column: 1; }
+  .demo-mark {
+    grid-column: 2;
+    grid-row: 1 / span 5;
+    display: flex; align-items: center; justify-content: center;
+    position: relative;
+  }
+  .demo-mark svg { width: 78%; max-width: 320px; filter: opacity(0.55); }
+  .demo-mark::before {
+    content: "";
+    position: absolute; inset: 25%;
+    background: radial-gradient(circle, rgba(124, 58, 237, 0.4), transparent 70%);
+    filter: blur(40px);
+    pointer-events: none;
+  }
+  .demo-badge {
+    display: inline-flex; align-items: center; gap: 10px;
+    font-family: "JetBrains Mono", monospace;
+    font-size: 11px; letter-spacing: 0.20em;
+    color: var(--violet-2);
+    background: rgba(124, 58, 237, 0.12);
+    border: 1px solid rgba(124, 58, 237, 0.3);
+    border-radius: 999px;
+    padding: 6px 14px 6px 12px;
+    width: fit-content;
+  }
+  .demo-dot {
+    width: 7px; height: 7px; border-radius: 50%;
+    background: var(--violet-2);
+    box-shadow: 0 0 10px var(--violet-2);
+    animation: pulse 1.8s ease-in-out infinite;
+  }
+  .demo-card h3 {
+    font-size: clamp(28px, 3vw, 36px);
+    font-weight: 600;
+    letter-spacing: -0.02em;
+    line-height: 1.1;
+    margin: 22px 0 14px;
+  }
+  .demo-card > .demo-content > p {
+    color: var(--silver-2);
+    font-size: 16px;
+    line-height: 1.5;
+    margin: 0 0 28px;
+    max-width: 500px;
+  }
+  .demo-features {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 14px 24px;
+    margin: 0 0 36px;
+  }
+  .demo-feature {
+    display: flex; align-items: center; gap: 12px;
+    color: var(--silver-2);
+    font-size: 14px;
+  }
+  .demo-feature-num {
+    font-family: "JetBrains Mono", monospace;
+    font-size: 10px;
+    color: var(--violet-2);
+    background: var(--ink);
+    border: 1px solid var(--line-2);
+    border-radius: 6px;
+    padding: 4px 7px;
+    letter-spacing: 0.1em;
+  }
+  .demo-cta { width: fit-content; }
+
+  /* ── CTA ─────────────────────────────────────────────────── */
+  .cta {
+    background:
+      radial-gradient(900px 500px at 20% 30%, rgba(124, 58, 237, 0.30), transparent 60%),
+      radial-gradient(900px 500px at 90% 90%, rgba(20, 241, 217, 0.18), transparent 60%),
+      linear-gradient(180deg, #16121f, #0d0f15);
+    border: 1px solid var(--line);
+    border-radius: 24px;
+    padding: 80px 72px;
+    text-align: left;
+    position: relative;
+    overflow: hidden;
+    display: grid; grid-template-columns: 1.4fr 1fr; gap: 56px;
+    align-items: center;
+  }
+  .cta::before {
+    content: ""; position: absolute; inset: 0;
+    background:
+      linear-gradient(rgba(124, 58, 237, 0.06) 1px, transparent 1px) 0 0/48px 48px,
+      linear-gradient(90deg, rgba(124, 58, 237, 0.06) 1px, transparent 1px) 0 0/48px 48px;
+    opacity: 0.6; pointer-events: none;
+    mask-image: radial-gradient(ellipse at center, black, transparent 75%);
+  }
+  .cta-left { position: relative; z-index: 1; }
+  .cta-left h2 { font-size: clamp(36px, 4.2vw, 52px); font-weight: 600; letter-spacing: -0.025em; line-height: 1.02; margin: 0 0 18px; }
+  .cta-left h2 em { font-style: normal; color: var(--silver-2); }
+  .cta-left p { color: var(--silver-2); font-size: 17px; max-width: 480px; margin: 0 0 32px; line-height: 1.5; }
+  .cta-left .cta-row { display: flex; gap: 12px; }
+  .cta-left .cta-row .btn { padding: 13px 22px; font-size: 14.5px; }
+  .cta-right { position: relative; z-index: 1; display: flex; justify-content: center; }
+  .cta-right svg { width: 80%; max-width: 320px; height: auto; }
+
+  /* ── FAQ ───────────────────────────────────────────── */
+  .faq-grid {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 0;
+    border: 1px solid var(--line);
+    border-radius: 16px;
+    overflow: hidden;
+    background: var(--graphite);
+    max-width: 880px;
+  }
+  .faq-item { border-bottom: 1px solid var(--line); }
+  .faq-item:last-child { border-bottom: none; }
+  .faq-item summary {
+    list-style: none;
+    cursor: pointer;
+    padding: 24px 28px;
+    display: flex; align-items: center; gap: 20px;
+    font-size: 17px;
+    font-weight: 500;
+    letter-spacing: -0.005em;
+    color: var(--silver);
+    transition: background 0.15s;
+  }
+  .faq-item summary::-webkit-details-marker { display: none; }
+  .faq-item summary:hover { background: var(--ink-2); }
+  .faq-icon {
+    width: 24px; height: 24px; flex-shrink: 0;
+    border-radius: 50%;
+    border: 1px solid var(--line-2);
+    position: relative;
+    margin-left: auto;
+    transition: transform 0.3s, border-color 0.2s;
+  }
+  .faq-icon::before, .faq-icon::after {
+    content: "";
+    position: absolute;
+    background: var(--silver-2);
+    top: 50%; left: 50%;
+    transform: translate(-50%, -50%);
+    transition: opacity 0.2s, transform 0.2s;
+  }
+  .faq-icon::before { width: 10px; height: 1.5px; }
+  .faq-icon::after { width: 1.5px; height: 10px; }
+  .faq-item[open] .faq-icon { border-color: var(--violet); background: var(--violet); }
+  .faq-item[open] .faq-icon::before, .faq-item[open] .faq-icon::after { background: white; }
+  .faq-item[open] .faq-icon::after { transform: translate(-50%, -50%) rotate(90deg); opacity: 0; }
+  .faq-num {
+    font-family: "JetBrains Mono", monospace;
+    font-size: 11px;
+    color: var(--slate);
+    letter-spacing: 0.12em;
+    flex-shrink: 0;
+    width: 28px;
+  }
+  .faq-body {
+    padding: 0 28px 28px 76px;
+    color: var(--silver-2);
+    font-size: 15px;
+    line-height: 1.6;
+    max-width: 780px;
+  }
+  .faq-body p { margin: 0 0 12px; }
+  .faq-body p:last-child { margin: 0; }
+
+  /* ── Waitlist ─────────────────────────────────────── */
+  .waitlist {
+    position: relative;
+    border: 1px solid var(--line);
+    border-radius: 24px;
+    padding: 80px 64px;
+    overflow: hidden;
+    background:
+      radial-gradient(900px 500px at 18% 25%, rgba(124, 58, 237, 0.28), transparent 60%),
+      radial-gradient(900px 500px at 88% 85%, rgba(20, 241, 217, 0.16), transparent 60%),
+      linear-gradient(180deg, #16121f, #0b0d12);
+  }
+  .waitlist::before {
+    content: "";
+    position: absolute; inset: 0;
+    background:
+      linear-gradient(rgba(124, 58, 237, 0.07) 1px, transparent 1px) 0 0/48px 48px,
+      linear-gradient(90deg, rgba(124, 58, 237, 0.07) 1px, transparent 1px) 0 0/48px 48px;
+    mask-image: radial-gradient(ellipse at center, black, transparent 78%);
+    pointer-events: none;
+  }
+  .waitlist-inner {
+    position: relative; z-index: 1;
+    max-width: 720px;
+    margin: 0 auto;
+    text-align: center;
+  }
+  .waitlist .eyebrow {
+    display: inline-flex; align-items: center; gap: 10px;
+    font-family: "JetBrains Mono", monospace;
+    font-size: 11px; letter-spacing: 0.18em;
+    color: var(--violet-2);
+    background: rgba(124, 58, 237, 0.12);
+    border: 1px solid rgba(124, 58, 237, 0.3);
+    border-radius: 999px;
+    padding: 7px 14px;
+    margin-bottom: 24px;
+  }
+  .waitlist .eyebrow i {
+    width: 7px; height: 7px; border-radius: 50%;
+    background: var(--violet-2);
+    box-shadow: 0 0 10px var(--violet-2);
+  }
+  .waitlist h2 {
+    font-size: clamp(38px, 4.6vw, 56px);
+    font-weight: 600;
+    letter-spacing: -0.025em;
+    line-height: 1.02;
+    margin: 0 0 18px;
+  }
+  .waitlist h2 em { font-style: normal; color: var(--silver-2); }
+  .waitlist .lede { font-size: 18px; color: var(--silver-2); line-height: 1.5; margin: 0 0 40px; }
+  .waitlist-form {
+    display: flex;
+    gap: 10px;
+    max-width: 540px;
+    margin: 0 auto;
+    align-items: stretch;
+  }
+  .waitlist-form input[type="email"] {
+    flex: 1;
+    background: var(--ink);
+    border: 1px solid var(--line-2);
+    border-radius: 10px;
+    padding: 14px 18px;
+    color: var(--silver);
+    font-family: "Space Grotesk";
+    font-size: 15px;
+    outline: none;
+    transition: border-color 0.2s, box-shadow 0.2s;
+  }
+  .waitlist-form input[type="email"]::placeholder { color: var(--slate); }
+  .waitlist-form input[type="email"]:focus {
+    border-color: var(--violet);
+    box-shadow: 0 0 0 3px rgba(124, 58, 237, 0.18);
+  }
+  .waitlist-form button {
+    padding: 14px 24px;
+    font-size: 15px;
+    font-weight: 500;
+    background: var(--violet);
+    color: white;
+    border: none;
+    border-radius: 10px;
+    cursor: pointer;
+    transition: background 0.15s, transform 0.1s;
+    font-family: "Space Grotesk";
+    display: inline-flex; align-items: center; gap: 8px;
+    white-space: nowrap;
+  }
+  .waitlist-form button:hover { background: #8b50f1; }
+  .waitlist-form button:active { transform: scale(0.98); }
+  .waitlist-form button .arrow { font-family: "JetBrains Mono", monospace; opacity: 0.8; }
+  .waitlist-success {
+    display: none;
+    color: var(--green);
+    font-size: 15px;
+    padding: 14px 18px;
+    background: rgba(34, 197, 94, 0.08);
+    border: 1px solid rgba(34, 197, 94, 0.3);
+    border-radius: 10px;
+    max-width: 540px;
+    margin: 0 auto;
+  }
+  .waitlist-success.show { display: block; }
+  .waitlist-meta {
+    margin-top: 28px;
+    display: flex; justify-content: center; gap: 28px;
+    font-family: "JetBrains Mono", monospace;
+    font-size: 11.5px;
+    color: var(--slate);
+    letter-spacing: 0.06em;
+    flex-wrap: wrap;
+  }
+  .waitlist-meta b { color: var(--silver); font-weight: 500; }
+  .waitlist-meta div { display: flex; align-items: center; gap: 8px; }
+  .waitlist-meta i { width: 6px; height: 6px; border-radius: 50%; display: inline-block; }
+
+  /* ── Footer ──────────────────────────────────────────────── */
+  footer { border-top: 1px solid var(--line); margin-top: 120px; }
+  footer .ftop {
+    display: grid;
+    grid-template-columns: 2fr 1fr 1fr 1fr 1fr;
+    gap: 36px;
+    padding: 64px 0 48px;
+  }
+  footer .fcol h5 { font-size: 12px; font-weight: 500; color: var(--silver); margin: 0 0 16px; letter-spacing: 0.12em; text-transform: uppercase; font-family: "JetBrains Mono", monospace; }
+  footer .fcol a { display: block; color: var(--silver-2); font-size: 14px; padding: 6px 0; }
+  footer .fcol a:hover { color: var(--silver); }
+  footer .fcol.brand-col { padding-right: 32px; }
+  footer .fcol.brand-col p { color: var(--silver-2); font-size: 13.5px; line-height: 1.55; margin: 16px 0 24px; max-width: 320px; }
+  footer .fcol.brand-col .social { display: flex; gap: 10px; }
+  footer .fcol.brand-col .social a {
+    width: 34px; height: 34px; border-radius: 8px;
+    border: 1px solid var(--line); background: var(--graphite);
+    display: flex; align-items: center; justify-content: center;
+    padding: 0;
+  }
+  footer .fcol.brand-col .social a:hover { border-color: var(--line-2); }
+  footer .fbot {
+    border-top: 1px solid var(--line);
+    padding: 22px 0 28px;
+    display: flex; justify-content: space-between; align-items: center;
+    font-family: "JetBrains Mono", monospace;
+    font-size: 11px; color: var(--slate); letter-spacing: 0.08em;
+  }
+  footer .fbot .chain { display: flex; align-items: center; gap: 8px; }
+  footer .fbot .chain i { width: 6px; height: 6px; border-radius: 50%; background: var(--green); }
+
+  /* ── Responsive ──────────────────────────────────────────── */
+  @media (max-width: 1100px) {
+    .hero-grid { grid-template-columns: 1fr; }
+    .pillars, .steps, .uc { grid-template-columns: 1fr 1fr; }
+    .step { border-right: none; border-bottom: 1px solid var(--line); }
+    .step:nth-child(odd) { border-right: 1px solid var(--line); }
+    .stats-banner { grid-template-columns: 1fr 1fr; gap: 24px 0; }
+    .stat:nth-child(2) { border-right: none; }
+    .stat:nth-child(3) { padding-left: 0; }
+    .cta { grid-template-columns: 1fr; padding: 48px 36px; }
+    footer .ftop { grid-template-columns: 1fr 1fr; }
+  }
+  @media (max-width: 900px) {
+    .demo-card { padding: 40px 28px; }
+    .demo-content { grid-template-columns: 1fr; }
+    .demo-mark { grid-column: 1; grid-row: auto; }
+    .demo-mark svg { max-width: 200px; }
+    .demo-features { grid-template-columns: 1fr; }
+  }
+  @media (max-width: 700px) {
+    .nav { display: none; }
+    .pillars, .steps, .uc, footer .ftop { grid-template-columns: 1fr; }
+    .stats-banner { grid-template-columns: 1fr; padding: 32px 24px; }
+    .stat { border-right: none !important; border-bottom: 1px solid var(--line); padding: 18px 0; }
+    .waitlist { padding: 56px 28px; }
+    .waitlist-form { flex-direction: column; }
+    .faq-item summary { padding: 18px 20px; font-size: 15px; gap: 14px; }
+    .faq-body { padding: 0 20px 22px 52px; font-size: 14px; }
+  }
+</style>
+</head>
+<body>
+
+<!-- SVG Symbols -->
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <defs>
+    <linearGradient id="threadA" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#7C3AED"/>
+      <stop offset="0.6" stop-color="#14F1D9"/>
+      <stop offset="1" stop-color="#22C55E"/>
+    </linearGradient>
+    <linearGradient id="curveFill" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#7C3AED" stop-opacity="0.45"/>
+      <stop offset="1" stop-color="#7C3AED" stop-opacity="0"/>
+    </linearGradient>
+
+    <symbol id="logoA" viewBox="0 0 512 512">
+      <circle cx="252" cy="268" r="120" fill="none" stroke="#1F2430" stroke-width="1"/>
+      <circle cx="252" cy="268" r="76" fill="none" stroke="#1F2430" stroke-width="1"/>
+      <g fill="none" stroke="#E5E7EB" stroke-linecap="round">
+        <line x1="88" y1="116" x2="252" y2="268" stroke-width="3" opacity="0.85"/>
+        <line x1="408" y1="76" x2="252" y2="268" stroke-width="3" opacity="0.85"/>
+        <line x1="452" y1="244" x2="252" y2="268" stroke-width="2" opacity="0.55"/>
+        <line x1="104" y1="364" x2="252" y2="268" stroke-width="2" opacity="0.45"/>
+        <line x1="252" y1="268" x2="296" y2="428" stroke-width="3" opacity="0.85"/>
+      </g>
+      <path d="M 60 200 C 140 80, 280 140, 252 268 C 232 372, 360 380, 296 428" fill="none" stroke="url(#threadA)" stroke-width="3" stroke-linecap="round" stroke-dasharray="600" stroke-dashoffset="0" opacity="0.95">
+        <animate attributeName="stroke-dashoffset" from="600" to="0" dur="3.6s" repeatCount="indefinite"/>
+      </path>
+      <circle cx="88" cy="116" r="22" fill="#0B0D12" stroke="#7C3AED" stroke-width="8"/>
+      <circle cx="408" cy="76" r="18" fill="#14F1D9"/>
+      <circle cx="452" cy="244" r="11" fill="#14F1D9"/>
+      <circle cx="104" cy="364" r="13" fill="#7C3AED"/>
+      <g transform="translate(252 268) rotate(45)">
+        <rect x="-38" y="-38" width="76" height="76" rx="4" fill="#0B0D12" stroke="#E5E7EB" stroke-width="10"/>
+      </g>
+      <circle cx="252" cy="268" r="12" fill="#22C55E"/>
+      <circle cx="296" cy="428" r="20" fill="#0B0D12" stroke="#22C55E" stroke-width="7"/>
+      <circle cx="296" cy="428" r="6" fill="#22C55E"/>
+    </symbol>
+
+    <symbol id="logoSm" viewBox="0 0 512 512">
+      <g fill="none" stroke="#E5E7EB" stroke-linecap="round">
+        <line x1="88" y1="116" x2="252" y2="268" stroke-width="14"/>
+        <line x1="408" y1="76" x2="252" y2="268" stroke-width="14"/>
+        <line x1="252" y1="268" x2="296" y2="428" stroke-width="14"/>
+      </g>
+      <circle cx="88" cy="116" r="32" fill="#7C3AED"/>
+      <circle cx="408" cy="76" r="28" fill="#14F1D9"/>
+      <g transform="translate(252 268) rotate(45)"><rect x="-44" y="-44" width="88" height="88" rx="6" fill="#0B0D12" stroke="#E5E7EB" stroke-width="20"/></g>
+      <circle cx="296" cy="428" r="26" fill="#22C55E"/>
+    </symbol>
+
+    <symbol id="step1" viewBox="0 0 200 100">
+      <g font-family="JetBrains Mono, monospace" font-size="9" fill="#64748B">
+        <text x="6" y="22">addr_01</text>
+        <text x="6" y="42">addr_02</text>
+        <text x="6" y="62">addr_03</text>
+        <text x="6" y="82">addr_04</text>
+      </g>
+      <g stroke="#E5E7EB" stroke-width="1.5" fill="none">
+        <line x1="60" y1="18" x2="100" y2="40"/>
+        <line x1="60" y1="38" x2="100" y2="40"/>
+        <line x1="60" y1="58" x2="100" y2="68"/>
+        <line x1="60" y1="78" x2="100" y2="68"/>
+        <line x1="100" y1="40" x2="160" y2="54"/>
+        <line x1="100" y1="68" x2="160" y2="54"/>
+      </g>
+      <circle cx="100" cy="40" r="4" fill="#7C3AED"/>
+      <circle cx="100" cy="68" r="4" fill="#14F1D9"/>
+      <circle cx="160" cy="54" r="6" fill="#E5E7EB"/>
+    </symbol>
+    <symbol id="step2" viewBox="0 0 200 100">
+      <line x1="20" y1="80" x2="180" y2="80" stroke="#1F2430"/>
+      <line x1="20" y1="20" x2="20" y2="80" stroke="#1F2430"/>
+      <path d="M 20 80 L 60 80 L 60 60 L 100 50 L 140 35 L 180 25" stroke="#7C3AED" stroke-width="2" fill="none" stroke-linejoin="round"/>
+      <circle cx="60" cy="60" r="3" fill="#14F1D9"/>
+      <circle cx="100" cy="50" r="3" fill="#14F1D9"/>
+      <circle cx="140" cy="35" r="3" fill="#14F1D9"/>
+      <circle cx="180" cy="25" r="3" fill="#22C55E"/>
+      <text x="55" y="95" font-family="JetBrains Mono, monospace" font-size="7" fill="#64748B">cliff</text>
+    </symbol>
+    <symbol id="step3" viewBox="0 0 200 100">
+      <g stroke="#E5E7EB" stroke-width="1.5" stroke-linecap="round" fill="none">
+        <line x1="20" y1="50" x2="80" y2="50"/>
+        <line x1="120" y1="50" x2="180" y2="50"/>
+      </g>
+      <circle cx="20" cy="50" r="6" fill="none" stroke="#7C3AED" stroke-width="2"/>
+      <polygon points="92,50 108,42 108,58" fill="#14F1D9"/>
+      <circle cx="180" cy="50" r="6" fill="#22C55E"/>
+      <text x="14" y="78" font-family="JetBrains Mono, monospace" font-size="7" fill="#64748B">root</text>
+      <text x="160" y="78" font-family="JetBrains Mono, monospace" font-size="7" fill="#64748B">user</text>
+    </symbol>
+    <symbol id="step4" viewBox="0 0 200 100">
+      <line x1="20" y1="50" x2="180" y2="50" stroke="#1F2430" stroke-dasharray="2 3"/>
+      <rect x="40" y="40" width="50" height="20" rx="3" fill="none" stroke="#22C55E" stroke-width="1.5"/>
+      <rect x="100" y="40" width="60" height="20" rx="3" fill="none" stroke="#7C3AED" stroke-width="1.5" stroke-dasharray="3 3"/>
+      <text x="48" y="54" font-family="JetBrains Mono, monospace" font-size="8" fill="#22C55E">grace 7d</text>
+      <text x="106" y="54" font-family="JetBrains Mono, monospace" font-size="8" fill="#7C3AED">rotate</text>
+    </symbol>
+
+    <symbol id="gMerkle" viewBox="0 0 64 64">
+      <g stroke="#E5E7EB" stroke-width="1.5" fill="none" stroke-linecap="round">
+        <line x1="16" y1="14" x2="32" y2="32"/>
+        <line x1="48" y1="14" x2="32" y2="32"/>
+        <line x1="32" y1="32" x2="22" y2="50"/>
+        <line x1="32" y1="32" x2="42" y2="50"/>
+      </g>
+      <circle cx="16" cy="14" r="4" fill="#7C3AED"/>
+      <circle cx="48" cy="14" r="4" fill="#14F1D9"/>
+      <circle cx="32" cy="32" r="5" fill="#0B0D12" stroke="#E5E7EB" stroke-width="2"/>
+      <circle cx="22" cy="50" r="3" fill="#7C3AED" opacity="0.7"/>
+      <circle cx="42" cy="50" r="3" fill="#14F1D9" opacity="0.7"/>
+    </symbol>
+    <symbol id="gVesting" viewBox="0 0 64 64">
+      <line x1="10" y1="50" x2="54" y2="50" stroke="#1F2430"/>
+      <line x1="10" y1="14" x2="10" y2="50" stroke="#1F2430"/>
+      <path d="M 10 50 L 18 50 L 18 42 L 28 36 L 38 28 L 54 18" stroke="#7C3AED" stroke-width="2" fill="none" stroke-linejoin="round"/>
+      <circle cx="18" cy="42" r="2.5" fill="#14F1D9"/>
+      <circle cx="38" cy="28" r="2.5" fill="#14F1D9"/>
+      <circle cx="54" cy="18" r="3" fill="#22C55E"/>
+    </symbol>
+    <symbol id="gClawback" viewBox="0 0 64 64">
+      <circle cx="32" cy="32" r="20" fill="none" stroke="#1F2430" stroke-width="1" stroke-dasharray="3 3"/>
+      <path d="M 20 22 A 16 16 0 1 1 18 36" stroke="#7C3AED" stroke-width="2" fill="none" stroke-linecap="round"/>
+      <polygon points="14,32 22,28 22,36" fill="#7C3AED"/>
+      <circle cx="32" cy="32" r="6" fill="#0B0D12" stroke="#E5E7EB" stroke-width="2"/>
+      <circle cx="32" cy="32" r="2" fill="#22C55E"/>
+    </symbol>
+
+    <symbol id="iX" viewBox="0 0 16 16"><path d="M11.5 1.5h2L9 7l5 7h-4L7 9.5 3.5 14h-2l5-6L1.5 1.5h4L8 5.5z" fill="#E5E7EB"/></symbol>
+    <symbol id="iGh" viewBox="0 0 16 16"><path d="M8 1.5C4.4 1.5 1.5 4.4 1.5 8c0 2.9 1.9 5.4 4.4 6.2.3.1.4-.1.4-.3v-1.2c-1.8.4-2.2-.8-2.2-.8-.3-.7-.7-.9-.7-.9-.6-.4 0-.4 0-.4.7 0 1 .7 1 .7.6 1 1.6.7 2 .5.1-.4.2-.7.4-.9-1.4-.2-2.9-.7-2.9-3.2 0-.7.3-1.3.7-1.8-.1-.2-.3-.9.1-1.9 0 0 .6-.2 1.8.7.5-.1 1.1-.2 1.6-.2s1.1.1 1.6.2c1.2-.8 1.8-.7 1.8-.7.4 1 .1 1.7.1 1.9.4.5.7 1.1.7 1.8 0 2.5-1.5 3.1-3 3.2.2.2.4.6.4 1.2v1.8c0 .2.1.4.4.3 2.5-.8 4.4-3.3 4.4-6.2 0-3.6-2.9-6.5-6.5-6.5z" fill="#E5E7EB"/></symbol>
+    <symbol id="iDc" viewBox="0 0 16 16"><path d="M13.5 3.5c-1-.5-2-.8-3.1-.9l-.1.2c1 .3 1.9.7 2.7 1.4-1.6-.8-3.5-.8-5.1-.4-.5.1-1.1.3-1.7.5C5 4 4.3 4 3.6 4.3l-.1-.2c-1 .1-2.1.4-3 .9C-.4 7.5-.8 10.4.4 13c1.1.8 2.4 1.3 3.7 1.3l.6-.8c-.7-.3-1.3-.7-1.9-1.2.2.1.3.2.4.3 2.4 1.3 5.3 1.3 7.7 0 .1 0 .3-.1.4-.3-.6.5-1.3.9-2 1.2l.5.8c1.3-.1 2.6-.5 3.7-1.3 1.4-2.9.7-5.7-.5-9.5zM5.5 11C4.7 11 4 10.3 4 9.4s.7-1.6 1.5-1.6 1.5.7 1.5 1.6S6.3 11 5.5 11zm5 0c-.8 0-1.5-.7-1.5-1.6s.7-1.6 1.5-1.6 1.5.7 1.5 1.6S11.3 11 10.5 11z" fill="#E5E7EB"/></symbol>
+  </defs>
+</svg>
+
+<!-- TOP BAR -->
+<header class="topbar">
+  <div class="wrap topbar-inner">
+    <div class="brand">
+      <svg viewBox="0 0 512 512" preserveAspectRatio="xMidYMid meet"><use href="#logoSm"/></svg>
+      <span class="name">Velthoryn</span>
+    </div>
+    <nav class="nav">
+      <a href="#product">Product</a>
+      <a href="#how">How it works</a>
+      <a href="#demo">Demo</a>
+      <a href="#faq">FAQ</a>
+    </nav>
+    <div class="topbar-actions">
+      <a href="#waitlist" class="btn waitlist-cta">Join waitlist <span class="arrow">→</span></a>
+    </div>
+  </div>
+</header>
+
+<!-- HERO -->
+<section class="hero">
+  <div class="wrap">
+    <div class="hero-grid">
+      <div class="hero-left">
+        <h1>Precision Vesting,<br><em>on a schedule.</em></h1>
+        <p class="sub">Give your team, investors, and community their tokens little by little — fair, automatic, and cheap on Solana. No spreadsheets. No middleman.</p>
+        <div class="cta-row">
+          <a href="#waitlist" class="btn primary">Join waitlist <span class="arrow">→</span></a>
+          <button class="btn ghost">Read the docs</button>
+        </div>
+        <div class="meta">
+          <div>Audit by Mr G and Mr L</div>
+          <div><i style="background:var(--violet-2)"></i> <b>$0+</b> sent out so far</div>
+          <div><i style="background:var(--teal)"></i> <b>0</b> projects using it</div>
+        </div>
+      </div>
+
+      <div class="brand-anim">
+        <svg viewBox="0 0 600 600" xmlns="http://www.w3.org/2000/svg" fill="none">
+          <defs>
+            <linearGradient id="bThread" x1="0" y1="0" x2="1" y2="1">
+              <stop offset="0" stop-color="#7C3AED"/>
+              <stop offset="0.5" stop-color="#14F1D9"/>
+              <stop offset="1" stop-color="#22C55E"/>
+            </linearGradient>
+            <radialGradient id="bHalo">
+              <stop offset="0" stop-color="#7C3AED" stop-opacity="0.18"/>
+              <stop offset="0.7" stop-color="#7C3AED" stop-opacity="0"/>
+            </radialGradient>
+            <filter id="bGlow" x="-50%" y="-50%" width="200%" height="200%">
+              <feGaussianBlur stdDeviation="4" result="blur"/>
+              <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+            </filter>
+          </defs>
+
+          <circle cx="300" cy="300" r="260" fill="url(#bHalo)"/>
+          <g stroke="#1F2430" fill="none">
+            <circle cx="300" cy="300" r="260" stroke-dasharray="2 6"/>
+            <circle cx="300" cy="300" r="180"/>
+            <circle cx="300" cy="300" r="100" stroke-dasharray="2 4" opacity="0.55"/>
+          </g>
+
+          <g class="brand-rot">
+            <g stroke="#2A3140" stroke-width="2" stroke-linecap="round">
+              <line x1="300" y1="34" x2="300" y2="50"/>
+              <line x1="300" y1="550" x2="300" y2="566"/>
+              <line x1="34" y1="300" x2="50" y2="300"/>
+              <line x1="550" y1="300" x2="566" y2="300"/>
+              <line x1="124" y1="124" x2="135" y2="135" opacity="0.6"/>
+              <line x1="465" y1="465" x2="476" y2="476" opacity="0.6"/>
+              <line x1="476" y1="124" x2="465" y2="135" opacity="0.6"/>
+              <line x1="124" y1="476" x2="135" y2="465" opacity="0.6"/>
+            </g>
+          </g>
+
+          <g stroke="#E5E7EB" stroke-linecap="round" opacity="0.45">
+            <line x1="90" y1="140" x2="300" y2="300" stroke-width="2.5"/>
+            <line x1="510" y1="100" x2="300" y2="300" stroke-width="2.5"/>
+            <line x1="540" y1="320" x2="300" y2="300" stroke-width="1.5"/>
+            <line x1="110" y1="470" x2="300" y2="300" stroke-width="1.5"/>
+            <line x1="300" y1="300" x2="380" y2="510" stroke-width="2.5"/>
+          </g>
+
+          <path d="M 90 140 C 220 80 280 200 300 300 C 320 420 480 470 380 510"
+                stroke="url(#bThread)" stroke-width="3" stroke-linecap="round"
+                stroke-dasharray="60 600" fill="none" opacity="0.9">
+            <animate attributeName="stroke-dashoffset" from="0" to="-660" dur="4.5s" repeatCount="indefinite"/>
+          </path>
+
+          <circle r="5" fill="#7C3AED" filter="url(#bGlow)">
+            <animateMotion dur="3s" repeatCount="indefinite" path="M 90 140 L 300 300"/>
+            <animate attributeName="opacity" values="0;1;1;0" keyTimes="0;0.15;0.85;1" dur="3s" repeatCount="indefinite"/>
+          </circle>
+          <circle r="4" fill="#7C3AED" filter="url(#bGlow)">
+            <animateMotion dur="3s" begin="1.5s" repeatCount="indefinite" path="M 90 140 L 300 300"/>
+            <animate attributeName="opacity" values="0;1;1;0" keyTimes="0;0.15;0.85;1" dur="3s" begin="1.5s" repeatCount="indefinite"/>
+          </circle>
+          <circle r="5" fill="#14F1D9" filter="url(#bGlow)">
+            <animateMotion dur="3.2s" begin="0.6s" repeatCount="indefinite" path="M 510 100 L 300 300"/>
+            <animate attributeName="opacity" values="0;1;1;0" keyTimes="0;0.15;0.85;1" dur="3.2s" begin="0.6s" repeatCount="indefinite"/>
+          </circle>
+          <circle r="3" fill="#14F1D9" filter="url(#bGlow)">
+            <animateMotion dur="3.4s" begin="1.2s" repeatCount="indefinite" path="M 540 320 L 300 300"/>
+            <animate attributeName="opacity" values="0;1;1;0" keyTimes="0;0.15;0.85;1" dur="3.4s" begin="1.2s" repeatCount="indefinite"/>
+          </circle>
+          <circle r="3" fill="#7C3AED" filter="url(#bGlow)">
+            <animateMotion dur="3.6s" begin="2s" repeatCount="indefinite" path="M 110 470 L 300 300"/>
+            <animate attributeName="opacity" values="0;1;1;0" keyTimes="0;0.15;0.85;1" dur="3.6s" begin="2s" repeatCount="indefinite"/>
+          </circle>
+
+          <circle r="6" fill="#22C55E" filter="url(#bGlow)">
+            <animateMotion dur="2.6s" begin="1.5s" repeatCount="indefinite" path="M 300 300 L 380 510"/>
+            <animate attributeName="opacity" values="0;1;1;0" keyTimes="0;0.15;0.85;1" dur="2.6s" begin="1.5s" repeatCount="indefinite"/>
+          </circle>
+          <circle r="5" fill="#22C55E" filter="url(#bGlow)">
+            <animateMotion dur="2.6s" begin="3.5s" repeatCount="indefinite" path="M 300 300 L 380 510"/>
+            <animate attributeName="opacity" values="0;1;1;0" keyTimes="0;0.15;0.85;1" dur="2.6s" begin="3.5s" repeatCount="indefinite"/>
+          </circle>
+
+          <circle cx="90" cy="140" r="22" fill="none" stroke="#7C3AED" stroke-width="2" opacity="0.5">
+            <animate attributeName="r" values="22;58;22" dur="3.6s" repeatCount="indefinite"/>
+            <animate attributeName="opacity" values="0.5;0;0.5" dur="3.6s" repeatCount="indefinite"/>
+          </circle>
+          <circle cx="90" cy="140" r="22" fill="#0B0D12" stroke="#7C3AED" stroke-width="8"/>
+
+          <circle cx="510" cy="100" r="20" fill="none" stroke="#14F1D9" stroke-width="2" opacity="0.5">
+            <animate attributeName="r" values="20;55;20" dur="3.2s" begin="0.4s" repeatCount="indefinite"/>
+            <animate attributeName="opacity" values="0.5;0;0.5" dur="3.2s" begin="0.4s" repeatCount="indefinite"/>
+          </circle>
+          <circle cx="510" cy="100" r="20" fill="#14F1D9"/>
+
+          <circle cx="540" cy="320" r="12" fill="#14F1D9"/>
+          <circle cx="110" cy="470" r="14" fill="#7C3AED"/>
+
+          <g transform="translate(300 300) rotate(45)">
+            <rect x="-52" y="-52" width="104" height="104" rx="6" fill="#0B0D12" stroke="#E5E7EB" stroke-width="10"/>
+          </g>
+          <circle cx="300" cy="300" r="12" fill="#22C55E" filter="url(#bGlow)">
+            <animate attributeName="r" values="10;16;10" dur="2.4s" repeatCount="indefinite"/>
+          </circle>
+          <circle cx="300" cy="300" r="20" fill="none" stroke="#22C55E" stroke-width="1.5" opacity="0.5">
+            <animate attributeName="r" values="14;38;14" dur="2.4s" repeatCount="indefinite"/>
+            <animate attributeName="opacity" values="0.5;0;0.5" dur="2.4s" repeatCount="indefinite"/>
+          </circle>
+
+          <circle cx="380" cy="510" r="30" fill="none" stroke="#22C55E" stroke-width="2" opacity="0.5">
+            <animate attributeName="r" values="24;48;24" dur="2.8s" begin="1s" repeatCount="indefinite"/>
+            <animate attributeName="opacity" values="0.5;0;0.5" dur="2.8s" begin="1s" repeatCount="indefinite"/>
+          </circle>
+          <circle cx="380" cy="510" r="24" fill="#0B0D12" stroke="#22C55E" stroke-width="7"/>
+          <circle cx="380" cy="510" r="8" fill="#22C55E"/>
+
+          <g font-family="JetBrains Mono, monospace" font-size="9" fill="#64748B" letter-spacing="1.2">
+            <text x="38" y="116">LEAF · 0x8af2</text>
+            <text x="446" y="76">LEAF · 0x7e3a</text>
+            <text x="344" y="556">CLAIM · vested</text>
+            <text x="300" y="234" text-anchor="middle" fill="#94A3B8">VAULT · ROOT 0x…c104</text>
+          </g>
+        </svg>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- PARTNERS -->
+<div class="ticker">
+  <div class="partners-label">BUILT WITH</div>
+  <div class="partners-track">
+    <a class="partner-item" href="#" aria-label="Solana"><img src="/assets/partners/solana.png" alt="Solana"></a>
+    <a class="partner-item boxed" href="#" aria-label="Superteam Indonesia"><img src="/assets/partners/superteam.png" alt="Superteam Indonesia"></a>
+    <a class="partner-item" href="#" aria-label="Mancer"><img src="/assets/partners/mancer.png" alt="Mancer"></a>
+    <a class="partner-item" href="#" aria-label="Solana"><img src="/assets/partners/solana.png" alt="Solana"></a>
+    <a class="partner-item boxed" href="#" aria-label="Superteam Indonesia"><img src="/assets/partners/superteam.png" alt="Superteam Indonesia"></a>
+    <a class="partner-item" href="#" aria-label="Mancer"><img src="/assets/partners/mancer.png" alt="Mancer"></a>
+    <!-- Duplicate set for seamless loop -->
+    <a class="partner-item" href="#" aria-hidden="true" tabindex="-1"><img src="/assets/partners/solana.png" alt=""></a>
+    <a class="partner-item boxed" href="#" aria-hidden="true" tabindex="-1"><img src="/assets/partners/superteam.png" alt=""></a>
+    <a class="partner-item" href="#" aria-hidden="true" tabindex="-1"><img src="/assets/partners/mancer.png" alt=""></a>
+    <a class="partner-item" href="#" aria-hidden="true" tabindex="-1"><img src="/assets/partners/solana.png" alt=""></a>
+    <a class="partner-item boxed" href="#" aria-hidden="true" tabindex="-1"><img src="/assets/partners/superteam.png" alt=""></a>
+    <a class="partner-item" href="#" aria-hidden="true" tabindex="-1"><img src="/assets/partners/mancer.png" alt=""></a>
+  </div>
+</div>
+
+<!-- CAMPAIGN PREVIEW -->
+<section class="sect" style="padding-top: 96px;">
+  <div class="wrap">
+    <h2 class="sect-title reveal">What your campaign<br><em>looks like.</em></h2>
+    <p class="sect-sub">Every campaign gets its own page. See who's unlocked tokens, who's claimed, and what's next. People only see their own row.</p>
+
+    <div style="position:relative; max-width: 720px; margin: 0 auto;">
+      <div class="annotate tl">sample · not live yet</div>
+      <div class="annotate tr" style="color:var(--violet-2)"><b>● PREVIEW</b></div>
+      <div class="live-card">
+        <div class="lc-head">
+          <span class="dot" style="background:var(--violet-2);box-shadow:0 0 10px var(--violet-2);"></span>
+          <span class="t"><b style="color:var(--violet-2)">● PREVIEW</b></span>
+          <span class="t" style="color:var(--silver-2);">sample campaign — not live</span>
+          <span class="tt">root pending</span>
+        </div>
+        <div class="lc-body">
+          <div class="lc-row">
+            <div class="lbl">SAMPLE CAMPAIGN</div>
+            <div class="val">0 recipients</div>
+          </div>
+          <div class="lc-title">Token allocation, 24-month linear</div>
+
+          <div class="lc-chart">
+            <svg viewBox="0 0 400 130" preserveAspectRatio="none">
+              <g stroke="#1F2430" stroke-width="0.5">
+                <line x1="0" y1="32" x2="400" y2="32"/>
+                <line x1="0" y1="64" x2="400" y2="64"/>
+                <line x1="0" y1="96" x2="400" y2="96"/>
+              </g>
+              <path d="M 0 128 L 30 128 L 30 116 L 70 108 L 110 92 L 145 76 L 175 60 L 210 50 L 245 40 L 280 32 L 315 24 L 350 18 L 400 14 L 400 130 L 0 130 Z" fill="url(#curveFill)"/>
+              <path d="M 0 128 L 30 128 L 30 116 L 70 108 L 110 92 L 145 76 L 175 60 L 210 50 L 245 40 L 280 32 L 315 24 L 350 18 L 400 14" fill="none" stroke="#A78BFA" stroke-width="2"/>
+              <line x1="30" y1="0" x2="30" y2="128" stroke="#14F1D9" stroke-width="1" stroke-dasharray="3 3" opacity="0.6"/>
+              <text x="34" y="14" font-family="JetBrains Mono, monospace" font-size="8" fill="#14F1D9" letter-spacing="0.5">cliff · 3mo</text>
+            </svg>
+          </div>
+
+          <div class="lc-stats">
+            <div class="lc-stat"><div class="l">VESTED</div><div class="v">0<small>%</small></div></div>
+            <div class="lc-stat"><div class="l">ALLOCATION</div><div class="v">0</div></div>
+            <div class="lc-stat"><div class="l">UNLOCK</div><div class="v">—</div></div>
+          </div>
+
+          <div class="lc-recip">
+            <div class="recip">
+              <div class="ava"></div>
+              <div class="addr">recipient.sol</div>
+              <span class="stat pending">PENDING</span>
+              <div class="amt">0 $VLT</div>
+            </div>
+            <div class="recip">
+              <div class="ava" style="background:linear-gradient(135deg,#14F1D9,#22C55E);"></div>
+              <div class="addr">recipient.sol</div>
+              <span class="stat pending">PENDING</span>
+              <div class="amt">0 $VLT</div>
+            </div>
+            <div class="recip">
+              <div class="ava" style="background:linear-gradient(135deg,#7C3AED,#A78BFA);"></div>
+              <div class="addr">recipient.sol</div>
+              <span class="stat pending">PENDING</span>
+              <div class="amt">0 $VLT</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- PILLARS -->
+<section class="sect" id="product">
+  <div class="wrap">
+    <div class="sect-eyebrow"><b>01</b> &nbsp; PRODUCT</div>
+    <h2 class="sect-title reveal">Everything a token campaign needs.<br><em>Nothing it doesn't.</em></h2>
+    <p class="sect-sub">Three primitives — Merkle compression, vesting schedules, and per-recipient clawback — composed into a single Anchor program. No off-chain custody. No multisig theater.</p>
+
+    <div class="pillars reveal-stagger">
+      <div class="pillar">
+        <div class="glyph"><svg viewBox="0 0 64 64" style="width:42px;height:42px;"><use href="#gMerkle"/></svg></div>
+        <h3>Merkle&nbsp;compression</h3>
+        <p>Distribute to 10,000 wallets with one 32-byte root. Recipients submit proofs, the program verifies on-chain. State stays small, gas stays predictable.</p>
+        <div class="specs">
+          <span class="spec">SPL · cToken</span>
+          <span class="spec">99.6% gas saved</span>
+          <span class="spec">No bitmap</span>
+        </div>
+      </div>
+
+      <div class="pillar">
+        <div class="glyph"><svg viewBox="0 0 64 64" style="width:42px;height:42px;"><use href="#gVesting"/></svg></div>
+        <h3>Vesting schedules</h3>
+        <p>Cliff, linear, and milestone schedules — per recipient, per campaign. The program enforces the curve; nobody can claim past the line.</p>
+        <div class="specs">
+          <span class="spec">Cliff</span>
+          <span class="spec">Linear</span>
+          <span class="spec">Milestone</span>
+          <span class="spec">Custom</span>
+        </div>
+      </div>
+
+      <div class="pillar">
+        <div class="glyph"><svg viewBox="0 0 64 64" style="width:42px;height:42px;"><use href="#gClawback"/></svg></div>
+        <h3>Per-recipient&nbsp;clawback</h3>
+        <p>Rotate the Merkle root to remove or replace any allocation. A 7-day grace window protects recipients from sudden revocation.</p>
+        <div class="specs">
+          <span class="spec">Root rotation</span>
+          <span class="spec">7-day grace</span>
+          <span class="spec">Audit trail</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- HOW IT WORKS -->
+<section class="sect" id="how" style="padding-top:0;">
+  <div class="wrap">
+    <div class="sect-eyebrow"><b>02</b> &nbsp; HOW IT WORKS</div>
+    <h2 class="sect-title reveal">Four moves.<br><em>From CSV to claim.</em></h2>
+    <p class="sect-sub">A campaign is a Merkle root plus a vesting program. You upload allocations; recipients claim on their own schedule.</p>
+
+    <div class="steps reveal-stagger">
+      <div class="step">
+        <span class="num">STEP 01</span>
+        <h4>Compress allocations</h4>
+        <p>Drop in a CSV of (address, amount). Velthoryn builds the Merkle tree and stores the 32-byte root on chain.</p>
+        <div class="diag"><svg viewBox="0 0 200 100"><use href="#step1"/></svg></div>
+      </div>
+      <div class="step">
+        <span class="num">STEP 02</span>
+        <h4>Set schedule</h4>
+        <p>Pick cliff, linear, or milestone — globally or per recipient. The curve is signed into the campaign config.</p>
+        <div class="diag"><svg viewBox="0 0 200 100"><use href="#step2"/></svg></div>
+      </div>
+      <div class="step">
+        <span class="num">STEP 03</span>
+        <h4>Recipients claim</h4>
+        <p>Each wallet submits its Merkle proof. The program verifies, releases the vested portion, marks the leaf.</p>
+        <div class="diag"><svg viewBox="0 0 200 100"><use href="#step3"/></svg></div>
+      </div>
+      <div class="step">
+        <span class="num">STEP 04</span>
+        <h4>Rotate or claw back</h4>
+        <p>Mistakes happen. Rotate the root inside the 7-day grace; the next root becomes canonical, unclaimed leaves invalidate.</p>
+        <div class="diag"><svg viewBox="0 0 200 100"><use href="#step4"/></svg></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- STATS -->
+<section class="sect" style="padding-top:0;">
+  <div class="wrap">
+    <div class="stats-banner reveal-stagger" data-counter-banner>
+      <div class="stat">
+        <div class="l">TOTAL VALUE DISTRIBUTED</div>
+        <div class="v"><span class="count" data-prefix="$" data-suffix="" data-target="0" data-decimals="0">$0</span></div>
+        <div class="delta">— launching soon</div>
+      </div>
+      <div class="stat">
+        <div class="l">ACTIVE CAMPAIGNS</div>
+        <div class="v"><span class="count" data-target="0" data-decimals="0" data-comma="1">0</span></div>
+        <div class="delta">— launching soon</div>
+      </div>
+      <div class="stat">
+        <div class="l">RECIPIENTS SERVED</div>
+        <div class="v"><span class="count" data-target="0" data-decimals="0" data-comma="1">0</span></div>
+        <div class="delta">— launching soon</div>
+      </div>
+      <div class="stat">
+        <div class="l">GAS SAVED VS. NAIVE</div>
+        <div class="v"><span class="count" data-target="0" data-decimals="0">0</span><small>%</small></div>
+        <div class="delta">— launching soon</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- USE CASES -->
+<section class="sect" style="padding-top:0;">
+  <div class="wrap">
+    <div class="sect-eyebrow"><b>03</b> &nbsp; WHO IT'S FOR</div>
+    <h2 class="sect-title reveal">Who uses Velthoryn.</h2>
+    <p class="sect-sub">If you have a token and a list of people to pay — you can use it.</p>
+
+    <div class="uc reveal-stagger">
+      <div class="uc-card violet">
+        <span class="tag">TEAMS</span>
+        <h4>Pay your team over time</h4>
+        <p>Give founders and employees their tokens across a few years. If someone leaves early, you can adjust their share before it's final.</p>
+        <div class="ex"><b>Example:</b> 4 years of monthly payouts, after a 1-year wait.</div>
+      </div>
+      <div class="uc-card teal">
+        <span class="tag">INVESTORS</span>
+        <h4>Pay investors on schedule</h4>
+        <p>Each investor gets their tokens at the speed you agreed. They claim themselves — no chasing, no spreadsheets, no middleman.</p>
+        <div class="ex"><b>Example:</b> 2 years of monthly drops, after a 3-month wait.</div>
+      </div>
+      <div class="uc-card green">
+        <span class="tag">COMMUNITY</span>
+        <h4>Reward your community</h4>
+        <p>Send tokens to thousands of supporters in one go. You still have a week to fix anything that looks wrong.</p>
+        <div class="ex"><b>Example:</b> Send today, 7 days to fix mistakes.</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- DEMO -->
+<section class="sect" id="demo" style="padding-top:0;">
+  <div class="wrap">
+    <div class="sect-eyebrow"><b>04</b> &nbsp; DEMO</div>
+    <h2 class="sect-title reveal">See it in action.<br><em>Soon.</em></h2>
+    <p class="sect-sub">An interactive walkthrough where you can spin up a sample campaign, set a schedule, and watch tokens unlock — no wallet required.</p>
+
+    <div class="demo-card reveal">
+      <div class="demo-grid-bg"></div>
+      <div class="demo-content">
+        <div class="demo-badge">
+          <span class="demo-dot"></span>
+          COMING SOON
+        </div>
+        <div class="demo-mark">
+          <svg viewBox="0 0 512 512"><use href="#logoA"/></svg>
+        </div>
+        <h3>Interactive product walkthrough</h3>
+        <p>Build a test campaign, configure vesting, simulate claims — all in your browser, all in under two minutes.</p>
+        <div class="demo-features">
+          <div class="demo-feature">
+            <span class="demo-feature-num">01</span>
+            <span>Spin up a sample campaign</span>
+          </div>
+          <div class="demo-feature">
+            <span class="demo-feature-num">02</span>
+            <span>Configure your vesting curve</span>
+          </div>
+          <div class="demo-feature">
+            <span class="demo-feature-num">03</span>
+            <span>Watch recipients claim live</span>
+          </div>
+          <div class="demo-feature">
+            <span class="demo-feature-num">04</span>
+            <span>Test the 7-day grace window</span>
+          </div>
+        </div>
+        <a href="#waitlist" class="btn primary demo-cta">Get notified when it's live <span class="arrow">→</span></a>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- CTA -->
+<section class="sect" style="padding: 40px 0 80px;">
+  <div class="wrap">
+    <div class="cta reveal">
+      <div class="cta-left">
+        <h2>Start sending in&nbsp;<em>under a minute.</em></h2>
+        <p>Bring your token. Bring your list. Bring your plan. We do the rest — sending, scheduling, tracking, and fixing if you need to.</p>
+        <div class="cta-row">
+          <button class="btn dark">Talk to the team</button>
+        </div>
+      </div>
+      <div class="cta-right">
+        <svg viewBox="0 0 512 512"><use href="#logoA"/></svg>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- FAQ -->
+<section class="sect" id="faq" style="padding-top:0; padding-bottom: 80px;">
+  <div class="wrap">
+    <div class="sect-eyebrow"><b>05</b> &nbsp; FAQ</div>
+    <h2 class="sect-title reveal">Questions, answered.</h2>
+    <p class="sect-sub">Everything you might want to know before getting on the waitlist.</p>
+
+    <div class="faq-grid reveal">
+      <details class="faq-item" open>
+        <summary>
+          <span class="faq-num">01</span>
+          <span>What is Velthoryn, in one sentence?</span>
+          <span class="faq-icon"></span>
+        </summary>
+        <div class="faq-body">
+          <p>A tool for Solana projects to send tokens to many people on a schedule — fairly, automatically, and at a fraction of the usual cost.</p>
+        </div>
+      </details>
+
+      <details class="faq-item">
+        <summary>
+          <span class="faq-num">02</span>
+          <span>Who is it for?</span>
+          <span class="faq-icon"></span>
+        </summary>
+        <div class="faq-body">
+          <p>Teams paying themselves over years, projects paying investors over months, and communities running airdrops to thousands of supporters.</p>
+        </div>
+      </details>
+
+      <details class="faq-item">
+        <summary>
+          <span class="faq-num">03</span>
+          <span>How is it cheaper than just sending tokens?</span>
+          <span class="faq-icon"></span>
+        </summary>
+        <div class="faq-body">
+          <p>Instead of writing every recipient to the blockchain (which scales with cost), Velthoryn stores one tiny fingerprint that proves everyone's share. Recipients claim using a short proof. You pay once — not 10,000 times.</p>
+        </div>
+      </details>
+
+      <details class="faq-item">
+        <summary>
+          <span class="faq-num">04</span>
+          <span>What if I make a mistake in the list?</span>
+          <span class="faq-icon"></span>
+        </summary>
+        <div class="faq-body">
+          <p>You have a 7-day grace window after publishing a campaign. During that window you can update or remove any allocation. After 7 days, the schedule is locked and runs on its own.</p>
+        </div>
+      </details>
+
+      <details class="faq-item">
+        <summary>
+          <span class="faq-num">05</span>
+          <span>Does Velthoryn hold my tokens?</span>
+          <span class="faq-icon"></span>
+        </summary>
+        <div class="faq-body">
+          <p>No. Tokens stay in a non-custodial Solana program. Velthoryn (the company) cannot touch them — only the rules of your campaign can release them.</p>
+        </div>
+      </details>
+
+      <details class="faq-item">
+        <summary>
+          <span class="faq-num">06</span>
+          <span>What schedules can I set?</span>
+          <span class="faq-icon"></span>
+        </summary>
+        <div class="faq-body">
+          <p>Four shapes, mix-and-match per recipient: all at once, gradually over time (linear), after a waiting period (cliff), or when specific goals are hit (milestone).</p>
+        </div>
+      </details>
+
+      <details class="faq-item">
+        <summary>
+          <span class="faq-num">07</span>
+          <span>When does the product launch?</span>
+          <span class="faq-icon"></span>
+        </summary>
+        <div class="faq-body">
+          <p>Public mainnet is targeted for Q3 2026. Waitlist members get early access on devnet first, plus a personal onboarding session for the first 100 teams.</p>
+        </div>
+      </details>
+
+      <details class="faq-item">
+        <summary>
+          <span class="faq-num">08</span>
+          <span>Is the code open source?</span>
+          <span class="faq-icon"></span>
+        </summary>
+        <div class="faq-body">
+          <p>Yes. The on-chain program and SDKs will be MIT-licensed on GitHub. You can read every line, run your own copy, or fork it. Independent security audits are underway.</p>
+        </div>
+      </details>
+    </div>
+  </div>
+</section>
+
+<!-- WAITLIST -->
+<section class="sect" id="waitlist" style="padding: 40px 0 100px;">
+  <div class="wrap">
+    <div class="waitlist reveal">
+      <div class="waitlist-inner">
+        <div class="eyebrow"><i></i> EARLY ACCESS · LIMITED SPOTS</div>
+        <h2>Be first on the <em>mainnet rollout.</em></h2>
+        <p class="lede">Drop your email. We'll let you know the moment campaigns open up, plus a personal onboarding session for the first 100 teams.</p>
+        <form class="waitlist-form" id="waitlist-form" novalidate>
+          <input type="email" name="email" placeholder="you@yourproject.xyz" required autocomplete="email">
+          <button type="submit">Join waitlist <span class="arrow">→</span></button>
+        </form>
+        <div class="waitlist-success" id="waitlist-success">✓ You're on the list. We'll reach out soon.</div>
+        <div class="waitlist-meta">
+          <div><i style="background:var(--green)"></i> <b>0</b> already signed up</div>
+          <div><i style="background:var(--violet-2)"></i> <b>Q3 2026</b> public mainnet</div>
+          <div><i style="background:var(--teal)"></i> No spam, ever</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- FOOTER -->
+<footer>
+  <div class="wrap">
+    <div class="ftop">
+      <div class="fcol brand-col">
+        <div class="brand">
+          <svg viewBox="0 0 512 512" style="width:30px;height:30px;"><use href="#logoSm"/></svg>
+          <span class="name">Velthoryn</span>
+        </div>
+        <p>The simple way to share tokens on Solana — fair, automatic, and cheap. No spreadsheets. No middleman.</p>
+        <div class="social">
+          <a href="#" aria-label="X"><svg width="14" height="14"><use href="#iX"/></svg></a>
+          <a href="#" aria-label="GitHub"><svg width="15" height="15"><use href="#iGh"/></svg></a>
+          <a href="#" aria-label="Discord"><svg width="15" height="15"><use href="#iDc"/></svg></a>
+        </div>
+      </div>
+      <div class="fcol">
+        <h5>Product</h5>
+        <a href="#">Overview</a>
+        <a href="#">Send tokens</a>
+        <a href="#">Release over time</a>
+        <a href="#">Fix mistakes</a>
+      </div>
+      <div class="fcol">
+        <h5>Build</h5>
+        <a href="#">Docs</a>
+        <a href="#">TypeScript SDK</a>
+        <a href="#">Rust SDK</a>
+        <a href="#">CLI</a>
+      </div>
+      <div class="fcol">
+        <h5>Trust</h5>
+        <a href="#">Audits</a>
+        <a href="#">Bug bounty</a>
+        <a href="#">Status</a>
+        <a href="#">Roadmap</a>
+      </div>
+      <div class="fcol">
+        <h5>Company</h5>
+        <a href="#">About</a>
+        <a href="#">Blog</a>
+        <a href="#">Careers</a>
+        <a href="#">Contact</a>
+      </div>
+    </div>
+    <div class="fbot">
+      <span>© 2026 VELTHORYN LABS · ALL RIGHTS RESERVED</span>
+      <span class="chain"><i></i> SOLANA · PRE-LAUNCH</span>
+    </div>
+  </div>
+</footer>
+
+<!-- Scripts -->
+<script>
+  (function() {
+    var form = document.getElementById('waitlist-form');
+    var success = document.getElementById('waitlist-success');
+    if (!form) return;
+    form.addEventListener('submit', function(e) {
+      e.preventDefault();
+      var email = form.querySelector('input[type="email"]').value.trim();
+      if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+        form.querySelector('input[type="email"]').focus();
+        return;
+      }
+      form.style.display = 'none';
+      success.classList.add('show');
+    });
+  })();
+</script>
+<script>
+  (function() {
+    if (!('IntersectionObserver' in window)) {
+      document.querySelectorAll('.reveal, .reveal-stagger').forEach(function(el) { el.classList.add('in'); });
+      return;
+    }
+    var io = new IntersectionObserver(function(entries) {
+      entries.forEach(function(entry) {
+        if (entry.isIntersecting) {
+          entry.target.classList.add('in');
+          io.unobserve(entry.target);
+        }
+      });
+    }, { threshold: 0.12, rootMargin: '0px 0px -8% 0px' });
+    document.querySelectorAll('.reveal, .reveal-stagger').forEach(function(el) { io.observe(el); });
+  })();
+</script>
+<script>
+  (function() {
+    function fmt(n, decimals, comma) {
+      var fixed = n.toFixed(decimals);
+      if (!comma) return fixed;
+      var parts = fixed.split('.');
+      var withCommas = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+      return parts[1] ? withCommas + '.' + parts[1] : withCommas;
+    }
+    function easeOutExpo(t) { return t === 1 ? 1 : 1 - Math.pow(2, -10 * t); }
+
+    function animate(el) {
+      var target = parseFloat(el.dataset.target) || 0;
+      var decimals = parseInt(el.dataset.decimals || '0', 10);
+      var comma = el.dataset.comma === '1';
+      var prefix = el.dataset.prefix || '';
+      var suffix = el.dataset.suffix || '';
+      var duration = 1800;
+      var start = performance.now();
+
+      function tick(now) {
+        var t = Math.min(1, (now - start) / duration);
+        var eased = easeOutExpo(t);
+        var val = target * eased;
+        el.textContent = prefix + fmt(val, decimals, comma) + suffix;
+        if (t < 1) requestAnimationFrame(tick);
+        else el.textContent = prefix + fmt(target, decimals, comma) + suffix;
+      }
+      requestAnimationFrame(tick);
+    }
+
+    if (!('IntersectionObserver' in window)) {
+      document.querySelectorAll('[data-counter-banner] .count').forEach(animate);
+      return;
+    }
+    var io = new IntersectionObserver(function(entries) {
+      entries.forEach(function(entry) {
+        if (entry.isIntersecting) {
+          entry.target.querySelectorAll('.count').forEach(animate);
+          io.unobserve(entry.target);
+        }
+      });
+    }, { threshold: 0.35 });
+    document.querySelectorAll('[data-counter-banner]').forEach(function(el) { io.observe(el); });
+  })();
+</script>
+</body>
+</html>
