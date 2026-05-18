@@ -1,5 +1,4 @@
 # Vesting Program — Internals
-# Vesting Program — Internals
 
 This document describes the on-chain program at `programs/vesting/`. All instructions and math modules are **LIVE** and fully implemented.
 
