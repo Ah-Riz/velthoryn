@@ -3,71 +3,10 @@ import { NextRequest } from "next/server";
 import { PublicKey } from "@solana/web3.js";
 
 // ---------------------------------------------------------------------------
-// Mock declarations — vi.hoisted ensures these are available inside vi.mock
+// Module mocks (claim-events only — DB uses real Postgres)
 // ---------------------------------------------------------------------------
-
-const {
-  mockSelect,
-  mockFrom,
-  mockWhere,
-  mockOrderBy,
-  mockLimit,
-  mockOffset,
-  mockInsert,
-  mockValues,
-  mockUpdate,
-  mockSet,
-  mockReturning,
-  mockExecute,
-  mockTransaction,
-} = vi.hoisted(() => {
-  const fns = [
-    "mockSelect",
-    "mockFrom",
-    "mockWhere",
-    "mockOrderBy",
-    "mockLimit",
-    "mockOffset",
-    "mockInsert",
-    "mockValues",
-    "mockUpdate",
-    "mockSet",
-    "mockReturning",
-    "mockExecute",
-    "mockTransaction",
-  ] as const;
-  const result: Record<string, ReturnType<typeof vi.fn>> = {};
-  for (const name of fns) {
-    result[name] = vi.fn();
-  }
-  return result;
-});
-
-// ---------------------------------------------------------------------------
-// Module mocks
-// ---------------------------------------------------------------------------
-
-vi.mock("@/lib/db", () => ({
-  db: {
-    select: mockSelect,
-    from: mockFrom,
-    where: mockWhere,
-    limit: mockLimit,
-    offset: mockOffset,
-    orderBy: mockOrderBy,
-    insert: mockInsert,
-    values: mockValues,
-    returning: mockReturning,
-    update: mockUpdate,
-    set: mockSet,
-    execute: mockExecute,
-    transaction: mockTransaction,
-  },
-}));
 
 vi.mock("@/lib/indexer/claim-events", async (importOriginal) => {
-  // Import the real module so we can re-export parseClaimedEvent and CLAIMED_DISCRIMINATOR
-  // while still mocking syncClaimEvents.
   const actual = await importOriginal<typeof import("@/lib/indexer/claim-events")>();
   return {
     ...actual,
@@ -85,9 +24,7 @@ import {
 } from "@/app/api/campaigns/route";
 import { GET as getCampaignByAddress } from "@/app/api/campaigns/[treeAddress]/route";
 import { GET as getProof } from "@/app/api/campaigns/[treeAddress]/proof/route";
-import {
-  POST as postRootVersion,
-} from "@/app/api/campaigns/[treeAddress]/root-versions/route";
+import { POST as postRootVersion } from "@/app/api/campaigns/[treeAddress]/root-versions/route";
 import { GET as getClaims } from "@/app/api/campaigns/[treeAddress]/claims/route";
 import { GET as getBeneficiaryCampaigns } from "@/app/api/beneficiary/[address]/campaigns/route";
 import { POST as postAdminSync } from "@/app/api/admin/sync/route";
@@ -96,84 +33,43 @@ import {
   createCampaignRequestSchema,
   createRootVersionRequestSchema,
 } from "@/lib/api/validators";
-import { hashLeaf } from "@/lib/merkle/builder";
-import { syncClaimEvents, parseClaimedEvent, CLAIMED_DISCRIMINATOR } from "@/lib/indexer/claim-events";
+import {
+  syncClaimEvents,
+  parseClaimedEvent,
+  CLAIMED_DISCRIMINATOR,
+} from "@/lib/indexer/claim-events";
+
+import { resetDb } from "../helpers/db";
+import {
+  CREATOR,
+  MINT,
+  BENEFICIARY,
+  OTHER_BENEFICIARY,
+  EMPTY_SIBLING,
+  makeLeaf,
+  makeCampaignBody,
+  computeSingleLeafRoot,
+  makeUrl,
+} from "../helpers/requests";
+import {
+  uniqueTreeAddress,
+  createCampaignViaPost,
+  seedClaimEvent,
+  setCampaignStatus,
+} from "../helpers/fixtures";
 
 // ---------------------------------------------------------------------------
-// Helpers
+// Constants
 // ---------------------------------------------------------------------------
 
 const TREE_ADDRESS = "7xKXtg2CW87d97TXJSDpbD5jBkheTqA83TZRuJosgAsU";
-const CREATOR = "11111111111111111111111111111112";
-const MINT = "11111111111111111111111111111114";
-const BENEFICIARY = "11111111111111111111111111111111";
-const OTHER_BENEFICIARY = "22222222222222222222222222222222";
-
-// 32-byte array of zeros for proof siblings
-const EMPTY_SIBLING = new Array(32).fill(0) as number[];
-
-function makeLeaf(overrides: Record<string, unknown> = {}) {
-  return {
-    leafIndex: 0,
-    beneficiary: BENEFICIARY,
-    amount: "1000000",
-    releaseType: 1,
-    startTime: "1700000000",
-    cliffTime: "0",
-    endTime: "1731536000",
-    milestoneIdx: 0,
-    proof: [EMPTY_SIBLING] as number[][],
-    ...overrides,
-  };
-}
-
-function makeCampaignBody(overrides: Record<string, unknown> = {}) {
-  return {
-    treeAddress: TREE_ADDRESS,
-    creator: CREATOR,
-    mint: MINT,
-    campaignId: 1,
-    merkleRoot: "a".repeat(64),
-    leafCount: 1,
-    totalSupply: "1000000",
-    cancellable: false,
-    cancelAuthority: null,
-    pauseAuthority: null,
-    createdAt: 1700000000,
-    metadata: undefined as { name?: string; description?: string; logoUri?: string } | undefined,
-    ipfsCid: undefined as string | undefined,
-    leaves: [makeLeaf()],
-    ...overrides,
-  };
-}
-
-/** Build a valid single-leaf merkleRoot for the given leaf data */
-function computeSingleLeafRoot(leaf: ReturnType<typeof makeLeaf>): string {
-  const leafForHash = {
-    leafIndex: leaf.leafIndex,
-    beneficiary: leaf.beneficiary,
-    amount: BigInt(leaf.amount),
-    releaseType: leaf.releaseType as 0 | 1 | 2,
-    startTs: BigInt(leaf.startTime),
-    cliffTs: BigInt(leaf.cliffTime),
-    endTs: BigInt(leaf.endTime),
-    milestoneIdx: leaf.milestoneIdx,
-  };
-  return hashLeaf(leafForHash).toString("hex");
-}
-
-function makeUrl(path: string, params?: Record<string, string>): string {
-  const base = `http://localhost${path}`;
-  if (!params) return base;
-  const qs = new URLSearchParams(params).toString();
-  return `${base}?${qs}`;
-}
 
 // ---------------------------------------------------------------------------
-// Reset mocks between tests
+// Reset DB and mocks between tests
 // ---------------------------------------------------------------------------
 
-beforeEach(() => {
+beforeEach(async () => {
+  await resetDb();
   vi.clearAllMocks();
 });
 
@@ -399,34 +295,7 @@ describe("POST /api/campaigns", () => {
   it("returns 201 with { ok: true, campaignId } for valid creation", async () => {
     const leaf = makeLeaf();
     const merkleRoot = computeSingleLeafRoot(leaf);
-    const body = makeCampaignBody({ merkleRoot, leaves: [leaf] });
-
-    mockTransaction.mockImplementation(async (callback: (tx: unknown) => Promise<unknown>) => {
-      // First insert (campaigns): returns { id: 42 }
-      const insertCampaignChain = {
-        values: vi.fn().mockReturnValue({
-          returning: vi.fn().mockResolvedValue([{ id: 42 }]),
-        }),
-      };
-      // Second insert (rootVersions): returns { id: 1 }
-      const insertRootVersionChain = {
-        values: vi.fn().mockReturnValue({
-          returning: vi.fn().mockResolvedValue([{ id: 1 }]),
-        }),
-      };
-      // Third insert (leaves): resolves undefined
-      const insertLeavesChain = {
-        values: vi.fn().mockResolvedValue(undefined),
-      };
-
-      const tx = {
-        insert: vi.fn()
-          .mockReturnValueOnce(insertCampaignChain)
-          .mockReturnValueOnce(insertRootVersionChain)
-          .mockReturnValueOnce(insertLeavesChain),
-      };
-      return callback(tx);
-    });
+    const body = makeCampaignBody({ treeAddress: uniqueTreeAddress(), merkleRoot, leaves: [leaf] });
 
     const req = new NextRequest(makeUrl("/api/campaigns"), {
       method: "POST",
@@ -438,49 +307,34 @@ describe("POST /api/campaigns", () => {
 
     expect(res.status).toBe(201);
     expect(json.ok).toBe(true);
-    expect(json.campaignId).toBe(42);
+    expect(json.campaignId).toBeGreaterThan(0);
   });
 
   it("returns 200 with existing campaignId for idempotent request (same treeAddress)", async () => {
     const leaf = makeLeaf();
     const merkleRoot = computeSingleLeafRoot(leaf);
-    const body = makeCampaignBody({ merkleRoot, leaves: [leaf] });
+    const body = makeCampaignBody({ treeAddress: TREE_ADDRESS, merkleRoot, leaves: [leaf] });
 
-    mockTransaction.mockImplementation(async (callback: (tx: unknown) => Promise<unknown>) => {
-      // insert throws unique constraint violation
-      const insertChain = {
-        values: vi.fn().mockImplementation(() => {
-          const err = new Error("duplicate key") as Error & { code: string };
-          err.code = "23505";
-          throw err;
-        }),
-      };
-      // select fallback finds existing campaign
-      const selectChain = {
-        from: vi.fn().mockReturnValue({
-          where: vi.fn().mockReturnValue({
-            limit: vi.fn().mockResolvedValue([{ id: 99 }]),
-          }),
-        }),
-      };
-      const tx = {
-        insert: vi.fn().mockReturnValue(insertChain),
-        select: vi.fn().mockReturnValue(selectChain),
-      };
-      return callback(tx);
-    });
-
-    const req = new NextRequest(makeUrl("/api/campaigns"), {
+    const req1 = new NextRequest(makeUrl("/api/campaigns"), {
       method: "POST",
       body: JSON.stringify(body),
     });
+    const res1 = await postCampaigns(req1);
+    const json1 = await res1.json();
 
-    const res = await postCampaigns(req);
-    const json = await res.json();
+    expect(res1.status).toBe(201);
+    expect(json1.campaignId).toBeGreaterThan(0);
 
-    expect(res.status).toBe(200);
-    expect(json.ok).toBe(true);
-    expect(json.campaignId).toBe(99);
+    const req2 = new NextRequest(makeUrl("/api/campaigns"), {
+      method: "POST",
+      body: JSON.stringify(body),
+    });
+    const res2 = await postCampaigns(req2);
+    const json2 = await res2.json();
+
+    expect(res2.status).toBe(200);
+    expect(json2.ok).toBe(true);
+    expect(json2.campaignId).toBe(json1.campaignId);
   });
 
   it("returns 400 for validation failure", async () => {
@@ -499,10 +353,34 @@ describe("POST /api/campaigns", () => {
     expect(json.details).toBeDefined();
   });
 
+  it("returns 400 when leafCount does not match leaves array length", async () => {
+    const leaf = makeLeaf();
+    const merkleRoot = computeSingleLeafRoot(leaf);
+    const body = makeCampaignBody({
+      treeAddress: uniqueTreeAddress(),
+      merkleRoot,
+      leaves: [leaf],
+      leafCount: 2,
+    });
+
+    const req = new NextRequest(makeUrl("/api/campaigns"), {
+      method: "POST",
+      body: JSON.stringify(body),
+    });
+
+    const res = await postCampaigns(req);
+    const json = await res.json();
+
+    expect(res.status).toBe(400);
+    expect(json.error).toContain("leafCount");
+    expect(json.error).toContain("does not match");
+  });
+
   it("returns 400 when single-leaf root does not match leaf hash", async () => {
     const leaf = makeLeaf();
     const body = makeCampaignBody({
-      merkleRoot: "b".repeat(64), // Wrong root
+      treeAddress: uniqueTreeAddress(),
+      merkleRoot: "b".repeat(64),
       leaves: [leaf],
     });
 
@@ -520,10 +398,15 @@ describe("POST /api/campaigns", () => {
 
   it("returns 400 when multi-leaf proof verification fails", async () => {
     const leaf0 = makeLeaf({ leafIndex: 0, proof: [EMPTY_SIBLING] });
-    const leaf1 = makeLeaf({ leafIndex: 1, beneficiary: OTHER_BENEFICIARY, proof: [EMPTY_SIBLING] });
+    const leaf1 = makeLeaf({
+      leafIndex: 1,
+      beneficiary: OTHER_BENEFICIARY,
+      proof: [EMPTY_SIBLING],
+    });
 
     const body = makeCampaignBody({
-      merkleRoot: "c".repeat(64), // Arbitrary root that won't match
+      treeAddress: uniqueTreeAddress(),
+      merkleRoot: "c".repeat(64),
       leafCount: 2,
       leaves: [leaf0, leaf1],
     });
@@ -539,50 +422,6 @@ describe("POST /api/campaigns", () => {
     expect(res.status).toBe(400);
     expect(json.error).toContain("Proof verification failed");
   });
-
-  it("returns 500 on DB error", async () => {
-    const leaf = makeLeaf();
-    const merkleRoot = computeSingleLeafRoot(leaf);
-    const body = makeCampaignBody({ merkleRoot, leaves: [leaf] });
-
-    mockTransaction.mockRejectedValue(new Error("DB connection failed"));
-
-    const req = new NextRequest(makeUrl("/api/campaigns"), {
-      method: "POST",
-      body: JSON.stringify(body),
-    });
-
-    const res = await postCampaigns(req);
-    expect(res.status).toBe(500);
-  });
-
-  it("passes through non-unique-constraint DB errors (not idempotent)", async () => {
-    const leaf = makeLeaf();
-    const merkleRoot = computeSingleLeafRoot(leaf);
-    const body = makeCampaignBody({ merkleRoot, leaves: [leaf] });
-
-    mockTransaction.mockImplementation(async (callback: (tx: unknown) => Promise<unknown>) => {
-      const insertChain = {
-        values: vi.fn().mockImplementation(() => {
-          const err = new Error("connection lost") as Error & { code: string };
-          err.code = "08001";
-          throw err;
-        }),
-      };
-      const tx = {
-        insert: vi.fn().mockReturnValue(insertChain),
-      };
-      return callback(tx);
-    });
-
-    const req = new NextRequest(makeUrl("/api/campaigns"), {
-      method: "POST",
-      body: JSON.stringify(body),
-    });
-
-    const res = await postCampaigns(req);
-    expect(res.status).toBe(500);
-  });
 });
 
 // ===========================================================================
@@ -591,71 +430,24 @@ describe("POST /api/campaigns", () => {
 
 describe("GET /api/campaigns", () => {
   it("returns paginated campaigns list", async () => {
-    const mockCampaigns = [
-      {
-        treeAddress: TREE_ADDRESS,
-        creator: CREATOR,
-        mint: MINT,
-        campaignId: 1,
-        leafCount: 10,
-        totalSupply: 1000000,
-        totalClaimed: 0,
-        cancellable: false,
-        paused: false,
-        cancelledAt: null,
-        createdAt: 1700000000,
-        metadata: null,
-      },
-    ];
-
-    // First call: count query; second call: data query
-    mockSelect
-      .mockReturnValueOnce({
-        from: vi.fn().mockReturnValue({
-          where: vi.fn().mockResolvedValue([{ count: 1 }]),
-        }),
-      })
-      .mockReturnValueOnce({
-        from: vi.fn().mockReturnValue({
-          where: vi.fn().mockReturnValue({
-            orderBy: vi.fn().mockReturnValue({
-              limit: vi.fn().mockReturnValue({
-                offset: vi.fn().mockResolvedValue(mockCampaigns),
-              }),
-            }),
-          }),
-        }),
-      });
+    const { treeAddress } = await createCampaignViaPost();
 
     const req = new NextRequest(makeUrl("/api/campaigns"));
     const res = await getCampaigns(req);
     const json = await res.json();
 
     expect(res.status).toBe(200);
-    expect(json.campaigns).toHaveLength(1);
-    expect(json.total).toBe(1);
+    expect(json.campaigns.length).toBeGreaterThanOrEqual(1);
+    expect(json.total).toBeGreaterThanOrEqual(1);
     expect(json.page).toBe(1);
     expect(json.limit).toBe(20);
+    expect(json.campaigns.some((c: { treeAddress: string }) => c.treeAddress === treeAddress)).toBe(
+      true,
+    );
   });
 
   it("filters by creator", async () => {
-    mockSelect
-      .mockReturnValueOnce({
-        from: vi.fn().mockReturnValue({
-          where: vi.fn().mockResolvedValue([{ count: 0 }]),
-        }),
-      })
-      .mockReturnValueOnce({
-        from: vi.fn().mockReturnValue({
-          where: vi.fn().mockReturnValue({
-            orderBy: vi.fn().mockReturnValue({
-              limit: vi.fn().mockReturnValue({
-                offset: vi.fn().mockResolvedValue([]),
-              }),
-            }),
-          }),
-        }),
-      });
+    await createCampaignViaPost({ treeAddress: uniqueTreeAddress() });
 
     const req = new NextRequest(
       makeUrl("/api/campaigns", { creator: CREATOR }),
@@ -664,56 +456,40 @@ describe("GET /api/campaigns", () => {
     const json = await res.json();
 
     expect(res.status).toBe(200);
-    expect(json.total).toBe(0);
+    expect(json.total).toBeGreaterThanOrEqual(1);
+    expect(json.campaigns.every((c: { creator: string }) => c.creator === CREATOR)).toBe(true);
+
+    const emptyReq = new NextRequest(
+      makeUrl("/api/campaigns", { creator: "33333333333333333333333333333333" }),
+    );
+    const emptyRes = await getCampaigns(emptyReq);
+    const emptyJson = await emptyRes.json();
+
+    expect(emptyJson.total).toBe(0);
   });
 
   it("filters by mint", async () => {
-    mockSelect
-      .mockReturnValueOnce({
-        from: vi.fn().mockReturnValue({
-          where: vi.fn().mockResolvedValue([{ count: 0 }]),
-        }),
-      })
-      .mockReturnValueOnce({
-        from: vi.fn().mockReturnValue({
-          where: vi.fn().mockReturnValue({
-            orderBy: vi.fn().mockReturnValue({
-              limit: vi.fn().mockReturnValue({
-                offset: vi.fn().mockResolvedValue([]),
-              }),
-            }),
-          }),
-        }),
-      });
+    await createCampaignViaPost({ treeAddress: uniqueTreeAddress() });
 
-    const req = new NextRequest(
-      makeUrl("/api/campaigns", { mint: MINT }),
-    );
+    const req = new NextRequest(makeUrl("/api/campaigns", { mint: MINT }));
     const res = await getCampaigns(req);
     const json = await res.json();
 
     expect(res.status).toBe(200);
-    expect(json.total).toBe(0);
+    expect(json.total).toBeGreaterThanOrEqual(1);
+    expect(json.campaigns.every((c: { mint: string }) => c.mint === MINT)).toBe(true);
+
+    const emptyReq = new NextRequest(
+      makeUrl("/api/campaigns", { mint: "33333333333333333333333333333335" }),
+    );
+    const emptyRes = await getCampaigns(emptyReq);
+    const emptyJson = await emptyRes.json();
+
+    expect(emptyJson.total).toBe(0);
   });
 
   it("uses default pagination (page=1, limit=20)", async () => {
-    mockSelect
-      .mockReturnValueOnce({
-        from: vi.fn().mockReturnValue({
-          where: vi.fn().mockResolvedValue([{ count: 5 }]),
-        }),
-      })
-      .mockReturnValueOnce({
-        from: vi.fn().mockReturnValue({
-          where: vi.fn().mockReturnValue({
-            orderBy: vi.fn().mockReturnValue({
-              limit: vi.fn().mockReturnValue({
-                offset: vi.fn().mockResolvedValue([]),
-              }),
-            }),
-          }),
-        }),
-      });
+    await createCampaignViaPost({ treeAddress: uniqueTreeAddress() });
 
     const req = new NextRequest(makeUrl("/api/campaigns"));
     const res = await getCampaigns(req);
@@ -724,122 +500,70 @@ describe("GET /api/campaigns", () => {
   });
 
   it("applies custom pagination", async () => {
-    mockSelect
-      .mockReturnValueOnce({
-        from: vi.fn().mockReturnValue({
-          where: vi.fn().mockResolvedValue([{ count: 100 }]),
-        }),
-      })
-      .mockReturnValueOnce({
-        from: vi.fn().mockReturnValue({
-          where: vi.fn().mockReturnValue({
-            orderBy: vi.fn().mockReturnValue({
-              limit: vi.fn().mockReturnValue({
-                offset: vi.fn().mockResolvedValue([]),
-              }),
-            }),
-          }),
-        }),
-      });
+    await createCampaignViaPost({ treeAddress: uniqueTreeAddress() });
+    await createCampaignViaPost({ treeAddress: uniqueTreeAddress() });
 
     const req = new NextRequest(
-      makeUrl("/api/campaigns", { page: "3", limit: "10" }),
+      makeUrl("/api/campaigns", { page: "1", limit: "1" }),
     );
     const res = await getCampaigns(req);
     const json = await res.json();
 
-    expect(json.page).toBe(3);
-    expect(json.limit).toBe(10);
+    expect(json.page).toBe(1);
+    expect(json.limit).toBe(1);
+    expect(json.campaigns).toHaveLength(1);
+    expect(json.total).toBeGreaterThanOrEqual(2);
   });
 
   it("filters by status=active (not paused, not cancelled)", async () => {
-    mockSelect
-      .mockReturnValueOnce({
-        from: vi.fn().mockReturnValue({
-          where: vi.fn().mockResolvedValue([{ count: 0 }]),
-        }),
-      })
-      .mockReturnValueOnce({
-        from: vi.fn().mockReturnValue({
-          where: vi.fn().mockReturnValue({
-            orderBy: vi.fn().mockReturnValue({
-              limit: vi.fn().mockReturnValue({
-                offset: vi.fn().mockResolvedValue([]),
-              }),
-            }),
-          }),
-        }),
-      });
+    const active = await createCampaignViaPost({ treeAddress: uniqueTreeAddress() });
+    const paused = await createCampaignViaPost({ treeAddress: uniqueTreeAddress() });
+    const cancelled = await createCampaignViaPost({ treeAddress: uniqueTreeAddress() });
 
-    const req = new NextRequest(
-      makeUrl("/api/campaigns", { status: "active" }),
-    );
+    await setCampaignStatus(paused.treeAddress, { paused: true });
+    await setCampaignStatus(cancelled.treeAddress, { cancelledAt: 1700000001 });
+
+    const req = new NextRequest(makeUrl("/api/campaigns", { status: "active" }));
     const res = await getCampaigns(req);
+    const json = await res.json();
+
     expect(res.status).toBe(200);
+    const addresses = json.campaigns.map((c: { treeAddress: string }) => c.treeAddress);
+    expect(addresses).toContain(active.treeAddress);
+    expect(addresses).not.toContain(paused.treeAddress);
+    expect(addresses).not.toContain(cancelled.treeAddress);
   });
 
   it("filters by status=paused", async () => {
-    mockSelect
-      .mockReturnValueOnce({
-        from: vi.fn().mockReturnValue({
-          where: vi.fn().mockResolvedValue([{ count: 0 }]),
-        }),
-      })
-      .mockReturnValueOnce({
-        from: vi.fn().mockReturnValue({
-          where: vi.fn().mockReturnValue({
-            orderBy: vi.fn().mockReturnValue({
-              limit: vi.fn().mockReturnValue({
-                offset: vi.fn().mockResolvedValue([]),
-              }),
-            }),
-          }),
-        }),
-      });
+    const active = await createCampaignViaPost({ treeAddress: uniqueTreeAddress() });
+    const paused = await createCampaignViaPost({ treeAddress: uniqueTreeAddress() });
 
-    const req = new NextRequest(
-      makeUrl("/api/campaigns", { status: "paused" }),
-    );
+    await setCampaignStatus(paused.treeAddress, { paused: true });
+
+    const req = new NextRequest(makeUrl("/api/campaigns", { status: "paused" }));
     const res = await getCampaigns(req);
+    const json = await res.json();
+
     expect(res.status).toBe(200);
+    const addresses = json.campaigns.map((c: { treeAddress: string }) => c.treeAddress);
+    expect(addresses).toContain(paused.treeAddress);
+    expect(addresses).not.toContain(active.treeAddress);
   });
 
   it("filters by status=cancelled", async () => {
-    mockSelect
-      .mockReturnValueOnce({
-        from: vi.fn().mockReturnValue({
-          where: vi.fn().mockResolvedValue([{ count: 0 }]),
-        }),
-      })
-      .mockReturnValueOnce({
-        from: vi.fn().mockReturnValue({
-          where: vi.fn().mockReturnValue({
-            orderBy: vi.fn().mockReturnValue({
-              limit: vi.fn().mockReturnValue({
-                offset: vi.fn().mockResolvedValue([]),
-              }),
-            }),
-          }),
-        }),
-      });
+    const active = await createCampaignViaPost({ treeAddress: uniqueTreeAddress() });
+    const cancelled = await createCampaignViaPost({ treeAddress: uniqueTreeAddress() });
 
-    const req = new NextRequest(
-      makeUrl("/api/campaigns", { status: "cancelled" }),
-    );
+    await setCampaignStatus(cancelled.treeAddress, { cancelledAt: 1700000001 });
+
+    const req = new NextRequest(makeUrl("/api/campaigns", { status: "cancelled" }));
     const res = await getCampaigns(req);
+    const json = await res.json();
+
     expect(res.status).toBe(200);
-  });
-
-  it("returns 500 on DB error", async () => {
-    mockSelect.mockReturnValue({
-      from: vi.fn().mockReturnValue({
-        where: vi.fn().mockRejectedValue(new Error("DB error")),
-      }),
-    });
-
-    const req = new NextRequest(makeUrl("/api/campaigns"));
-    const res = await getCampaigns(req);
-    expect(res.status).toBe(500);
+    const addresses = json.campaigns.map((c: { treeAddress: string }) => c.treeAddress);
+    expect(addresses).toContain(cancelled.treeAddress);
+    expect(addresses).not.toContain(active.treeAddress);
   });
 });
 
@@ -849,73 +573,49 @@ describe("GET /api/campaigns", () => {
 
 describe("GET /api/campaigns/[treeAddress]", () => {
   it("returns campaign detail with analytics", async () => {
-    const mockCampaign = {
-      id: 1,
+    const { treeAddress, campaignId } = await createCampaignViaPost({
       treeAddress: TREE_ADDRESS,
-      creator: CREATOR,
-      mint: MINT,
-      campaignId: 1,
-      merkleRoot: "a".repeat(64),
-      leafCount: 10,
-      totalSupply: 1000000,
-      totalClaimed: 250000,
-      cancellable: false,
-      paused: false,
-      cancelledAt: null,
-      createdAt: 1700000000,
-      metadata: null,
-    };
+    });
 
-    mockSelect
-      .mockReturnValueOnce({
-        from: vi.fn().mockReturnValue({
-          where: vi.fn().mockReturnValue({
-            limit: vi.fn().mockResolvedValue([mockCampaign]),
-          }),
-        }),
-      })
-      .mockReturnValueOnce({
-        from: vi.fn().mockReturnValue({
-          where: vi.fn().mockReturnValue({
-            orderBy: vi.fn().mockResolvedValue([
-              { version: 1, merkleRoot: "a".repeat(64), leafCount: 10, createdAt: 1700000000, ipfsCid: null },
-            ]),
-          }),
-        }),
-      })
-      .mockReturnValueOnce({
-        from: vi.fn().mockReturnValue({
-          where: vi.fn().mockResolvedValue([
-            { uniqueClaimers: 3, claimCount: 5, totalClaimed: 250000 },
-          ]),
-        }),
-      });
+    await seedClaimEvent(campaignId, {
+      beneficiary: BENEFICIARY,
+      amount: 100000,
+      totalClaimedByUser: 100000,
+      totalClaimedOverall: 100000,
+      signature: "sig_a",
+    });
+    await seedClaimEvent(campaignId, {
+      beneficiary: BENEFICIARY,
+      amount: 150000,
+      totalClaimedByUser: 250000,
+      totalClaimedOverall: 250000,
+      signature: "sig_b",
+    });
+    await seedClaimEvent(campaignId, {
+      beneficiary: OTHER_BENEFICIARY,
+      amount: 50000,
+      totalClaimedByUser: 50000,
+      totalClaimedOverall: 300000,
+      signature: "sig_c",
+    });
 
-    const req = new NextRequest(makeUrl(`/api/campaigns/${TREE_ADDRESS}`));
+    const req = new NextRequest(makeUrl(`/api/campaigns/${treeAddress}`));
     const res = await getCampaignByAddress(req, {
-      params: Promise.resolve({ treeAddress: TREE_ADDRESS }),
+      params: Promise.resolve({ treeAddress }),
     });
     const json = await res.json();
 
     expect(res.status).toBe(200);
-    expect(json.treeAddress).toBe(TREE_ADDRESS);
+    expect(json.treeAddress).toBe(treeAddress);
     expect(json.analytics).toBeDefined();
-    expect(json.analytics.uniqueClaimers).toBe(3);
-    expect(json.analytics.claimCount).toBe(5);
+    expect(json.analytics.uniqueClaimers).toBe(2);
+    expect(json.analytics.claimCount).toBe(3);
     expect(json.analytics.percentClaimed).toBeDefined();
     expect(typeof json.analytics.percentClaimed).toBe("number");
     expect(json.rootVersions).toHaveLength(1);
   });
 
   it("returns 404 for non-existent campaign", async () => {
-    mockSelect.mockReturnValue({
-      from: vi.fn().mockReturnValue({
-        where: vi.fn().mockReturnValue({
-          limit: vi.fn().mockResolvedValue([]),
-        }),
-      }),
-    });
-
     const req = new NextRequest(makeUrl("/api/campaigns/nonexistent"));
     const res = await getCampaignByAddress(req, {
       params: Promise.resolve({ treeAddress: "nonexistent" }),
@@ -925,22 +625,6 @@ describe("GET /api/campaigns/[treeAddress]", () => {
     expect(res.status).toBe(404);
     expect(json.error).toContain("not found");
   });
-
-  it("returns 500 on DB error", async () => {
-    mockSelect.mockReturnValue({
-      from: vi.fn().mockReturnValue({
-        where: vi.fn().mockReturnValue({
-          limit: vi.fn().mockRejectedValue(new Error("DB error")),
-        }),
-      }),
-    });
-
-    const req = new NextRequest(makeUrl(`/api/campaigns/${TREE_ADDRESS}`));
-    const res = await getCampaignByAddress(req, {
-      params: Promise.resolve({ treeAddress: TREE_ADDRESS }),
-    });
-    expect(res.status).toBe(500);
-  });
 });
 
 // ===========================================================================
@@ -949,53 +633,15 @@ describe("GET /api/campaigns/[treeAddress]", () => {
 
 describe("GET /api/campaigns/[treeAddress]/proof", () => {
   it("returns leaf + proof for beneficiary", async () => {
-    const mockLeaf = {
-      leafIndex: 0,
-      beneficiary: BENEFICIARY,
-      amount: 1000000,
-      releaseType: 1,
-      startTime: 1700000000,
-      cliffTime: 0,
-      endTime: 1731536000,
-      milestoneIdx: 0,
-      proof: [EMPTY_SIBLING],
-    };
-
-    mockSelect
-      // Find campaign
-      .mockReturnValueOnce({
-        from: vi.fn().mockReturnValue({
-          where: vi.fn().mockReturnValue({
-            limit: vi.fn().mockResolvedValue([{ id: 1, merkleRoot: "a".repeat(64) }]),
-          }),
-        }),
-      })
-      // Get latest root version
-      .mockReturnValueOnce({
-        from: vi.fn().mockReturnValue({
-          where: vi.fn().mockReturnValue({
-            orderBy: vi.fn().mockReturnValue({
-              limit: vi.fn().mockResolvedValue([{ id: 10, version: 1 }]),
-            }),
-          }),
-        }),
-      })
-      // Find leaf
-      .mockReturnValueOnce({
-        from: vi.fn().mockReturnValue({
-          where: vi.fn().mockReturnValue({
-            limit: vi.fn().mockResolvedValue([mockLeaf]),
-          }),
-        }),
-      });
+    const { treeAddress } = await createCampaignViaPost({ treeAddress: TREE_ADDRESS });
 
     const req = new NextRequest(
-      makeUrl(`/api/campaigns/${TREE_ADDRESS}/proof`, {
+      makeUrl(`/api/campaigns/${treeAddress}/proof`, {
         beneficiary: BENEFICIARY,
       }),
     );
     const res = await getProof(req, {
-      params: Promise.resolve({ treeAddress: TREE_ADDRESS }),
+      params: Promise.resolve({ treeAddress }),
     });
     const json = await res.json();
 
@@ -1004,13 +650,11 @@ describe("GET /api/campaigns/[treeAddress]/proof", () => {
     expect(json.leaf.beneficiary).toBe(BENEFICIARY);
     expect(json.proof).toBeDefined();
     expect(json.merkleRoot).toBeDefined();
-    expect(json.treeAddress).toBe(TREE_ADDRESS);
+    expect(json.treeAddress).toBe(treeAddress);
   });
 
   it("returns 400 if beneficiary param missing", async () => {
-    const req = new NextRequest(
-      makeUrl(`/api/campaigns/${TREE_ADDRESS}/proof`),
-    );
+    const req = new NextRequest(makeUrl(`/api/campaigns/${TREE_ADDRESS}/proof`));
     const res = await getProof(req, {
       params: Promise.resolve({ treeAddress: TREE_ADDRESS }),
     });
@@ -1021,16 +665,8 @@ describe("GET /api/campaigns/[treeAddress]/proof", () => {
   });
 
   it("returns 404 if campaign not found", async () => {
-    mockSelect.mockReturnValue({
-      from: vi.fn().mockReturnValue({
-        where: vi.fn().mockReturnValue({
-          limit: vi.fn().mockResolvedValue([]),
-        }),
-      }),
-    });
-
     const req = new NextRequest(
-      makeUrl(`/api/campaigns/nonexistent/proof`, {
+      makeUrl("/api/campaigns/nonexistent/proof", {
         beneficiary: BENEFICIARY,
       }),
     );
@@ -1044,66 +680,23 @@ describe("GET /api/campaigns/[treeAddress]/proof", () => {
   });
 
   it("returns 404 if no leaf for beneficiary", async () => {
-    mockSelect
-      // Find campaign
-      .mockReturnValueOnce({
-        from: vi.fn().mockReturnValue({
-          where: vi.fn().mockReturnValue({
-            limit: vi.fn().mockResolvedValue([{ id: 1, merkleRoot: "a".repeat(64) }]),
-          }),
-        }),
-      })
-      // Get latest root version
-      .mockReturnValueOnce({
-        from: vi.fn().mockReturnValue({
-          where: vi.fn().mockReturnValue({
-            orderBy: vi.fn().mockReturnValue({
-              limit: vi.fn().mockResolvedValue([{ id: 10, version: 1 }]),
-            }),
-          }),
-        }),
-      })
-      // Find leaf - not found
-      .mockReturnValueOnce({
-        from: vi.fn().mockReturnValue({
-          where: vi.fn().mockReturnValue({
-            limit: vi.fn().mockResolvedValue([]),
-          }),
-        }),
-      });
+    const { treeAddress } = await createCampaignViaPost({
+      treeAddress: uniqueTreeAddress(),
+      leaf: { beneficiary: OTHER_BENEFICIARY },
+    });
 
     const req = new NextRequest(
-      makeUrl(`/api/campaigns/${TREE_ADDRESS}/proof`, {
+      makeUrl(`/api/campaigns/${treeAddress}/proof`, {
         beneficiary: BENEFICIARY,
       }),
     );
     const res = await getProof(req, {
-      params: Promise.resolve({ treeAddress: TREE_ADDRESS }),
+      params: Promise.resolve({ treeAddress }),
     });
     const json = await res.json();
 
     expect(res.status).toBe(404);
     expect(json.error).toContain("No proof found");
-  });
-
-  it("returns 500 on DB error", async () => {
-    mockSelect.mockReturnValue({
-      from: vi.fn().mockReturnValue({
-        where: vi.fn().mockReturnValue({
-          limit: vi.fn().mockRejectedValue(new Error("DB error")),
-        }),
-      }),
-    });
-
-    const req = new NextRequest(
-      makeUrl(`/api/campaigns/${TREE_ADDRESS}/proof`, {
-        beneficiary: BENEFICIARY,
-      }),
-    );
-    const res = await getProof(req, {
-      params: Promise.resolve({ treeAddress: TREE_ADDRESS }),
-    });
-    expect(res.status).toBe(500);
   });
 });
 
@@ -1113,33 +706,7 @@ describe("GET /api/campaigns/[treeAddress]/proof", () => {
 
 describe("POST /api/campaigns/[treeAddress]/root-versions", () => {
   it("creates new root version and returns 201 with version number", async () => {
-    mockSelect
-      // Find campaign
-      .mockReturnValueOnce({
-        from: vi.fn().mockReturnValue({
-          where: vi.fn().mockReturnValue({
-            limit: vi.fn().mockResolvedValue([{ id: 1 }]),
-          }),
-        }),
-      })
-      // Get max version
-      .mockReturnValueOnce({
-        from: vi.fn().mockReturnValue({
-          where: vi.fn().mockResolvedValue([{ version: 1 }]),
-        }),
-      });
-
-    mockInsert.mockReturnValue({
-      values: vi.fn().mockReturnValue({
-        returning: vi.fn().mockResolvedValue([{ id: 5 }]),
-      }),
-    });
-
-    mockUpdate.mockReturnValue({
-      set: vi.fn().mockReturnValue({
-        where: vi.fn().mockResolvedValue(undefined),
-      }),
-    });
+    await createCampaignViaPost({ treeAddress: TREE_ADDRESS });
 
     const body = {
       merkleRoot: "b".repeat(64),
@@ -1166,14 +733,6 @@ describe("POST /api/campaigns/[treeAddress]/root-versions", () => {
   });
 
   it("returns 404 for non-existent campaign", async () => {
-    mockSelect.mockReturnValue({
-      from: vi.fn().mockReturnValue({
-        where: vi.fn().mockReturnValue({
-          limit: vi.fn().mockResolvedValue([]),
-        }),
-      }),
-    });
-
     const body = {
       merkleRoot: "b".repeat(64),
       leafCount: 1,
@@ -1208,31 +767,6 @@ describe("POST /api/campaigns/[treeAddress]/root-versions", () => {
     expect(res.status).toBe(400);
     expect(json.error).toBe("Validation failed");
   });
-
-  it("returns 500 on DB error", async () => {
-    mockSelect.mockReturnValue({
-      from: vi.fn().mockReturnValue({
-        where: vi.fn().mockReturnValue({
-          limit: vi.fn().mockRejectedValue(new Error("DB error")),
-        }),
-      }),
-    });
-
-    const body = {
-      merkleRoot: "b".repeat(64),
-      leafCount: 1,
-      leaves: [makeLeaf()],
-    };
-
-    const req = new NextRequest(makeUrl(`/api/campaigns/${TREE_ADDRESS}/root-versions`), {
-      method: "POST",
-      body: JSON.stringify(body),
-    });
-    const res = await postRootVersion(req, {
-      params: Promise.resolve({ treeAddress: TREE_ADDRESS }),
-    });
-    expect(res.status).toBe(500);
-  });
 });
 
 // ===========================================================================
@@ -1241,143 +775,81 @@ describe("POST /api/campaigns/[treeAddress]/root-versions", () => {
 
 describe("GET /api/campaigns/[treeAddress]/claims", () => {
   it("returns paginated claims", async () => {
-    const mockClaims = [
-      {
-        beneficiary: BENEFICIARY,
-        leafIndex: 0,
-        amount: 100000,
-        totalClaimedByUser: 100000,
-        totalClaimedOverall: 100000,
-        milestoneIdx: null,
-        signature: "sig1",
-        slot: 1000,
-        blockTime: 1700000000,
-      },
-    ];
+    const { treeAddress, campaignId } = await createCampaignViaPost({
+      treeAddress: TREE_ADDRESS,
+    });
 
-    mockSelect
-      // Find campaign
-      .mockReturnValueOnce({
-        from: vi.fn().mockReturnValue({
-          where: vi.fn().mockReturnValue({
-            limit: vi.fn().mockResolvedValue([{ id: 1 }]),
-          }),
-        }),
-      })
-      // Count claims
-      .mockReturnValueOnce({
-        from: vi.fn().mockReturnValue({
-          where: vi.fn().mockResolvedValue([{ count: 1 }]),
-        }),
-      })
-      // Fetch claims
-      .mockReturnValueOnce({
-        from: vi.fn().mockReturnValue({
-          where: vi.fn().mockReturnValue({
-            orderBy: vi.fn().mockReturnValue({
-              limit: vi.fn().mockResolvedValue(mockClaims),
-            }),
-          }),
-        }),
-      });
+    await seedClaimEvent(campaignId, {
+      beneficiary: BENEFICIARY,
+      amount: 100000,
+      totalClaimedByUser: 100000,
+      totalClaimedOverall: 100000,
+      signature: "sig_claim_1",
+    });
 
-    const req = new NextRequest(makeUrl(`/api/campaigns/${TREE_ADDRESS}/claims`));
+    const req = new NextRequest(makeUrl(`/api/campaigns/${treeAddress}/claims`));
     const res = await getClaims(req, {
-      params: Promise.resolve({ treeAddress: TREE_ADDRESS }),
+      params: Promise.resolve({ treeAddress }),
     });
     const json = await res.json();
 
     expect(res.status).toBe(200);
     expect(json.claims).toHaveLength(1);
     expect(json.total).toBe(1);
+    expect(json.claims[0].beneficiary).toBe(BENEFICIARY);
   });
 
   it("filters by beneficiary", async () => {
-    mockSelect
-      .mockReturnValueOnce({
-        from: vi.fn().mockReturnValue({
-          where: vi.fn().mockReturnValue({
-            limit: vi.fn().mockResolvedValue([{ id: 1 }]),
-          }),
-        }),
-      })
-      .mockReturnValueOnce({
-        from: vi.fn().mockReturnValue({
-          where: vi.fn().mockResolvedValue([{ count: 0 }]),
-        }),
-      })
-      .mockReturnValueOnce({
-        from: vi.fn().mockReturnValue({
-          where: vi.fn().mockReturnValue({
-            orderBy: vi.fn().mockReturnValue({
-              limit: vi.fn().mockResolvedValue([]),
-            }),
-          }),
-        }),
-      });
+    const { treeAddress, campaignId } = await createCampaignViaPost({
+      treeAddress: uniqueTreeAddress(),
+    });
+
+    await seedClaimEvent(campaignId, {
+      beneficiary: BENEFICIARY,
+      signature: "sig_bene",
+    });
 
     const req = new NextRequest(
-      makeUrl(`/api/campaigns/${TREE_ADDRESS}/claims`, {
-        beneficiary: BENEFICIARY,
+      makeUrl(`/api/campaigns/${treeAddress}/claims`, {
+        beneficiary: OTHER_BENEFICIARY,
       }),
     );
     const res = await getClaims(req, {
-      params: Promise.resolve({ treeAddress: TREE_ADDRESS }),
+      params: Promise.resolve({ treeAddress }),
     });
     const json = await res.json();
 
     expect(res.status).toBe(200);
     expect(json.total).toBe(0);
+    expect(json.claims).toHaveLength(0);
   });
 
   it("filters by fromSlot", async () => {
-    mockSelect
-      .mockReturnValueOnce({
-        from: vi.fn().mockReturnValue({
-          where: vi.fn().mockReturnValue({
-            limit: vi.fn().mockResolvedValue([{ id: 1 }]),
-          }),
-        }),
-      })
-      .mockReturnValueOnce({
-        from: vi.fn().mockReturnValue({
-          where: vi.fn().mockResolvedValue([{ count: 0 }]),
-        }),
-      })
-      .mockReturnValueOnce({
-        from: vi.fn().mockReturnValue({
-          where: vi.fn().mockReturnValue({
-            orderBy: vi.fn().mockReturnValue({
-              limit: vi.fn().mockResolvedValue([]),
-            }),
-          }),
-        }),
-      });
+    const { treeAddress, campaignId } = await createCampaignViaPost({
+      treeAddress: uniqueTreeAddress(),
+    });
+
+    await seedClaimEvent(campaignId, { slot: 1000, signature: "sig_slot" });
 
     const req = new NextRequest(
-      makeUrl(`/api/campaigns/${TREE_ADDRESS}/claims`, {
+      makeUrl(`/api/campaigns/${treeAddress}/claims`, {
         fromSlot: "5000",
       }),
     );
     const res = await getClaims(req, {
-      params: Promise.resolve({ treeAddress: TREE_ADDRESS }),
+      params: Promise.resolve({ treeAddress }),
     });
     const json = await res.json();
 
     expect(res.status).toBe(200);
     expect(json.total).toBe(0);
+    expect(json.claims).toHaveLength(0);
   });
 
   it("returns 404 for non-existent campaign", async () => {
-    mockSelect.mockReturnValue({
-      from: vi.fn().mockReturnValue({
-        where: vi.fn().mockReturnValue({
-          limit: vi.fn().mockResolvedValue([]),
-        }),
-      }),
-    });
-
-    const req = new NextRequest(makeUrl("/api/campaigns/11111111111111111111111111111111/claims"));
+    const req = new NextRequest(
+      makeUrl("/api/campaigns/11111111111111111111111111111111/claims"),
+    );
     const res = await getClaims(req, {
       params: Promise.resolve({ treeAddress: "11111111111111111111111111111111" }),
     });
@@ -1385,22 +857,6 @@ describe("GET /api/campaigns/[treeAddress]/claims", () => {
 
     expect(res.status).toBe(404);
     expect(json.error).toContain("not found");
-  });
-
-  it("returns 500 on DB error", async () => {
-    mockSelect.mockReturnValue({
-      from: vi.fn().mockReturnValue({
-        where: vi.fn().mockReturnValue({
-          limit: vi.fn().mockRejectedValue(new Error("DB error")),
-        }),
-      }),
-    });
-
-    const req = new NextRequest(makeUrl(`/api/campaigns/${TREE_ADDRESS}/claims`));
-    const res = await getClaims(req, {
-      params: Promise.resolve({ treeAddress: TREE_ADDRESS }),
-    });
-    expect(res.status).toBe(500);
   });
 });
 
@@ -1410,32 +866,9 @@ describe("GET /api/campaigns/[treeAddress]/claims", () => {
 
 describe("GET /api/beneficiary/[address]/campaigns", () => {
   it("returns campaigns where address is beneficiary", async () => {
-    mockExecute.mockResolvedValue([
-      {
-        id: 1,
-        tree_address: TREE_ADDRESS,
-        creator: CREATOR,
-        mint: MINT,
-        campaign_id: 1,
-        total_supply: 1000000,
-        leaf_count: 10,
-        paused: false,
-        cancelled_at: null,
-        created_at: 1700000000,
-        metadata: null,
-        leaf_index: 0,
-        amount: 100000,
-        release_type: 1,
-        start_time: 1700000000,
-        cliff_time: 0,
-        end_time: 1731536000,
-        milestone_idx: 0,
-      },
-    ]);
+    await createCampaignViaPost({ treeAddress: TREE_ADDRESS });
 
-    const req = new NextRequest(
-      makeUrl(`/api/beneficiary/${BENEFICIARY}/campaigns`),
-    );
+    const req = new NextRequest(makeUrl(`/api/beneficiary/${BENEFICIARY}/campaigns`));
     const res = await getBeneficiaryCampaigns(req, {
       params: Promise.resolve({ address: BENEFICIARY }),
     });
@@ -1445,34 +878,20 @@ describe("GET /api/beneficiary/[address]/campaigns", () => {
     expect(json.campaigns).toHaveLength(1);
     expect(json.campaigns[0].treeAddress).toBe(TREE_ADDRESS);
     expect(json.campaigns[0].myLeaf).toBeDefined();
-    expect(json.campaigns[0].myLeaf.amount).toBe(100000);
+    expect(json.campaigns[0].myLeaf.amount).toBe(1000000);
   });
 
   it("returns empty array if no campaigns found", async () => {
-    mockExecute.mockResolvedValue([]);
-
     const req = new NextRequest(
-      makeUrl(`/api/beneficiary/${BENEFICIARY}/campaigns`),
+      makeUrl(`/api/beneficiary/${OTHER_BENEFICIARY}/campaigns`),
     );
     const res = await getBeneficiaryCampaigns(req, {
-      params: Promise.resolve({ address: BENEFICIARY }),
+      params: Promise.resolve({ address: OTHER_BENEFICIARY }),
     });
     const json = await res.json();
 
     expect(res.status).toBe(200);
     expect(json.campaigns).toEqual([]);
-  });
-
-  it("returns 500 on DB error", async () => {
-    mockExecute.mockRejectedValue(new Error("DB error"));
-
-    const req = new NextRequest(
-      makeUrl(`/api/beneficiary/${BENEFICIARY}/campaigns`),
-    );
-    const res = await getBeneficiaryCampaigns(req, {
-      params: Promise.resolve({ address: BENEFICIARY }),
-    });
-    expect(res.status).toBe(500);
   });
 });
 
@@ -1576,9 +995,7 @@ describe("POST /api/admin/sync", () => {
   it("returns 500 when syncClaimEvents throws", async () => {
     process.env.ADMIN_API_KEY = "super-secret-key";
 
-    vi.mocked(syncClaimEvents).mockRejectedValue(
-      new Error("RPC connection failed"),
-    );
+    vi.mocked(syncClaimEvents).mockRejectedValue(new Error("RPC connection failed"));
 
     const req = new NextRequest(makeUrl("/api/admin/sync"), {
       method: "POST",
@@ -1595,28 +1012,25 @@ describe("POST /api/admin/sync", () => {
 // ===========================================================================
 
 describe("parseClaimedEvent logic (unit test of event parsing)", () => {
-  // Use real PublicKeys so the base58 conversion matches what the real
-  // parseClaimedEvent returns.
   const TREE_KEY = new PublicKey(TREE_ADDRESS);
   const BENE_KEY = new PublicKey(BENEFICIARY);
 
-  function makeValidEventBuffer(overrides: {
-    milestoneFlag?: number;
-    milestoneIdx?: number;
-    truncateTo?: number;
-    wrongDiscriminator?: boolean;
-  } = {}): Buffer {
-    // 8 (discriminator) + 32 (tree) + 32 (beneficiary) + 4 (leafIndex)
-    // + 8 (amount) + 8 (totalClaimedByUser) + 8 (totalClaimedOverall)
-    // + 1 (option flag) + 1 (milestoneIdx) = 102 bytes
+  function makeValidEventBuffer(
+    overrides: {
+      milestoneFlag?: number;
+      milestoneIdx?: number;
+      truncateTo?: number;
+      wrongDiscriminator?: boolean;
+    } = {},
+  ): Buffer {
     const buf = Buffer.alloc(102);
     CLAIMED_DISCRIMINATOR.copy(buf, 0);
     TREE_KEY.toBuffer().copy(buf, 8);
     BENE_KEY.toBuffer().copy(buf, 40);
-    buf.writeUInt32LE(42, 72);                // leafIndex = 42
-    buf.writeBigUInt64LE(BigInt(1000000), 76); // amount
-    buf.writeBigUInt64LE(BigInt(1000000), 84); // totalClaimedByUser
-    buf.writeBigUInt64LE(BigInt(5000000), 92); // totalClaimedOverall
+    buf.writeUInt32LE(42, 72);
+    buf.writeBigUInt64LE(BigInt(1000000), 76);
+    buf.writeBigUInt64LE(BigInt(1000000), 84);
+    buf.writeBigUInt64LE(BigInt(5000000), 92);
 
     const milestoneFlag = overrides.milestoneFlag ?? 0;
     buf.writeUInt8(milestoneFlag, 100);
@@ -1630,7 +1044,7 @@ describe("parseClaimedEvent logic (unit test of event parsing)", () => {
     }
 
     if (overrides.wrongDiscriminator) {
-      buf.writeUInt8(0xFF, 0);
+      buf.writeUInt8(0xff, 0);
     }
 
     return buf;
@@ -1682,7 +1096,6 @@ describe("parseClaimedEvent logic (unit test of event parsing)", () => {
   it("returns milestoneIdx = null when option flag is 1 but buffer too short for value", () => {
     const buf = makeValidEventBuffer({ milestoneFlag: 1, truncateTo: 101 });
     const result = parseClaimedEvent(buf);
-    // Buffer is 101 bytes: option flag is readable at offset 100 but milestoneIdx byte at 101 is not
     expect(result!.milestoneIdx).toBeNull();
   });
 });
@@ -1695,29 +1108,10 @@ describe("Merkle proof verification (indirect)", () => {
   it("single-leaf tree: accepts correct root that equals leaf hash", async () => {
     const leaf = makeLeaf();
     const correctRoot = computeSingleLeafRoot(leaf);
-    const body = makeCampaignBody({ merkleRoot: correctRoot, leaves: [leaf] });
-
-    mockTransaction.mockImplementation(async (callback: (tx: unknown) => Promise<unknown>) => {
-      const insertCampaignChain = {
-        values: vi.fn().mockReturnValue({
-          returning: vi.fn().mockResolvedValue([{ id: 1 }]),
-        }),
-      };
-      const insertRootVersionChain = {
-        values: vi.fn().mockReturnValue({
-          returning: vi.fn().mockResolvedValue([{ id: 1 }]),
-        }),
-      };
-      const insertLeavesChain = {
-        values: vi.fn().mockResolvedValue(undefined),
-      };
-      const tx = {
-        insert: vi.fn()
-          .mockReturnValueOnce(insertCampaignChain)
-          .mockReturnValueOnce(insertRootVersionChain)
-          .mockReturnValueOnce(insertLeavesChain),
-      };
-      return callback(tx);
+    const body = makeCampaignBody({
+      treeAddress: uniqueTreeAddress(),
+      merkleRoot: correctRoot,
+      leaves: [leaf],
     });
 
     const req = new NextRequest(makeUrl("/api/campaigns"), {
@@ -1729,15 +1123,19 @@ describe("Merkle proof verification (indirect)", () => {
     expect(res.status).toBe(201);
     const json = await res.json();
     expect(json.ok).toBe(true);
+    expect(json.campaignId).toBeGreaterThan(0);
   });
 
   it("multi-leaf tree with empty proof rejects with 400", async () => {
-    // Multi-leaf trees must provide a proof for the first leaf —
-    // otherwise the merkle root cannot be verified.
     const leaf0 = makeLeaf({ leafIndex: 0, proof: [] });
-    const leaf1 = makeLeaf({ leafIndex: 1, beneficiary: OTHER_BENEFICIARY, proof: [] });
+    const leaf1 = makeLeaf({
+      leafIndex: 1,
+      beneficiary: OTHER_BENEFICIARY,
+      proof: [],
+    });
 
     const body = makeCampaignBody({
+      treeAddress: uniqueTreeAddress(),
       merkleRoot: "d".repeat(64),
       leafCount: 2,
       leaves: [leaf0, leaf1],

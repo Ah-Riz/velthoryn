@@ -7,6 +7,8 @@ export default defineConfig({
   test: {
     environment: "node",
     include: ["tests/**/*.test.ts", "src/**/*.test.ts"],
+    globalSetup: ["./tests/globalSetup.ts"],
+    fileParallelism: false,
   },
   resolve: {
     alias: {

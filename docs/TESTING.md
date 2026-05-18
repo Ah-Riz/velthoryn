@@ -5,7 +5,7 @@
 **265 tests total** — all passing (on-chain security suite includes 11 exploit tests).
 
 - On-chain (Anchor): 70 tests across 5 files
-- Frontend (Vitest): 208 tests across 19 files
+- Web (Vitest): ~200 tests across 20 files (API routes use real Postgres in CI)
 - Trident fuzz: smoke test in CI (`trident-tests/fuzz_vesting`)
 
 | Test File | Tests | Purpose |
@@ -110,19 +110,33 @@ describe("clock test", () => {
 });
 ```
 
-## Frontend Tests (Vitest)
+## Web Tests (Vitest)
+
+API route tests (`tests/api/*`) use a **real Postgres** database. CI provides Postgres via service containers in `web-ci.yml` and `lint.yml`. Hooks, merkle, and math tests do not need a database.
+
+### Local setup (Postgres required for full suite)
+
+```bash
+docker run -d --name vesting-pg \
+  -e POSTGRES_USER=ci -e POSTGRES_PASSWORD=ci -e POSTGRES_DB=ci \
+  -p 5432:5432 postgres:15
+
+export DATABASE_URL=postgresql://ci:ci@127.0.0.1:5432/ci
+cd apps/web && pnpm drizzle-kit push && pnpm test
+```
 
 ```bash
 cd apps/web
-pnpm test              # 208 passing
+pnpm test              # full suite (requires DATABASE_URL)
 pnpm test -- --reporter=verbose  # detailed output
 ```
 
 | Test File | Tests | Purpose |
 |-----------|-------|---------|
-| `tests/api/backend.test.ts` | 76 | API routes — campaigns, claims, proofs, beneficiary, admin sync |
+| `tests/api/backend.test.ts` | ~69 | API routes — campaigns, claims, proofs, beneficiary, admin sync (real DB) |
 | `tests/math/vesting.test.ts` | 23 | Vesting math — linear, cliff, milestone, cancel clamp, edge cases |
-| `tests/api/bug-fix-validation.test.ts` | 14 | Input validation — address format, amount bounds, date logic |
+| `tests/api/bug-fix-validation.test.ts` | ~14 | Bug-fix regressions — validation, indexer cursor, real DB transactions |
+| `tests/lib/db-ssl.test.ts` | 3 | DB SSL host detection (local vs Supabase) |
 | `tests/anchor/pda.test.ts` | 10 | PDA derivation — VestingTree, VaultAuthority, ClaimRecord seeds |
 | `tests/lib/adapters.test.ts` | 10 | Anchor adapter utils — account parsing, type conversion |
 | `tests/lib/anchor-client.test.ts` | 9 | Anchor client — program init, instruction building |

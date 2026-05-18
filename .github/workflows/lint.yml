@@ -10,7 +10,26 @@ jobs:
   lint:
     name: Lint
     runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_USER: ci
+          POSTGRES_PASSWORD: ci
+          POSTGRES_DB: ci
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
     env:
+      DATABASE_URL: "postgresql://ci:ci@127.0.0.1:5432/ci"
+      ADMIN_API_KEY: "ci-test-key"
+      NEXT_PUBLIC_RPC_ENDPOINT: "https://api.devnet.solana.com"
       CARGO_INCREMENTAL: 0
       CARGO_TERM_COLOR: always
 
@@ -43,6 +62,9 @@ jobs:
 
       - run: pnpm install --frozen-lockfile
 
+      - name: Push DB schema
+        run: cd apps/web && echo "y" | pnpm drizzle-kit push
+
       - name: Next.js lint
         run: cd apps/web && pnpm lint
 
@@ -51,7 +73,3 @@ jobs:
 
       - name: Next.js build
         run: cd apps/web && pnpm build
-        env:
-          DATABASE_URL: "postgresql://ci:ci@localhost:5432/ci"
-          NEXT_PUBLIC_RPC_ENDPOINT: "https://api.devnet.solana.com"
-          ADMIN_API_KEY: "ci-test-key"

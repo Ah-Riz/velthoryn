@@ -7,73 +7,22 @@
  */
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { NextRequest } from "next/server";
+import { db } from "@/lib/db";
+import { resetDb } from "../helpers/db";
+import { createCampaignViaPost } from "../helpers/fixtures";
+import { makeUrl, BENEFICIARY } from "../helpers/requests";
+
+const TREE_ADDRESS = "7xKXtg2CW87d97TXJSDpbD5jBkheTqA83TZRuJosgAsU";
 
 // ---------------------------------------------------------------------------
-// Mock declarations
+// Mock declarations (RPC / indexer only — no DB mock)
 // ---------------------------------------------------------------------------
 
-const {
-  mockSelect,
-  mockFrom,
-  mockWhere,
-  mockOrderBy,
-  mockLimit,
-  mockOffset,
-  mockInsert,
-  mockValues,
-  mockUpdate,
-  mockSet,
-  mockReturning,
-  mockExecute,
-  mockTransaction,
-  mockGetSignaturesForAddress,
-  mockGetTransactions,
-} = vi.hoisted(() => {
-  const fns = [
-    "mockSelect",
-    "mockFrom",
-    "mockWhere",
-    "mockOrderBy",
-    "mockLimit",
-    "mockOffset",
-    "mockInsert",
-    "mockValues",
-    "mockUpdate",
-    "mockSet",
-    "mockReturning",
-    "mockExecute",
-    "mockTransaction",
-    "mockGetSignaturesForAddress",
-    "mockGetTransactions",
-  ] as const;
-  const result: Record<string, ReturnType<typeof vi.fn>> = {};
-  for (const name of fns) {
-    result[name] = vi.fn();
-  }
-  return result;
-});
-
-// Mock DB
-vi.mock("@/lib/db", () => ({
-  db: {
-    select: mockSelect,
-    from: mockFrom,
-    where: mockWhere,
-    limit: mockLimit,
-    offset: mockOffset,
-    orderBy: mockOrderBy,
-    insert: mockInsert,
-    values: mockValues,
-    returning: mockReturning,
-    update: mockUpdate,
-    set: mockSet,
-    execute: mockExecute,
-    transaction: mockTransaction,
-  },
+const { mockGetSignaturesForAddress, mockGetTransactions } = vi.hoisted(() => ({
+  mockGetSignaturesForAddress: vi.fn(),
+  mockGetTransactions: vi.fn(),
 }));
 
-// Mock @/lib/indexer/claim-events: preserve real exports but override syncClaimEvents
-// for route-level tests. Bug 1 tests use vi.importActual to get the real function.
 vi.mock("@/lib/indexer/claim-events", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@/lib/indexer/claim-events")>();
   return {
@@ -82,7 +31,6 @@ vi.mock("@/lib/indexer/claim-events", async (importOriginal) => {
   };
 });
 
-// Mock Connection constructor so syncClaimEvents uses our controlled mock
 const mockConnectionInstance = {
   getSignaturesForAddress: mockGetSignaturesForAddress,
   getTransactions: mockGetTransactions,
@@ -95,44 +43,15 @@ vi.mock("@solana/web3.js", async (importOriginal) => {
   };
 });
 
-// ---------------------------------------------------------------------------
-// Route handler imports (after mocks)
-// ---------------------------------------------------------------------------
-
 import { GET as getBeneficiaryCampaigns } from "@/app/api/beneficiary/[address]/campaigns/route";
 import { GET as getClaims } from "@/app/api/campaigns/[treeAddress]/claims/route";
 
-
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
-
-const TREE_ADDRESS = "7xKXtg2CW87d97TXJSDpbD5jBkheTqA83TZRuJosgAsU";
-const BENEFICIARY = "11111111111111111111111111111111";
-
-function makeUrl(path: string, params?: Record<string, string>): string {
-  const base = `http://localhost${path}`;
-  if (!params) return base;
-  const qs = new URLSearchParams(params).toString();
-  return `${base}?${qs}`;
-}
-
-// ---------------------------------------------------------------------------
-// Reset mocks between tests
-// ---------------------------------------------------------------------------
-
-beforeEach(() => {
+beforeEach(async () => {
+  await resetDb();
   vi.clearAllMocks();
   process.env.API_KEY = "test-api-key";
   process.env.RPC_ENDPOINT = "http://localhost:8899";
   process.env.NEXT_PUBLIC_RPC_ENDPOINT = "http://localhost:8899";
-  mockTransaction.mockImplementation(async (cb: (tx: unknown) => Promise<unknown>) => {
-    return cb({
-      select: mockSelect,
-      insert: mockInsert,
-      update: mockUpdate,
-    });
-  });
 });
 
 // ===========================================================================
@@ -141,52 +60,33 @@ beforeEach(() => {
 
 describe("Bug 1: Pagination cursor fix", () => {
   it("syncClaimEvents uses last valid signature as cursor when some signatures are filtered by fromSlot", async () => {
-    // Import the real syncClaimEvents to test actual cursor logic
-    const { syncClaimEvents: realSyncClaimEvents } = await vi.importActual<typeof import("@/lib/indexer/claim-events")>(
-      "@/lib/indexer/claim-events",
-    );
+    const { syncClaimEvents: realSyncClaimEvents } = await vi.importActual<
+      typeof import("@/lib/indexer/claim-events")
+    >("@/lib/indexer/claim-events");
 
-    // Simulate RPC returning 4 signatures across one page, where fromSlot=50
-    // filters out the first 2. The bug would use pageSignatures[last] as cursor
-    // ("sig_50") instead of validSigs[last] ("sig_70").
     const page1Signatures = [
       { signature: "sig_10", slot: 30 },
       { signature: "sig_20", slot: 40 },
-      { signature: "sig_50", slot: 50 },  // filtered: slot <= fromSlot
+      { signature: "sig_50", slot: 50 },
       { signature: "sig_70", slot: 70 },
     ];
 
-    // First call returns the page, second call returns empty (end of pages)
     mockGetSignaturesForAddress
       .mockResolvedValueOnce(page1Signatures)
       .mockResolvedValueOnce([]);
 
-    // Only 1 valid sig (slot 70) after filtering, so getTransactions receives 1 sig
     mockGetTransactions.mockResolvedValue([null]);
-
-    // Mock the DB select chain for getCampaignId (returns undefined so events are skipped)
-    mockSelect.mockReturnValue({
-      from: vi.fn().mockReturnValue({
-        where: vi.fn().mockReturnValue({
-          limit: vi.fn().mockResolvedValue([]),
-        }),
-      }),
-    });
 
     await realSyncClaimEvents(50);
 
-    // validSigs has only sig_70 (slot 70 > fromSlot 50).
-    // After processing, cursor uses last pageSignature for next page.
-    // Since page has < 1000 sigs, loop ends — only 1 call.
     expect(mockGetSignaturesForAddress).toHaveBeenCalledTimes(1);
   });
 
   it("syncClaimEvents falls back to last pageSignature when all are filtered", async () => {
-    const { syncClaimEvents: realSyncClaimEvents } = await vi.importActual<typeof import("@/lib/indexer/claim-events")>(
-      "@/lib/indexer/claim-events",
-    );
+    const { syncClaimEvents: realSyncClaimEvents } = await vi.importActual<
+      typeof import("@/lib/indexer/claim-events")
+    >("@/lib/indexer/claim-events");
 
-    // All signatures have slot <= fromSlot=100
     const page1Signatures = [
       { signature: "sig_30", slot: 30 },
       { signature: "sig_40", slot: 40 },
@@ -198,20 +98,8 @@ describe("Bug 1: Pagination cursor fix", () => {
 
     mockGetTransactions.mockResolvedValue([null, null]);
 
-    // Mock DB select chain
-    mockSelect.mockReturnValue({
-      from: vi.fn().mockReturnValue({
-        where: vi.fn().mockReturnValue({
-          limit: vi.fn().mockResolvedValue([]),
-        }),
-      }),
-    });
-
     await realSyncClaimEvents(100);
 
-    // When validSigs is empty, the loop should break immediately
-    // in claim-events.ts: `if (validSigs.length === 0) break;`).
-    // getSignaturesForAddress should only be called once (no second page request).
     expect(mockGetSignaturesForAddress).toHaveBeenCalledTimes(1);
   });
 
@@ -220,7 +108,7 @@ describe("Bug 1: Pagination cursor fix", () => {
       { signature: "sig_30", slot: 30 },
       { signature: "sig_40", slot: 40 },
     ];
-    const fromSlot = 100; // all slots are <= fromSlot
+    const fromSlot = 100;
 
     const validSigs = pageSignatures.filter(
       (s) => !(fromSlot && s.slot <= fromSlot),
@@ -228,7 +116,6 @@ describe("Bug 1: Pagination cursor fix", () => {
 
     expect(validSigs).toHaveLength(0);
 
-    // When validSigs is empty, fall back to pageSignatures last
     const cursorSig =
       validSigs.length > 0
         ? validSigs[validSigs.length - 1].signature
@@ -244,10 +131,6 @@ describe("Bug 1: Pagination cursor fix", () => {
 
 describe("Bug 2: RootUpdated creates root_versions", () => {
   it("version numbering increments correctly", () => {
-    // Verify the version calculation logic: nextVersion = (maxVersion ?? 0) + 1
-    // For first root_versions insert, maxVersion is null/undefined -> version = 1
-    // For second insert after one exists, version = 2
-
     const maxVersion1 = null;
     const nextVersion1 = (maxVersion1 ?? 0) + 1;
     expect(nextVersion1).toBe(1);
@@ -281,9 +164,7 @@ describe("Bug 3: Input validation", () => {
     });
 
     it("returns 400 for address that is too short", async () => {
-      const req = new NextRequest(
-        makeUrl("/api/beneficiary/abc123/campaigns"),
-      );
+      const req = new NextRequest(makeUrl("/api/beneficiary/abc123/campaigns"));
       const res = await getBeneficiaryCampaigns(req, {
         params: Promise.resolve({ address: "abc123" }),
       });
@@ -293,9 +174,7 @@ describe("Bug 3: Input validation", () => {
     });
 
     it("returns 400 for empty address", async () => {
-      const req = new NextRequest(
-        makeUrl("/api/beneficiary//campaigns"),
-      );
+      const req = new NextRequest(makeUrl("/api/beneficiary//campaigns"));
       const res = await getBeneficiaryCampaigns(req, {
         params: Promise.resolve({ address: "" }),
       });
@@ -305,7 +184,7 @@ describe("Bug 3: Input validation", () => {
     });
 
     it("accepts a valid base58 Solana address", async () => {
-      mockExecute.mockResolvedValue([]);
+      await createCampaignViaPost({ treeAddress: TREE_ADDRESS });
 
       const req = new NextRequest(
         makeUrl(`/api/beneficiary/${BENEFICIARY}/campaigns`),
@@ -355,28 +234,7 @@ describe("Bug 3: Input validation", () => {
     });
 
     it("accepts fromSlot=0 as valid", async () => {
-      mockSelect
-        .mockReturnValueOnce({
-          from: vi.fn().mockReturnValue({
-            where: vi.fn().mockReturnValue({
-              limit: vi.fn().mockResolvedValue([{ id: 1 }]),
-            }),
-          }),
-        })
-        .mockReturnValueOnce({
-          from: vi.fn().mockReturnValue({
-            where: vi.fn().mockResolvedValue([{ count: 0 }]),
-          }),
-        })
-        .mockReturnValueOnce({
-          from: vi.fn().mockReturnValue({
-            where: vi.fn().mockReturnValue({
-              orderBy: vi.fn().mockReturnValue({
-                limit: vi.fn().mockResolvedValue([]),
-              }),
-            }),
-          }),
-        });
+      const { campaignId } = await createCampaignViaPost({ treeAddress: TREE_ADDRESS });
 
       const req = new NextRequest(
         makeUrl(`/api/campaigns/${TREE_ADDRESS}/claims`, { fromSlot: "0" }),
@@ -384,36 +242,17 @@ describe("Bug 3: Input validation", () => {
       const res = await getClaims(req, {
         params: Promise.resolve({ treeAddress: TREE_ADDRESS }),
       });
-      // Should NOT return 400 -- fromSlot=0 is valid
       expect(res.status).toBe(200);
+      expect(campaignId).toBeGreaterThan(0);
     });
 
     it("accepts large positive fromSlot as valid", async () => {
-      mockSelect
-        .mockReturnValueOnce({
-          from: vi.fn().mockReturnValue({
-            where: vi.fn().mockReturnValue({
-              limit: vi.fn().mockResolvedValue([{ id: 1 }]),
-            }),
-          }),
-        })
-        .mockReturnValueOnce({
-          from: vi.fn().mockReturnValue({
-            where: vi.fn().mockResolvedValue([{ count: 0 }]),
-          }),
-        })
-        .mockReturnValueOnce({
-          from: vi.fn().mockReturnValue({
-            where: vi.fn().mockReturnValue({
-              orderBy: vi.fn().mockReturnValue({
-                limit: vi.fn().mockResolvedValue([]),
-              }),
-            }),
-          }),
-        });
+      await createCampaignViaPost({ treeAddress: TREE_ADDRESS });
 
       const req = new NextRequest(
-        makeUrl(`/api/campaigns/${TREE_ADDRESS}/claims`, { fromSlot: "999999999" }),
+        makeUrl(`/api/campaigns/${TREE_ADDRESS}/claims`, {
+          fromSlot: "999999999",
+        }),
       );
       const res = await getClaims(req, {
         params: Promise.resolve({ treeAddress: TREE_ADDRESS }),
@@ -429,27 +268,13 @@ describe("Bug 3: Input validation", () => {
 
 describe("Bug 4: Batched DB transactions for Claimed events", () => {
   it("transaction callback receives a tx object that can perform both insert and update", async () => {
-    // Verify the transaction mock provides both insert and update,
-    // which is what the batched handler needs.
-    let txReceived: any = null;
-    mockTransaction.mockImplementation(async (cb: (tx: unknown) => Promise<unknown>) => {
-      txReceived = {
-        insert: vi.fn(),
-        update: vi.fn(),
-      };
-      return cb(txReceived);
+    await createCampaignViaPost({ treeAddress: TREE_ADDRESS });
+
+    let txReceived: { insert: unknown; update: unknown } | null = null;
+    await db.transaction(async (tx) => {
+      txReceived = { insert: tx.insert, update: tx.update };
     });
 
-    // Simulate the batch handler calling transaction
-    await mockTransaction(async (tx: any) => {
-      // The batch handler does inserts and updates inside the callback
-      expect(tx).toBeDefined();
-      expect(typeof tx.insert).toBe("function");
-      expect(typeof tx.update).toBe("function");
-      return Promise.resolve();
-    });
-
-    expect(mockTransaction).toHaveBeenCalledTimes(1);
     expect(txReceived).not.toBeNull();
     expect(typeof txReceived!.insert).toBe("function");
     expect(typeof txReceived!.update).toBe("function");
