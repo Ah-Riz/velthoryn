@@ -53,6 +53,10 @@ if [[ ! -f "$KEYPAIR" ]]; then
   echo "ERROR: $KEYPAIR not found — run anchor build first"
   exit 1
 fi
+PUBKEY=$(solana-keygen pubkey "$KEYPAIR")
+echo "Airdropping SOL to program deployer $PUBKEY ..."
+solana airdrop 5 "$PUBKEY" --url "$VALIDATOR_URL" || true
+solana airdrop 5 "$PUBKEY" --url "$VALIDATOR_URL" || true
 echo "Upgrading program $PROGRAM_ID on local validator..."
 solana program deploy "$ROOT/target/deploy/vesting.so" \
   --program-id "$PROGRAM_ID" \

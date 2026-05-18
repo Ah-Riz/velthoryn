@@ -1,3 +1,4 @@
+import { sql } from "drizzle-orm";
 import {
   pgTable,
   serial,
@@ -26,7 +27,7 @@ export const campaigns = pgTable(
     merkleRoot: text("merkle_root").notNull(),
     leafCount: integer("leaf_count").notNull(),
     totalSupply: bigint("total_supply", { mode: "bigint" }).notNull(),
-    totalClaimed: bigint("total_claimed", { mode: "bigint" }).notNull().default(0n),
+    totalClaimed: bigint("total_claimed", { mode: "bigint" }).notNull().default(sql`0`),
     cancellable: boolean("cancellable").notNull().default(false),
     cancelAuthority: text("cancel_authority"),
     pauseAuthority: text("pause_authority"),

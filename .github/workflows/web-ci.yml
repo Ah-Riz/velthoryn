@@ -67,7 +67,12 @@ jobs:
       - run: pnpm install --frozen-lockfile
 
       - name: Push DB schema
-        run: cd apps/web && echo "y" | pnpm drizzle-kit push
+        run: |
+          cd apps/web
+          set -o pipefail
+          echo "y" | pnpm drizzle-kit push 2>&1 | tee /tmp/drizzle-push.log
+          ! grep -q "TypeError: Do not know how to serialize a BigInt" /tmp/drizzle-push.log
+          psql "$DATABASE_URL" -c '\dt' | grep -q campaigns
 
       - name: Start dev server and run E2E test
         run: |
@@ -133,7 +138,12 @@ jobs:
       - run: pnpm install --frozen-lockfile
 
       - name: Push DB schema
-        run: cd apps/web && echo "y" | pnpm drizzle-kit push
+        run: |
+          cd apps/web
+          set -o pipefail
+          echo "y" | pnpm drizzle-kit push 2>&1 | tee /tmp/drizzle-push.log
+          ! grep -q "TypeError: Do not know how to serialize a BigInt" /tmp/drizzle-push.log
+          psql "$DATABASE_URL" -c '\dt' | grep -q campaigns
 
       - name: Vitest
         run: cd apps/web && pnpm test
