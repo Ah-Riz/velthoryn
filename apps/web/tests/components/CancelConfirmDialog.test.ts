@@ -29,7 +29,7 @@ describe("CancelConfirmDialog", () => {
 
   it("renders dialog when open", () => {
     renderDialog();
-    expect(screen.getByText(/Are you sure/)).toBeTruthy();
+    expect(screen.getByText(/Cancel this vesting stream/)).toBeTruthy();
     expect(screen.getByText("Go Back")).toBeTruthy();
   });
 

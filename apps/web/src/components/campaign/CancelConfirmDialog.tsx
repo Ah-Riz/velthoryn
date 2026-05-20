@@ -26,36 +26,41 @@ export function CancelConfirmDialog({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
-      <div className="bg-gray-900 border border-gray-700 rounded-xl p-6 max-w-md w-full mx-4 space-y-5">
-        <h3 className="text-lg font-semibold text-red-400">
-          Are you sure you want to cancel this stream?
+      <div className="rounded-2xl border border-white/[0.08] bg-[#0d1017] p-6 max-w-md w-full mx-4 space-y-5">
+        <h3 className="text-[15px] font-semibold text-red-400">
+          Cancel this vesting stream?
         </h3>
 
-        <p className="text-sm text-gray-400">
-          This action is irreversible. Tokens will be distributed as follows:
+        <p className="text-[13px] text-[#8b92a5]">
+          This action is irreversible. Vesting will freeze at the current moment.
+          Recipients can still claim tokens vested up to now.
         </p>
 
-        <div className="space-y-3 text-sm">
+        <div className="space-y-3 text-[13px]">
           <div className="flex justify-between">
-            <span className="text-gray-400">Already claimed by recipient</span>
-            <span className="font-medium">{totalClaimed.toString()} tokens</span>
+            <span className="text-[#8b92a5]">Already claimed</span>
+            <span className="font-medium text-white">{totalClaimed.toString()} tokens</span>
           </div>
           <div className="flex justify-between">
-            <span className="text-gray-400">Unclaimed vested (to recipient)</span>
-            <span className="font-medium text-green-400">~{unclaimedVested.toString()} tokens</span>
+            <span className="text-[#8b92a5]">Unclaimed vested (claimable by recipient)</span>
+            <span className="font-medium text-emerald-400">~{unclaimedVested.toString()} tokens</span>
           </div>
           <div className="flex justify-between">
-            <span className="text-gray-400">Returned to creator</span>
+            <span className="text-[#8b92a5]">Unvested (recoverable after 7-day grace)</span>
             <span className="font-medium text-amber-400">~{returnedToCreator.toString()} tokens</span>
           </div>
         </div>
+
+        <p className="text-[11px] text-[#555d73]">
+          Unvested tokens are NOT returned immediately. Use &quot;Withdraw Unvested&quot; after the 7-day grace period.
+        </p>
 
         <div className="flex gap-3 pt-2">
           <button
             type="button"
             onClick={onClose}
             disabled={isLoading}
-            className="flex-1 py-2 rounded-lg border border-gray-600 text-gray-300 hover:bg-gray-800 transition disabled:opacity-50"
+            className="flex-1 rounded-xl border border-white/[0.08] py-2.5 text-[13px] text-[#8b92a5] transition hover:bg-white/[0.04] disabled:opacity-50"
           >
             Go Back
           </button>
@@ -63,7 +68,7 @@ export function CancelConfirmDialog({
             type="button"
             onClick={onConfirm}
             disabled={isLoading}
-            className="flex-1 py-2 rounded-lg bg-red-600 text-white hover:bg-red-700 transition disabled:opacity-50"
+            className="flex-1 rounded-xl bg-red-600 py-2.5 text-[13px] font-medium text-white transition hover:bg-red-500 disabled:opacity-50"
           >
             {isLoading ? "Cancelling..." : "Cancel Stream"}
           </button>

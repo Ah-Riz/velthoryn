@@ -1,45 +1,46 @@
 // @vitest-environment jsdom
-import { describe, it, expect, vi, afterEach } from "vitest";
-import { render, screen, fireEvent, cleanup } from "@testing-library/react";
+import { describe, it, expect, afterEach } from "vitest";
+import { render, screen, cleanup } from "@testing-library/react";
 import { createElement } from "react";
-import { TriggerMilestoneButton } from "@/components/campaign/TriggerMilestoneButton";
+import { MilestoneStatusBadge } from "@/components/campaign/TriggerMilestoneButton";
 
-function renderButton(overrides = {}) {
+function renderBadge(overrides = {}) {
   const props = {
-    isCreator: true,
     isMilestoneType: true,
     alreadyTriggered: false,
     milestoneIdx: 0,
+    cliffTime: 1000n,
+    nowTs: 500n,
     ...overrides,
   };
-  return render(createElement(TriggerMilestoneButton, props));
+  return render(createElement(MilestoneStatusBadge, props));
 }
 
-describe("TriggerMilestoneButton", () => {
+describe("MilestoneStatusBadge", () => {
   afterEach(() => cleanup());
 
-  it("renders nothing when not creator", () => {
-    const { container } = renderButton({ isCreator: false });
-    expect(container.innerHTML).toBe("");
-  });
-
   it("renders nothing when not milestone type", () => {
-    const { container } = renderButton({ isMilestoneType: false });
+    const { container } = renderBadge({ isMilestoneType: false });
     expect(container.innerHTML).toBe("");
   });
 
-  it("shows triggered state when already triggered", () => {
-    renderButton({ alreadyTriggered: true });
-    expect(screen.getByText(/triggered/i)).toBeTruthy();
+  it("shows claimed state when already triggered", () => {
+    renderBadge({ alreadyTriggered: true });
+    expect(screen.getByText(/claimed/i)).toBeTruthy();
   });
 
-  it("shows coming soon when feature flag disabled", () => {
-    renderButton();
-    expect(screen.getByText(/coming soon/i)).toBeTruthy();
+  it("shows unlocked when cliff passed and not claimed", () => {
+    renderBadge({ cliffTime: 100n, nowTs: 500n });
+    expect(screen.getByText(/unlocked/i)).toBeTruthy();
   });
 
-  it("includes milestone index in triggered message", () => {
-    renderButton({ alreadyTriggered: true, milestoneIdx: 5 });
-    expect(screen.getByText(/Milestone #5 triggered/)).toBeTruthy();
+  it("shows countdown when cliff not reached", () => {
+    renderBadge({ cliffTime: 1000n, nowTs: 500n });
+    expect(screen.getByText(/unlocks in/i)).toBeTruthy();
+  });
+
+  it("includes milestone index in message", () => {
+    renderBadge({ alreadyTriggered: true, milestoneIdx: 5 });
+    expect(screen.getByText(/Milestone #5 claimed/)).toBeTruthy();
   });
 });

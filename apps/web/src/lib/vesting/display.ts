@@ -46,6 +46,27 @@ export type WithdrawDisabledParams = {
   cliffTs: bigint;
 };
 
+export type GracePeriodState =
+  | { status: "not_cancelled" }
+  | { status: "grace_active"; remaining: bigint; countdown: string }
+  | { status: "grace_expired" };
+
+export function getGracePeriodState(
+  cancelledAt: bigint | null,
+  nowTs: bigint,
+): GracePeriodState {
+  if (cancelledAt === null) return { status: "not_cancelled" };
+  const graceEnd = cancelledAt + GRACE_PERIOD_SECS;
+  if (nowTs < graceEnd) {
+    return {
+      status: "grace_active",
+      remaining: graceEnd - nowTs,
+      countdown: formatCountdown(graceEnd, nowTs),
+    };
+  }
+  return { status: "grace_expired" };
+}
+
 export function getWithdrawDisabledReason(params: WithdrawDisabledParams): string | null {
   if (params.loading) return "Claiming...";
   if (params.paused) return "Campaign is paused";

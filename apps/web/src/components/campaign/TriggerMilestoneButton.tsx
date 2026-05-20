@@ -1,40 +1,54 @@
 "use client";
 
+import { formatCountdown } from "@/lib/vesting/display";
+
 type Props = {
-  isCreator: boolean;
   isMilestoneType: boolean;
   alreadyTriggered: boolean;
   milestoneIdx: number;
-  onTrigger?: () => void;
-  isLoading?: boolean;
+  cliffTime: bigint;
+  nowTs: bigint;
 };
 
-export function TriggerMilestoneButton({
-  isCreator,
+export function MilestoneStatusBadge({
   isMilestoneType,
   alreadyTriggered,
   milestoneIdx,
-  onTrigger,
-  isLoading,
+  cliffTime,
+  nowTs,
 }: Props) {
-  if (!isCreator || !isMilestoneType) return null;
+  if (!isMilestoneType) return null;
 
   if (alreadyTriggered) {
     return (
-      <div className="flex items-center gap-2 px-4 py-2 bg-green-900/30 border border-green-700 rounded-lg text-sm text-green-400">
-        <span>Milestone #{milestoneIdx} triggered</span>
+      <div className="flex items-center gap-2 rounded-xl border border-emerald-500/20 bg-emerald-500/5 px-4 py-2.5 text-[13px] text-emerald-400">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+          <polyline points="20 6 9 17 4 12" />
+        </svg>
+        Milestone #{milestoneIdx} claimed
+      </div>
+    );
+  }
+
+  if (nowTs >= cliffTime) {
+    return (
+      <div className="flex items-center gap-2 rounded-xl border border-violet-500/20 bg-violet-500/5 px-4 py-2.5 text-[13px] text-violet-400">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <circle cx="12" cy="12" r="10" />
+          <polyline points="12 6 12 12 16 14" />
+        </svg>
+        Milestone #{milestoneIdx} unlocked — ready to claim
       </div>
     );
   }
 
   return (
-    <button
-      type="button"
-      onClick={onTrigger}
-      disabled={isLoading || true}
-      className="w-full py-2 rounded-lg bg-blue-600 text-white hover:bg-blue-700 transition disabled:opacity-50 disabled:cursor-not-allowed text-sm"
-    >
-      {isLoading ? "Triggering..." : "Trigger Milestone (coming soon)"}
-    </button>
+    <div className="flex items-center gap-2 rounded-xl border border-white/[0.06] bg-white/[0.02] px-4 py-2.5 text-[13px] text-[#555d73]">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
+        <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+      </svg>
+      Milestone #{milestoneIdx} unlocks in {formatCountdown(cliffTime, nowTs)}
+    </div>
   );
 }
