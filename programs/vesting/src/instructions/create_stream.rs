@@ -110,6 +110,7 @@ pub fn handler(ctx: Context<CreateStream>, args: CreateStreamArgs) -> Result<()>
     tree.paused = false;
     tree.pause_authority = args.pause_authority;
     tree.created_at = Clock::get()?.unix_timestamp;
+    tree.milestone_released_flags = [0u8; 32];
     tree.bump = ctx.bumps.vesting_tree;
 
     emit!(CampaignCreated {

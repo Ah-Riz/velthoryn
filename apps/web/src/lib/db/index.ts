@@ -7,7 +7,7 @@ const connectionString = process.env.DATABASE_URL;
 /** Supabase and other hosted Postgres require TLS; local CI/dev Postgres does not. */
 export function sslOptionsForConnectionString(
   url: string | undefined,
-): { rejectUnauthorized: false } | undefined {
+): { rejectUnauthorized: boolean } | undefined {
   if (!url) return undefined;
 
   try {
@@ -23,7 +23,11 @@ export function sslOptionsForConnectionString(
     // Unparseable URL — assume remote hosted Postgres needs TLS.
   }
 
-  return { rejectUnauthorized: false };
+  const strict =
+    process.env.DATABASE_SSL_REJECT_UNAUTHORIZED === "true" ||
+    process.env.DATABASE_SSL_REJECT_UNAUTHORIZED === "1";
+
+  return { rejectUnauthorized: strict };
 }
 
 const client = postgres(

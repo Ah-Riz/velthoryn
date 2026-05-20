@@ -38,6 +38,26 @@ Schedule fields are **hashed into `merkle_root` at creation**, not stored as sep
 
 Per PRD §1.1: fixed ~0.005 SOL campaign cost vs ~$0.37/recipient for Streamflow-style one-PDA-per-stream. Bulk campaigns share one `VestingTree` + one root for unlimited recipients.
 
+## Milestone vs tutorial “creator flag”
+
+Bootcamp checklists describe milestone unlock via a **creator-set boolean flag**. Velthoryn implements that on-chain:
+
+- **`set_milestone_released(milestone_idx)`** — creator signer; sets a bit in `VestingTree.milestone_released_flags`.
+- **`release_type = 2`** leaves: `claim` / `withdraw` require the flag (not `cliff_time`).
+- `milestone_idx` + `milestone_bitmap` on `ClaimRecord` prevent double-claim of the same milestone slot.
+
+Tests: T10, T11, T46, T63. See [BE-SC-MERKLE-ACCEPTANCE-STATUS.md](./BE-SC-MERKLE-ACCEPTANCE-STATUS.md).
+
+## Cancel vs tutorial `cancel_stream`
+
+| Tutorial | Velthoryn |
+|----------|-----------|
+| Single `cancel_stream` splits unlocked/locked | **`cancel_stream`** for `leaf_count == 1`: vested → beneficiary, vault remainder → creator in one tx (T64) |
+| Multi-recipient cancel | `cancel_campaign` + per-beneficiary `claim`/`withdraw` + `withdraw_unvested` after 7-day grace |
+| Cannot cancel when fully vested | `FullyVested` (6030) — T60 |
+| Cancel before cliff | `cancel_campaign` — T62 |
+| Cancel mid-stream (clamp) | T55 (bankrun clock) |
+
 ## Related docs
 
 - [`docs/PROGRAM.md`](PROGRAM.md) — account layouts and instructions

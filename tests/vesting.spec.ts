@@ -11,20 +11,22 @@ describe("vesting program scaffold", () => {
     expect(program.programId.toBase58()).to.equal(PROGRAM_ID);
   });
 
-  it("exposes all 12 architecture instructions in the IDL", () => {
+  it("exposes all 14 architecture instructions in the IDL", () => {
     const expected = [
+      "cancelCampaign",
+      "cancelStream",
+      "claim",
+      "closeClaimRecord",
       "createCampaign",
       "createStream",
       "fundCampaign",
-      "claim",
-      "cancelCampaign",
+      "getVestedAmount",
+      "pauseCampaign",
+      "setMilestoneReleased",
+      "unpauseCampaign",
       "updateRoot",
       "withdraw",
       "withdrawUnvested",
-      "pauseCampaign",
-      "unpauseCampaign",
-      "closeClaimRecord",
-      "getVestedAmount",
     ].sort();
     const actual = program.idl.instructions.map((i) => i.name).sort();
     expect(actual).to.deep.equal(expected);

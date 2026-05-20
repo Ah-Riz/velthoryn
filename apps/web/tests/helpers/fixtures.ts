@@ -76,13 +76,13 @@ export async function seedClaimEvent(
     campaignId,
     beneficiary: overrides.beneficiary ?? "11111111111111111111111111111111",
     leafIndex: overrides.leafIndex ?? 0,
-    amount: overrides.amount ?? 100000,
-    totalClaimedByUser: overrides.totalClaimedByUser ?? 100000,
-    totalClaimedOverall: overrides.totalClaimedOverall ?? 100000,
+    amount: BigInt(overrides.amount ?? 100000),
+    totalClaimedByUser: BigInt(overrides.totalClaimedByUser ?? 100000),
+    totalClaimedOverall: BigInt(overrides.totalClaimedOverall ?? 100000),
     milestoneIdx: null,
     signature: sig,
-    slot: overrides.slot ?? 1000,
-    blockTime: overrides.blockTime ?? 1700000000,
+    slot: BigInt(overrides.slot ?? 1000),
+    blockTime: BigInt(overrides.blockTime ?? 1700000000),
   });
 }
 
@@ -90,11 +90,22 @@ export async function setCampaignStatus(
   treeAddress: string,
   patch: Partial<{
     paused: boolean;
-    cancelledAt: number | null;
-    totalClaimed: number;
-    totalSupply: number;
+    cancelledAt: string | number | null;
+    totalClaimed: string | number;
+    totalSupply: string | number;
     leafCount: number;
   }>,
 ): Promise<void> {
-  await db.update(campaigns).set(patch).where(eq(campaigns.treeAddress, treeAddress));
+  const { cancelledAt, totalClaimed, totalSupply, ...rest } = patch;
+  const update: Partial<typeof campaigns.$inferInsert> = { ...rest };
+  if (cancelledAt !== undefined) {
+    update.cancelledAt = cancelledAt === null ? null : BigInt(cancelledAt);
+  }
+  if (totalClaimed !== undefined) {
+    update.totalClaimed = BigInt(totalClaimed);
+  }
+  if (totalSupply !== undefined) {
+    update.totalSupply = BigInt(totalSupply);
+  }
+  await db.update(campaigns).set(update).where(eq(campaigns.treeAddress, treeAddress));
 }

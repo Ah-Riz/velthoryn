@@ -17,6 +17,7 @@ pub struct CancelCampaign<'info> {
         constraint = vesting_tree.cancellable @ VestingError::NotCancellable,
         constraint = vesting_tree.cancelled_at.is_none() @ VestingError::AlreadyCancelled,
         constraint = vesting_tree.cancel_authority == Some(cancel_authority.key()) @ VestingError::Unauthorized,
+        constraint = vesting_tree.total_claimed < vesting_tree.total_supply @ VestingError::FullyVested,
     )]
     pub vesting_tree: Account<'info, crate::state::VestingTree>,
 }

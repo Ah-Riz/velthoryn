@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { jsonResponse } from "@/lib/api/json-response";
 import { eq, sql } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { campaigns, rootVersions, claimEvents } from "@/lib/db/schema";
@@ -46,17 +47,19 @@ export async function GET(
       .select({
         uniqueClaimers: sql<number>`count(distinct ${claimEvents.beneficiary})::int`,
         claimCount: sql<number>`count(*)::int`,
-        totalClaimed: sql<number>`coalesce(sum(${claimEvents.amount}), 0)::int`,
+        totalClaimed: sql<string>`coalesce(sum(${claimEvents.amount}), 0)::text`,
       })
       .from(claimEvents)
       .where(eq(claimEvents.campaignId, campaign.id));
 
+    const totalSupply = BigInt(campaign.totalSupply);
+    const claimedSum = BigInt(analytics.totalClaimed ?? "0");
     const percentClaimed =
-      campaign.totalSupply > 0
-        ? Math.round((analytics.totalClaimed / campaign.totalSupply) * 10000) / 100
+      totalSupply > 0n
+        ? Number((claimedSum * 10000n) / totalSupply) / 100
         : 0;
 
-    return NextResponse.json({
+    return jsonResponse({
       treeAddress: campaign.treeAddress,
       creator: campaign.creator,
       mint: campaign.mint,

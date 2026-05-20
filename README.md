@@ -32,12 +32,12 @@ velthoryn/
 
 ## Current status
 
-**Fully implemented and deployed to devnet.** All 12 instruction handlers (including `create_stream` and `withdraw` for single-recipient streams), schedule math (`vested`, `get_vested_amount`), and Merkle proof verification (`verify_merkle_proof`) are live with real logic. State structs, error codes (31 variants), and events (9 types) are fully defined. `leaf_hash()` is byte-verified against the TS encoder.
+**Fully implemented and deployed to devnet.** All **14** instruction handlers (including `create_stream`, `withdraw`, `set_milestone_released`, and `cancel_stream`), schedule math (`vested`, `get_vested_amount`), and Merkle proof verification (`verify_merkle_proof`) are live with real logic. State structs, error codes (33 variants), and events (9 types) are fully defined. `leaf_hash()` is byte-verified against the TS encoder.
 
-**Test results: 74/74 SC tests PASS, ~200/200 web Vitest PASS** (API routes use real Postgres in CI; hooks/merkle/math need no DB)
-**BE-SC Merkle pipeline verified end-to-end**: 3-leaf campaigns (Cliff/Linear/Milestone) flow through prepare → POST → GET proof → verify against deployed API. RLS enabled on all Supabase tables.
-- Devnet: 58+ passing; clock-dependent cases run on bankrun
-- Localnet (bankrun): `tests/vesting.clock.spec.ts` — T17–T20, T25, T47, T55–T59, EXPLOIT 4
+**Test results: 79/79 SC tests PASS** (`pnpm test:localnet`); **~200/200 web Vitest PASS** (API routes use real Postgres in CI; hooks/merkle/math need no DB)
+**BE–SC Merkle pipeline verified end-to-end**: 3-leaf campaigns (Cliff/Linear/Milestone) through prepare → POST (all leaves verified) → GET proof → verify. RLS on all Supabase tables. **Bootcamp acceptance: 8/8** — see [`docs/BE-SC-MERKLE-ACCEPTANCE-STATUS.md`](docs/BE-SC-MERKLE-ACCEPTANCE-STATUS.md).
+- Devnet (`pnpm test:devnet`): **79 passing, 1 pending** (T64 `cancel_stream` flaky on public RPC; covered in bankrun)
+- Clock-dependent cases: `tests/vesting.clock.spec.ts` via **solana-bankrun** (T17–T20, T25, T47, T55–T64, EXPLOIT 4)
 
 See [`docs/STREAM_MODEL.md`](docs/STREAM_MODEL.md) (tutorial `Stream` PDA vs campaign model) and [`docs/ERROR_MAP.md`](docs/ERROR_MAP.md).
 
@@ -55,6 +55,8 @@ See [`docs/STREAM_MODEL.md`](docs/STREAM_MODEL.md) (tutorial `Stream` PDA vs cam
 | `unpause_campaign`   | Resume a paused campaign.                                         |
 | `close_claim_record` | Reclaim rent on a fully-claimed `ClaimRecord` PDA.                |
 | `get_vested_amount`  | Read-only helper that runs the schedule math against a leaf.      |
+| `set_milestone_released` | Creator sets a milestone flag before milestone unlock.        |
+| `cancel_stream`      | Creator-only single-leaf cancel: vested → beneficiary, rest → creator. |
 
 For deeper reads:
 - [`docs/PROGRAM.md`](docs/PROGRAM.md) — program internals, file map, instruction surface, state layouts.
@@ -91,7 +93,7 @@ solana-keygen new -o target/deploy/vesting-keypair.json --no-bip39-passphrase
 
 ```bash
 anchor build           # produces target/idl/vesting.json + target/types/vesting.ts
-pnpm test:localnet     # persistent validator — 74/74 passing (~2m)
+pnpm test:localnet     # persistent validator — 79/79 passing (~3m)
 pnpm test:devnet       # against devnet RPC (deployed program + funded wallet)
 ```
 
@@ -144,25 +146,25 @@ Frontend docs: [`docs/PRD_GERAL.md`](docs/PRD_GERAL.md), [`docs/PDD_GERAL.md`](d
 
 ## Devnet
 
-Program is deployed at `G6iaigUdi2btFwUc2N65twfxwA8Ew5uKKhKJ5RJa8wvu`. Latest upgrade at slot 461219566 (~447KB allocation).
+Program is deployed at `G6iaigUdi2btFwUc2N65twfxwA8Ew5uKKhKJ5RJa8wvu`. Latest upgrade at slot **463223253** (~447KB allocation). Upgrade authority: wallet `GPfHeZtBna1rJmwam1yCcREhYnLcxWhBmUdDoVuL5Es6`.
 
 ```bash
 solana program show G6iaigUdi2btFwUc2N65twfxwA8Ew5uKKhKJ5RJa8wvu --url devnet
 ```
 
-To redeploy (inject keypair from your local file — program ID stays stable):
+To redeploy, the signing keypair must match `declare_id!` (`G6iaig…`). If `target/deploy/vesting-keypair.json` was generated locally with a different pubkey, use `solana program deploy` with the upgrade-authority wallet instead of `anchor deploy` (see [`docs/DEVNET_TEST_RESULTS.md`](docs/DEVNET_TEST_RESULTS.md)).
 
 ```bash
 solana config set --url devnet
 anchor build
-anchor deploy --provider.cluster devnet
+solana program deploy target/deploy/vesting.so --program-id G6iaigUdi2btFwUc2N65twfxwA8Ew5uKKhKJ5RJa8wvu
 ```
 
 ## CI
 
 | Workflow | What it runs |
 |----------|----------------|
-| [`ci.yml`](.github/workflows/ci.yml) | `anchor build` + `pnpm test:localnet` (74 SC tests) |
+| [`ci.yml`](.github/workflows/ci.yml) | `anchor build` + IDL drift check + `pnpm test:localnet` (79 SC tests) |
 | [`lint.yml`](.github/workflows/lint.yml) | `cargo clippy`, Next.js lint, **Vitest + build** (Postgres 15 service + `drizzle-kit push`) |
 | [`web-ci.yml`](.github/workflows/web-ci.yml) | 3 parallel jobs: merkle parity, E2E pipeline (Postgres + dev server + `test-be-merkle-pipeline.ts`), web build + Vitest (Postgres) |
 

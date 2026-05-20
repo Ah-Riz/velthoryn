@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { jsonResponse } from "@/lib/api/json-response";
 import { sql } from "drizzle-orm";
 import { db } from "@/lib/db";
 
@@ -68,7 +69,7 @@ export async function GET(
     `);
 
     if (results.length === 0) {
-      return NextResponse.json({ campaigns: [] });
+      return jsonResponse({ campaigns: [] });
     }
 
     const campaignList = results.map((row) => ({
@@ -93,7 +94,7 @@ export async function GET(
       },
     }));
 
-    return NextResponse.json({ campaigns: campaignList });
+    return jsonResponse({ campaigns: campaignList });
   } catch (error) {
     console.error("[GET /api/beneficiary/:address/campaigns] Error:", error);
     return NextResponse.json(

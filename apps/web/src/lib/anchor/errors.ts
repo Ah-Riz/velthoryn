@@ -33,6 +33,10 @@ export const VESTING_ERROR_CODES = {
   GracePeriodActive: 6026,
   CannotClose: 6027,
   NotSingleStream: 6028,
+  ProofTooLong: 6029,
+  FullyVested: 6030,
+  StreamExpired: 6031,
+  MilestoneNotReleased: 6032,
 } as const;
 
 type ErrorKey = keyof typeof VESTING_ERROR_CODES;
@@ -68,6 +72,11 @@ const USER_MESSAGES: Record<ErrorKey, string> = {
   GracePeriodActive: "Grace period is still active; unvested sweep not allowed yet.",
   CannotClose: "Claim record cannot be closed yet.",
   NotSingleStream: "This action only works on single-recipient streams.",
+  ProofTooLong: "Merkle proof is too long for this campaign.",
+  FullyVested: "Stream is fully vested; cancellation is not allowed.",
+  StreamExpired: "This stream has ended; there is nothing left to claim.",
+  MilestoneNotReleased:
+    "This milestone has not been released yet. The creator must release it before you can claim.",
 };
 
 function codeToHex(code: number): string {

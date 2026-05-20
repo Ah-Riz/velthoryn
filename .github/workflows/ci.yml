@@ -97,6 +97,7 @@ jobs:
       - name: anchor build
         env:
           PROGRAM_KEYPAIR_JSON: ${{ secrets.PROGRAM_KEYPAIR_JSON }}
+          CARGO_TARGET_DIR: ${{ github.workspace }}/target
         run: |
           mkdir -p target/deploy
           echo "$PROGRAM_KEYPAIR_JSON" > target/deploy/vesting-keypair.json
@@ -114,7 +115,13 @@ jobs:
           fi
           anchor build
 
+      - name: Verify committed IDL matches build output
+        run: |
+          diff -q target/idl/vesting.json apps/web/src/lib/anchor/idl.json \
+            || (echo "ERROR: apps/web/src/lib/anchor/idl.json is out of date — run anchor build and copy target/idl/vesting.json" && exit 1)
+
       - name: Integration tests (localnet)
         env:
           TEST_SKIP_BUILD: "1"
+          CARGO_TARGET_DIR: ${{ github.workspace }}/target
         run: pnpm test:localnet

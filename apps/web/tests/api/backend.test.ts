@@ -48,6 +48,8 @@ import {
   EMPTY_SIBLING,
   makeLeaf,
   makeCampaignBody,
+  makeTwoLeafCampaignBody,
+  makeMultiLeafCampaignBody,
   computeSingleLeafRoot,
   makeUrl,
 } from "../helpers/requests";
@@ -708,15 +710,7 @@ describe("POST /api/campaigns/[treeAddress]/root-versions", () => {
   it("creates new root version and returns 201 with version number", async () => {
     await createCampaignViaPost({ treeAddress: TREE_ADDRESS });
 
-    const body = {
-      merkleRoot: "b".repeat(64),
-      leafCount: 3,
-      leaves: [
-        makeLeaf({ leafIndex: 0 }),
-        makeLeaf({ leafIndex: 1, beneficiary: OTHER_BENEFICIARY }),
-        makeLeaf({ leafIndex: 2, beneficiary: "33333333333333333333333333333333" }),
-      ],
-    };
+    const body = makeMultiLeafCampaignBody(3);
 
     const req = new NextRequest(makeUrl(`/api/campaigns/${TREE_ADDRESS}/root-versions`), {
       method: "POST",
@@ -733,10 +727,11 @@ describe("POST /api/campaigns/[treeAddress]/root-versions", () => {
   });
 
   it("returns 404 for non-existent campaign", async () => {
+    const leaf = makeLeaf();
     const body = {
-      merkleRoot: "b".repeat(64),
+      merkleRoot: computeSingleLeafRoot(leaf),
       leafCount: 1,
-      leaves: [makeLeaf()],
+      leaves: [{ ...leaf, proof: [] }],
     };
 
     const req = new NextRequest(makeUrl("/api/campaigns/nonexistent/root-versions"), {
@@ -878,7 +873,7 @@ describe("GET /api/beneficiary/[address]/campaigns", () => {
     expect(json.campaigns).toHaveLength(1);
     expect(json.campaigns[0].treeAddress).toBe(TREE_ADDRESS);
     expect(json.campaigns[0].myLeaf).toBeDefined();
-    expect(Number(json.campaigns[0].myLeaf.amount)).toBe(1000000);
+    expect(json.campaigns[0].myLeaf.amount).toBe("1000000");
   });
 
   it("returns empty array if no campaigns found", async () => {
@@ -1058,9 +1053,9 @@ describe("parseClaimedEvent logic (unit test of event parsing)", () => {
     expect(result!.tree).toBe(TREE_KEY.toBase58());
     expect(result!.beneficiary).toBe(BENE_KEY.toBase58());
     expect(result!.leafIndex).toBe(42);
-    expect(result!.amount).toBe(1000000);
-    expect(result!.totalClaimedByUser).toBe(1000000);
-    expect(result!.totalClaimedOverall).toBe(5000000);
+    expect(result!.amount).toBe("1000000");
+    expect(result!.totalClaimedByUser).toBe("1000000");
+    expect(result!.totalClaimedOverall).toBe("5000000");
   });
 
   it("returns null for wrong discriminator", () => {
@@ -1126,6 +1121,48 @@ describe("Merkle proof verification (indirect)", () => {
     expect(json.campaignId).toBeGreaterThan(0);
   });
 
+  it("persists u64 amounts larger than MAX_SAFE_INTEGER as strings", async () => {
+    const large = "9007199254740992"; // MAX_SAFE_INTEGER + 1
+    const leaf = makeLeaf({ amount: large });
+    const body = makeCampaignBody({
+      treeAddress: uniqueTreeAddress(),
+      merkleRoot: computeSingleLeafRoot(leaf),
+      totalSupply: large,
+      leaves: [leaf],
+    });
+
+    const req = new NextRequest(makeUrl("/api/campaigns"), {
+      method: "POST",
+      body: JSON.stringify(body),
+    });
+    const res = await postCampaigns(req);
+    expect(res.status).toBe(201);
+
+    const detailReq = new NextRequest(
+      makeUrl(`/api/campaigns/${body.treeAddress}`),
+    );
+    const detailRes = await getCampaignByAddress(detailReq, {
+      params: Promise.resolve({ treeAddress: body.treeAddress }),
+    });
+    const detail = await detailRes.json();
+    expect(detail.totalSupply).toBe(large);
+  });
+
+  it("rejects valid leaf 0 and invalid leaf 1 proof", async () => {
+    const body = makeTwoLeafCampaignBody();
+    body.leaves[1] = { ...body.leaves[1], proof: [EMPTY_SIBLING] };
+
+    const req = new NextRequest(makeUrl("/api/campaigns"), {
+      method: "POST",
+      body: JSON.stringify(body),
+    });
+    const res = await postCampaigns(req);
+    const json = await res.json();
+
+    expect(res.status).toBe(400);
+    expect(json.error).toContain("leaf index 1");
+  });
+
   it("multi-leaf tree with empty proof rejects with 400", async () => {
     const leaf0 = makeLeaf({ leafIndex: 0, proof: [] });
     const leaf1 = makeLeaf({
@@ -1149,6 +1186,27 @@ describe("Merkle proof verification (indirect)", () => {
 
     expect(res.status).toBe(400);
     const json = await res.json();
-    expect(json.error).toContain("proof");
+    expect(json.error).toMatch(/proof/i);
+  });
+
+  it("root-versions POST rejects invalid leaf proof", async () => {
+    const { treeAddress } = await createCampaignViaPost();
+    const body = makeTwoLeafCampaignBody({ treeAddress });
+    body.leaves[1] = { ...body.leaves[1], proof: [EMPTY_SIBLING] };
+
+    const req = new NextRequest(makeUrl(`/api/campaigns/${treeAddress}/root-versions`), {
+      method: "POST",
+      body: JSON.stringify({
+        merkleRoot: body.merkleRoot,
+        leafCount: 2,
+        leaves: body.leaves,
+      }),
+    });
+    const res = await postRootVersion(req, {
+      params: Promise.resolve({ treeAddress }),
+    });
+    const json = await res.json();
+    expect(res.status).toBe(400);
+    expect(json.error).toContain("leaf index 1");
   });
 });
