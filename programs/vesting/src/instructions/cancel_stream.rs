@@ -120,6 +120,15 @@ pub fn handler(ctx: Context<CancelStream>, args: WithdrawArgs) -> Result<()> {
         cr.bump = ctx.bumps.claim_record;
     }
 
+    if leaf.release_type == 2 {
+        let byte_idx = leaf.milestone_idx as usize / 8;
+        let bit_idx = leaf.milestone_idx as usize % 8;
+        require!(
+            cr.milestone_bitmap[byte_idx] & (1 << bit_idx) == 0,
+            VestingError::MilestoneAlreadyClaimed
+        );
+    }
+
     let to_beneficiary = if leaf.release_type == 2 {
         if milestone_flag_is_set(&tree.milestone_released_flags, leaf.milestone_idx) {
             leaf.amount.saturating_sub(cr.claimed_amount)
