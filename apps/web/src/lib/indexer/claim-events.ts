@@ -13,9 +13,9 @@ interface ParsedClaimedEvent {
   tree: string;
   beneficiary: string;
   leafIndex: number;
-  amount: number;
-  totalClaimedByUser: number;
-  totalClaimedOverall: number;
+  amount: string;
+  totalClaimedByUser: string;
+  totalClaimedOverall: string;
   milestoneIdx: number | null;
 }
 
@@ -27,9 +27,9 @@ export function parseClaimedEvent(data: Buffer): ParsedClaimedEvent | null {
   const tree = new PublicKey(data.subarray(8, 40)).toBase58();
   const beneficiary = new PublicKey(data.subarray(40, 72)).toBase58();
   const leafIndex = data.readUInt32LE(72);
-  const amount = Number(data.readBigUInt64LE(76));
-  const totalClaimedByUser = Number(data.readBigUInt64LE(84));
-  const totalClaimedOverall = Number(data.readBigUInt64LE(92));
+  const amount = data.readBigUInt64LE(76).toString();
+  const totalClaimedByUser = data.readBigUInt64LE(84).toString();
+  const totalClaimedOverall = data.readBigUInt64LE(92).toString();
 
   let milestoneIdx: number | null = null;
   if (data.length >= 101) {
@@ -114,13 +114,13 @@ async function processTransactions(params: {
         campaignId,
         beneficiary: event.beneficiary,
         leafIndex: event.leafIndex,
-        amount: event.amount,
-        totalClaimedByUser: event.totalClaimedByUser,
-        totalClaimedOverall: event.totalClaimedOverall,
+        amount: BigInt(event.amount),
+        totalClaimedByUser: BigInt(event.totalClaimedByUser),
+        totalClaimedOverall: BigInt(event.totalClaimedOverall),
         milestoneIdx: event.milestoneIdx,
         signature,
-        slot,
-        blockTime: tx.blockTime ?? Math.floor(Date.now() / 1000),
+        slot: BigInt(slot),
+        blockTime: BigInt(tx.blockTime ?? Math.floor(Date.now() / 1000)),
       }).onConflictDoNothing();
 
       await db

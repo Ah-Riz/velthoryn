@@ -1,35 +1,17 @@
 import { NextRequest, NextResponse } from "next/server";
+import { jsonResponse } from "@/lib/api/json-response";
 import { eq, and, sql, desc } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { campaigns, rootVersions, leaves } from "@/lib/db/schema";
 import { createCampaignRequestSchema } from "@/lib/api/validators";
-import { hashLeaf, hashNode } from "@/lib/merkle/builder";
+import { verifyAllLeaves } from "@/lib/merkle/verify";
 
 function makeRequestId(): string {
   return `campaigns-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 }
 
-// ---------------------------------------------------------------------------
-// verifyProof — standalone proof verification using the web app's merkle lib.
-// Mirrors clients/ts/src/merkle.ts verifyProof() exactly.
-// ---------------------------------------------------------------------------
-function verifyProof(
-  hashLeafBuf: Buffer,
-  proof: Buffer[],
-  index: number,
-  root: Buffer,
-): boolean {
-  let hash = hashLeafBuf;
-  let idx = index;
-  for (const sibling of proof) {
-    if ((idx & 1) === 0) {
-      hash = hashNode(hash, sibling);
-    } else {
-      hash = hashNode(sibling, hash);
-    }
-    idx >>= 1;
-  }
-  return hash.equals(root);
+function u64BigInt(value: string | number): bigint {
+  return BigInt(value);
 }
 
 // ---------------------------------------------------------------------------
@@ -103,65 +85,16 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Verify first leaf against declared merkleRoot
-    const firstLeaf = data.leaves[0];
-    const leafForHash = {
-      leafIndex: firstLeaf.leafIndex,
-      beneficiary: firstLeaf.beneficiary,
-      amount: BigInt(firstLeaf.amount),
-      releaseType: firstLeaf.releaseType as 0 | 1 | 2,
-      startTs: BigInt(firstLeaf.startTime),
-      cliffTs: BigInt(firstLeaf.cliffTime),
-      endTs: BigInt(firstLeaf.endTime),
-      milestoneIdx: firstLeaf.milestoneIdx,
-    };
-
-    const leafHash = hashLeaf(leafForHash);
-    const rootBuf = Buffer.from(data.merkleRoot, "hex");
-
-    if (data.leaves.length === 1) {
-      // Single-leaf tree: root must equal leaf hash
-      if (!leafHash.equals(rootBuf)) {
-        console.error("[POST /api/campaigns] Single-leaf root mismatch", {
-          requestId,
-          treeAddress: data.treeAddress,
-          declaredRoot: data.merkleRoot,
-          computedLeafHash: leafHash.toString("hex"),
-        });
-        return NextResponse.json(
-          { error: "Single-leaf root does not match leaf hash" },
-          { status: 400 },
-        );
-      }
-    } else {
-      // Multi-leaf tree: verify first leaf's proof (required)
-      if (firstLeaf.proof.length === 0) {
-        console.error("[POST /api/campaigns] Missing proof for multi-leaf campaign", {
-          requestId,
-          treeAddress: data.treeAddress,
-          leafIndex: firstLeaf.leafIndex,
-        });
-        return NextResponse.json(
-          { error: "Multi-leaf campaign requires proof for first leaf" },
-          { status: 400 },
-        );
-      }
-      const proofBufs = firstLeaf.proof.map((sibling) => Buffer.from(sibling));
-      const valid = verifyProof(leafHash, proofBufs, firstLeaf.leafIndex, rootBuf);
-      if (!valid) {
-        console.error("[POST /api/campaigns] Proof verification failed", {
-          requestId,
-          treeAddress: data.treeAddress,
-          leafIndex: firstLeaf.leafIndex,
-          proofDepth: firstLeaf.proof.length,
-          declaredRoot: data.merkleRoot,
-          computedLeafHash: leafHash.toString("hex"),
-        });
-        return NextResponse.json(
-          { error: "Proof verification failed for first leaf" },
-          { status: 400 },
-        );
-      }
+    const proofCheck = verifyAllLeaves(data.leaves, data.merkleRoot);
+    if (!proofCheck.ok) {
+      const leafSuffix =
+        proofCheck.leafIndex !== undefined
+          ? ` for leaf index ${proofCheck.leafIndex}`
+          : "";
+      return NextResponse.json(
+        { error: `${proofCheck.error}${leafSuffix}` },
+        { status: 400 },
+      );
     }
 
     // Prepare leaf rows outside the transaction
@@ -169,11 +102,11 @@ export async function POST(request: NextRequest) {
       rootVersionId: 0, // placeholder, set after root version insert
       leafIndex: leaf.leafIndex,
       beneficiary: leaf.beneficiary,
-      amount: Number(leaf.amount),
+      amount: u64BigInt(leaf.amount),
       releaseType: leaf.releaseType,
-      startTime: Number(leaf.startTime),
-      cliffTime: Number(leaf.cliffTime),
-      endTime: Number(leaf.endTime),
+      startTime: u64BigInt(leaf.startTime),
+      cliffTime: u64BigInt(leaf.cliffTime),
+      endTime: u64BigInt(leaf.endTime),
       milestoneIdx: leaf.milestoneIdx,
       proof: leaf.proof,
     }));
@@ -200,7 +133,7 @@ export async function POST(request: NextRequest) {
           treeAddress: data.treeAddress,
           campaignId: existing.id,
         });
-        return NextResponse.json(
+        return jsonResponse(
           { ok: true, campaignId: existing.id },
           { status: 200 },
         );
@@ -216,14 +149,14 @@ export async function POST(request: NextRequest) {
           treeAddress: data.treeAddress,
           creator: data.creator,
           mint: data.mint,
-          campaignId: data.campaignId,
+          campaignId: u64BigInt(data.campaignId),
           merkleRoot: data.merkleRoot,
           leafCount: data.leafCount,
-          totalSupply: Number(data.totalSupply),
+          totalSupply: u64BigInt(data.totalSupply),
           cancellable: data.cancellable,
           cancelAuthority: data.cancelAuthority,
           pauseAuthority: data.pauseAuthority,
-          createdAt: data.createdAt,
+          createdAt: u64BigInt(data.createdAt),
           metadata: data.metadata ?? null,
         })
         .returning({ id: campaigns.id });
@@ -243,7 +176,7 @@ export async function POST(request: NextRequest) {
           leafCount: data.leafCount,
           ipfsCid: data.ipfsCid ?? null,
           version: 1,
-          createdAt: data.createdAt,
+          createdAt: u64BigInt(data.createdAt),
         })
         .returning({ id: rootVersions.id });
 
@@ -271,7 +204,7 @@ export async function POST(request: NextRequest) {
         campaignId,
         leafCount: leafRows.length,
       });
-      return NextResponse.json({ ok: true, campaignId }, { status: 201 });
+      return jsonResponse({ ok: true, campaignId }, { status: 201 });
     });
   } catch (error) {
     console.error("[POST /api/campaigns] Error", { requestId, error });
@@ -349,7 +282,7 @@ export async function GET(request: NextRequest) {
       .limit(limit)
       .offset(offset);
 
-    return NextResponse.json({
+    return jsonResponse({
       campaigns: results,
       total: count,
       page,

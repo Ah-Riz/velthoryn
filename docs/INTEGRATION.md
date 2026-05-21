@@ -2,7 +2,7 @@
 
 Audience: Geral and anyone building against the on-chain program from TypeScript.
 
-> **Status:** All 12 instruction handlers are fully implemented with real logic. The program is deployed on devnet (latest upgrade slot **462786659**). **74/74** integration tests pass via `pnpm test:localnet` / `pnpm test:devnet` (RPC tests on cluster; clock cases via bankrun). Merkle leaf hashing is byte-verified against the TS encoder.
+> **Status:** All **14** instruction handlers are fully implemented with real logic. The program is deployed on devnet (latest upgrade slot **463223253**). **79/79** integration tests pass via `pnpm test:localnet`; `pnpm test:devnet` reports **79 passing, 1 pending** (T64 on public RPC; T64 in bankrun). Merkle leaf hashing is byte-verified against the TS encoder.
 
 ## What you need
 
@@ -49,7 +49,7 @@ function getProgram(provider: anchor.AnchorProvider) {
 }
 ```
 
-The IDL exposes camelCase instruction names: `createCampaign`, `createStream`, `fundCampaign`, `claim`, `withdraw`, `cancelCampaign`, `updateRoot`, `withdrawUnvested`, `pauseCampaign`, `unpauseCampaign`, `closeClaimRecord`, `getVestedAmount`.
+The IDL exposes camelCase instruction names: `createCampaign`, `createStream`, `fundCampaign`, `claim`, `withdraw`, `cancelCampaign`, `cancelStream`, `setMilestoneReleased`, `updateRoot`, `withdrawUnvested`, `pauseCampaign`, `unpauseCampaign`, `closeClaimRecord`, `getVestedAmount`.
 
 ## PDA derivations
 
@@ -268,7 +268,7 @@ Field shapes in `programs/vesting/src/events.rs`.
 
 ## Devnet
 
-Program is deployed on devnet at `G6iaigUdi2btFwUc2N65twfxwA8Ew5uKKhKJ5RJa8wvu` (latest upgrade slot 461219566, ~447KB allocation).
+Program is deployed on devnet at `G6iaigUdi2btFwUc2N65twfxwA8Ew5uKKhKJ5RJa8wvu` (latest upgrade slot **463223253**, ~447KB allocation).
 
 ```bash
 solana config set --url devnet

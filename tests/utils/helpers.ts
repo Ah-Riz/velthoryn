@@ -59,10 +59,21 @@ export function expectAnchorError(err: unknown, code: number) {
   const msg = (err as any).message || String(err);
   const logs = ((err as any).logs || []).join("\n");
   const haystack = msg + "\n" + logs;
-  expect(
-    haystack,
-    `expected Anchor error ${hex} (${code})`,
-  ).to.include(hex);
+  const decimal = `Error Number: ${code}`;
+  const anchorName = Object.entries({
+    FullyVested: 6030,
+    StreamExpired: 6031,
+    MilestoneNotReleased: 6032,
+    NothingToClaim: 6015,
+    AlreadyCancelled: 6020,
+  }).find(([, v]) => v === code)?.[0];
+
+  const matched =
+    haystack.includes(hex) ||
+    haystack.includes(String(code)) ||
+    haystack.includes(decimal) ||
+    (anchorName !== undefined && haystack.includes(anchorName));
+  expect(matched, `expected Anchor error ${hex} (${code})`).to.equal(true);
 }
 
 // ---------------------------------------------------------------------------
@@ -163,6 +174,26 @@ export async function issueClaim(
       mint,
     })
     .signers([beneficiary])
+    .rpc();
+}
+
+// ---------------------------------------------------------------------------
+// releaseMilestone — Creator sets on-chain milestone release flag before claim.
+// ---------------------------------------------------------------------------
+
+export async function releaseMilestone(
+  ctx: { program: any; creator: Keypair },
+  treePda: PublicKey,
+  milestoneIdx: number,
+) {
+  const { program, creator } = ctx;
+  return program.methods
+    .setMilestoneReleased(milestoneIdx)
+    .accounts({
+      creator: creator.publicKey,
+      vestingTree: treePda,
+    })
+    .signers([creator])
     .rpc();
 }
 

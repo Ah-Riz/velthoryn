@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { jsonResponse } from "@/lib/api/json-response";
 import { eq, and, sql, desc } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { campaigns, claimEvents } from "@/lib/db/schema";
@@ -89,7 +90,7 @@ export async function GET(
       .orderBy(desc(claimEvents.blockTime))
       .limit(limit);
 
-    return NextResponse.json({
+    return jsonResponse({
       claims: results,
       total: count,
     });

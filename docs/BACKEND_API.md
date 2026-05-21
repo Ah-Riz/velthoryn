@@ -173,6 +173,10 @@ For `create_stream`: leafCount=1, leaves array has one entry with an empty proof
 
 For `create_campaign`: leafCount=N, leaves array has N entries with full proofs.
 
+**Validation:** Every leaf’s proof is verified against `merkleRoot` via [`lib/merkle/verify.ts`](../apps/web/src/lib/merkle/verify.ts). Invalid proofs return **400** with the failing `leafIndex`. `bigint` fields are stored as strings in Postgres.
+
+**Production SSL:** set `DATABASE_SSL_REJECT_UNAUTHORIZED=true` on Vercel when using strict certificate validation.
+
 ### Read Path — Proof Lookup
 
 #### `GET /api/campaigns/:treeAddress/proof?beneficiary=<base58>`

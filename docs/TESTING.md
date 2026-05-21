@@ -4,15 +4,15 @@
 
 **265 tests total** — all passing (on-chain security suite includes 11 exploit tests).
 
-- On-chain (Anchor): 70 tests across 5 files
+- On-chain (Anchor): 86 tests across 5 files (up from 79 — added T64b–T68 milestone cancel tests + milestone flag gating in T41)
 - Web (Vitest): ~200 tests across 20 files (API routes use real Postgres in CI)
 - Trident fuzz: smoke test in CI (`trident-tests/fuzz_vesting`)
 
 | Test File | Tests | Purpose |
 |-----------|-------|---------|
 | `tests/vesting.spec.ts` | 2 | Smoke tests (program ID, IDL structure) |
-| `tests/vesting.supplementary.spec.ts` | 47 | Integration tests covering all instructions |
-| `tests/vesting.clock.spec.ts` | 11 | Clock-dependent tests via `solana-bankrun` |
+| `tests/vesting.supplementary.spec.ts` | 62 | Integration tests covering all instructions (incl. T41 milestone flags, T63–T68 cancel/milestone) |
+| `tests/vesting.clock.spec.ts` | 12 | Clock-dependent tests via `solana-bankrun` (incl. T64 `cancel_stream`) |
 | `tests/security.spec.ts` | 11 | Security exploit tests (EXPLOIT 1–11) |
 | `tests/golden_vector.spec.ts` | 1 | Cross-language hash verification |
 
@@ -24,10 +24,10 @@ Use a **persistent** `solana-test-validator`. `anchor test` alone can flake on S
 
 ```bash
 pnpm test:localnet
-# Starts validator if needed, anchor build, then 74/74 passing (~2m)
+# Starts validator if needed, upgrades program (anchor deploy), then 86/86 passing (~3m)
 ```
 
-CI runs the same flow with `TEST_SKIP_BUILD=1` after `anchor build` (see `.github/workflows/ci.yml`).
+CI: [`ci.yml`](../.github/workflows/ci.yml) runs `anchor build`, IDL drift check, then `pnpm test:localnet` with `TEST_SKIP_BUILD=1`. [`web-ci.yml`](../.github/workflows/web-ci.yml) runs merkle parity, E2E pipeline, and Vitest with Postgres 15.
 
 Legacy one-shot (may flake):
 
@@ -61,7 +61,8 @@ Program must be deployed at `G6iaigUdi2btFwUc2N65twfxwA8Ew5uKKhKJ5RJa8wvu`. Wall
 
 ```bash
 pnpm test:devnet
-# RPC tests on devnet; clock suite still uses bankrun (11 tests, no RPC clock warp)
+# RPC tests on devnet; clock suite still uses bankrun (12 tests, no RPC clock warp)
+# 86 passing, 1 pending (T64 cancel_stream on public devnet RPC)
 ```
 
 Equivalent:

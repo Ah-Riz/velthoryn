@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { jsonResponse } from "@/lib/api/json-response";
 import { verifyAdminKey } from "@/lib/auth";
 import { syncClaimEvents } from "@/lib/indexer/claim-events";
 
@@ -21,7 +22,7 @@ export async function POST(request: NextRequest) {
 
     const { processed, lastSlot } = await syncClaimEvents(fromSlot);
 
-    return NextResponse.json({ ok: true, processed, lastSlot });
+    return jsonResponse({ ok: true, processed, lastSlot });
   } catch (error) {
     console.error("[POST /api/admin/sync] Error:", error);
     return NextResponse.json(

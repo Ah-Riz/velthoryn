@@ -60,6 +60,151 @@
       "args": []
     },
     {
+      "name": "cancel_stream",
+      "discriminator": [
+        218,
+        221,
+        38,
+        25,
+        177,
+        207,
+        188,
+        91
+      ],
+      "accounts": [
+        {
+          "name": "creator",
+          "writable": true,
+          "signer": true,
+          "relations": [
+            "vesting_tree"
+          ]
+        },
+        {
+          "name": "beneficiary"
+        },
+        {
+          "name": "vesting_tree",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  116,
+                  114,
+                  101,
+                  101
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "vesting_tree.creator",
+                "account": "VestingTree"
+              },
+              {
+                "kind": "account",
+                "path": "vesting_tree.mint",
+                "account": "VestingTree"
+              },
+              {
+                "kind": "account",
+                "path": "vesting_tree.campaign_id",
+                "account": "VestingTree"
+              }
+            ]
+          }
+        },
+        {
+          "name": "claim_record",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  108,
+                  97,
+                  105,
+                  109
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "vesting_tree"
+              },
+              {
+                "kind": "account",
+                "path": "beneficiary"
+              }
+            ]
+          }
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        },
+        {
+          "name": "vault_authority",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  118,
+                  97,
+                  117,
+                  108,
+                  116,
+                  95,
+                  97,
+                  117,
+                  116,
+                  104,
+                  111,
+                  114,
+                  105,
+                  116,
+                  121
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "vesting_tree"
+              }
+            ]
+          }
+        },
+        {
+          "name": "vault",
+          "writable": true
+        },
+        {
+          "name": "beneficiary_ata",
+          "writable": true
+        },
+        {
+          "name": "creator_ata",
+          "writable": true
+        },
+        {
+          "name": "token_program",
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+        }
+      ],
+      "args": [
+        {
+          "name": "args",
+          "type": {
+            "defined": {
+              "name": "WithdrawArgs"
+            }
+          }
+        }
+      ]
+    },
+    {
       "name": "claim",
       "discriminator": [
         62,
@@ -859,6 +1004,17 @@
         {
           "name": "now",
           "type": "i64"
+        },
+        {
+          "name": "milestone_released_flags",
+          "type": {
+            "option": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          }
         }
       ],
       "returns": "u64"
@@ -914,6 +1070,66 @@
         }
       ],
       "args": []
+    },
+    {
+      "name": "set_milestone_released",
+      "discriminator": [
+        11,
+        152,
+        139,
+        241,
+        111,
+        92,
+        243,
+        46
+      ],
+      "accounts": [
+        {
+          "name": "creator",
+          "signer": true,
+          "relations": [
+            "vesting_tree"
+          ]
+        },
+        {
+          "name": "vesting_tree",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  116,
+                  114,
+                  101,
+                  101
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "vesting_tree.creator",
+                "account": "VestingTree"
+              },
+              {
+                "kind": "account",
+                "path": "vesting_tree.mint",
+                "account": "VestingTree"
+              },
+              {
+                "kind": "account",
+                "path": "vesting_tree.campaign_id",
+                "account": "VestingTree"
+              }
+            ]
+          }
+        }
+      ],
+      "args": [
+        {
+          "name": "milestone_idx",
+          "type": "u8"
+        }
+      ]
     },
     {
       "name": "unpause_campaign",
@@ -1485,6 +1701,19 @@
       ]
     },
     {
+      "name": "MilestoneReleased",
+      "discriminator": [
+        49,
+        225,
+        91,
+        223,
+        34,
+        165,
+        109,
+        181
+      ]
+    },
+    {
       "name": "RootUpdated",
       "discriminator": [
         94,
@@ -1495,6 +1724,19 @@
         113,
         98,
         231
+      ]
+    },
+    {
+      "name": "StreamCancelled",
+      "discriminator": [
+        91,
+        215,
+        29,
+        237,
+        194,
+        6,
+        184,
+        92
       ]
     },
     {
@@ -1639,28 +1881,53 @@
     },
     {
       "code": 6025,
+      "name": "CampaignCompleted",
+      "msg": "Completed campaigns cannot be paused, unpaused, or cancelled"
+    },
+    {
+      "code": 6026,
       "name": "NotCancelled",
       "msg": "Campaign is not cancelled"
     },
     {
-      "code": 6026,
+      "code": 6027,
       "name": "GracePeriodActive",
       "msg": "Grace period after cancellation has not expired"
     },
     {
-      "code": 6027,
+      "code": 6028,
       "name": "CannotClose",
       "msg": "ClaimRecord cannot be closed yet (not fully claimed and grace period active)"
     },
     {
-      "code": 6028,
+      "code": 6029,
       "name": "NotSingleStream",
       "msg": "This instruction only works on single-recipient streams"
     },
     {
-      "code": 6029,
+      "code": 6030,
       "name": "ProofTooLong",
       "msg": "Merkle proof exceeds maximum allowed length for this campaign"
+    },
+    {
+      "code": 6031,
+      "name": "FullyVested",
+      "msg": "Campaign is fully vested; cannot cancel"
+    },
+    {
+      "code": 6032,
+      "name": "StreamExpired",
+      "msg": "Stream schedule has ended; nothing left to claim"
+    },
+    {
+      "code": 6033,
+      "name": "MilestoneNotReleased",
+      "msg": "Milestone has not been released by the creator"
+    },
+    {
+      "code": 6034,
+      "name": "MilestoneAlreadyReleased",
+      "msg": "Milestone has already been released"
     }
   ],
   "types": [
@@ -1966,6 +2233,26 @@
       }
     },
     {
+      "name": "MilestoneReleased",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "tree",
+            "type": "pubkey"
+          },
+          {
+            "name": "milestone_idx",
+            "type": "u8"
+          },
+          {
+            "name": "released_by",
+            "type": "pubkey"
+          }
+        ]
+      }
+    },
+    {
       "name": "RootUpdated",
       "type": {
         "kind": "struct",
@@ -1995,6 +2282,30 @@
           {
             "name": "new_leaf_count",
             "type": "u32"
+          }
+        ]
+      }
+    },
+    {
+      "name": "StreamCancelled",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "tree",
+            "type": "pubkey"
+          },
+          {
+            "name": "cancelled_at",
+            "type": "i64"
+          },
+          {
+            "name": "amount_to_beneficiary",
+            "type": "u64"
+          },
+          {
+            "name": "amount_to_creator",
+            "type": "u64"
           }
         ]
       }
@@ -2130,6 +2441,18 @@
           {
             "name": "created_at",
             "type": "i64"
+          },
+          {
+            "name": "milestone_released_flags",
+            "docs": [
+              "Creator-controlled release flags for milestone leaves (bit = milestone_idx)."
+            ],
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
           },
           {
             "name": "bump",

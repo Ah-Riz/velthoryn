@@ -223,11 +223,11 @@ interface ProofResponse {
   leaf: {
     leafIndex: number;
     beneficiary: string;
-    amount: number;
+    amount: string;
     releaseType: number;
-    startTime: number;
-    cliffTime: number;
-    endTime: number;
+    startTime: string;
+    cliffTime: string;
+    endTime: string;
     milestoneIdx: number;
   };
   proof: number[][];
@@ -282,8 +282,6 @@ async function listCampaigns(
 // Step 4: Verify proof + leaf data
 // ---------------------------------------------------------------------------
 
-// Note: uses toNumber() which is safe for test amounts (< MAX_SAFE_INTEGER).
-// Real token amounts may need string comparison if the DB switches to string mode.
 function verifyLeafData(
   inputLeaf: VestingLeaf,
   returnedLeaf: ProofResponse["leaf"]
@@ -291,11 +289,11 @@ function verifyLeafData(
   return (
     inputLeaf.leafIndex === returnedLeaf.leafIndex &&
     inputLeaf.beneficiary.toBase58() === returnedLeaf.beneficiary &&
-    inputLeaf.amount.toNumber() === returnedLeaf.amount &&
+    BigInt(inputLeaf.amount.toString()) === BigInt(returnedLeaf.amount) &&
     inputLeaf.releaseType === returnedLeaf.releaseType &&
-    inputLeaf.startTime.toNumber() === returnedLeaf.startTime &&
-    inputLeaf.cliffTime.toNumber() === returnedLeaf.cliffTime &&
-    inputLeaf.endTime.toNumber() === returnedLeaf.endTime &&
+    BigInt(inputLeaf.startTime.toString()) === BigInt(returnedLeaf.startTime) &&
+    BigInt(inputLeaf.cliffTime.toString()) === BigInt(returnedLeaf.cliffTime) &&
+    BigInt(inputLeaf.endTime.toString()) === BigInt(returnedLeaf.endTime) &&
     inputLeaf.milestoneIdx === returnedLeaf.milestoneIdx
   );
 }

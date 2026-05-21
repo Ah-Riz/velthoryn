@@ -11,12 +11,30 @@ describe("sslOptionsForConnectionString", () => {
     ).toBeUndefined();
   });
 
-  it("enables SSL for hosted Postgres (e.g. Supabase)", () => {
+  it("enables SSL for hosted Postgres with permissive certs by default", () => {
     expect(
       sslOptionsForConnectionString(
         "postgresql://postgres:secret@db.abcdef.supabase.co:5432/postgres",
       ),
     ).toEqual({ rejectUnauthorized: false });
+  });
+
+  it("enables strict SSL when DATABASE_SSL_REJECT_UNAUTHORIZED is set", () => {
+    const prev = process.env.DATABASE_SSL_REJECT_UNAUTHORIZED;
+    process.env.DATABASE_SSL_REJECT_UNAUTHORIZED = "true";
+    try {
+      expect(
+        sslOptionsForConnectionString(
+          "postgresql://postgres:secret@db.abcdef.supabase.co:5432/postgres",
+        ),
+      ).toEqual({ rejectUnauthorized: true });
+    } finally {
+      if (prev === undefined) {
+        delete process.env.DATABASE_SSL_REJECT_UNAUTHORIZED;
+      } else {
+        process.env.DATABASE_SSL_REJECT_UNAUTHORIZED = prev;
+      }
+    }
   });
 
   it("respects sslmode=disable in the connection string", () => {

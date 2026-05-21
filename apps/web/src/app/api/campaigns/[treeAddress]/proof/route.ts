@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { jsonResponse } from "@/lib/api/json-response";
 import { eq, and, sql } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { campaigns, rootVersions, leaves } from "@/lib/db/schema";
@@ -82,7 +83,7 @@ export async function GET(
       );
     }
 
-    return NextResponse.json({
+    return jsonResponse({
       leaf: {
         leafIndex: leaf.leafIndex,
         beneficiary: leaf.beneficiary,

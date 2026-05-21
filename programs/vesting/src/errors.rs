@@ -71,4 +71,16 @@ pub enum VestingError {
 
     #[msg("Merkle proof exceeds maximum allowed length for this campaign")]
     ProofTooLong,
+
+    #[msg("Campaign is fully vested; cannot cancel")]
+    FullyVested,
+
+    #[msg("Stream schedule has ended; nothing left to claim")]
+    StreamExpired,
+
+    #[msg("Milestone has not been released by the creator")]
+    MilestoneNotReleased,
+
+    #[msg("Milestone has already been released")]
+    MilestoneAlreadyReleased,
 }

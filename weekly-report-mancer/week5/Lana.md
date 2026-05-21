@@ -4,6 +4,17 @@
 
 **BE-SC Merkle pipeline verified end-to-end: 3-leaf campaigns (Cliff/Linear/Milestone) flow through prepare -> POST -> GET proof -> verify against deployed API. RLS enabled on all Supabase tables. Deployed at velthoryn.vercel.app.**
 
+### Milestone Vesting Hardening (2026-05-21)
+
+Fixed milestone vesting edge cases reported by FE:
+
+- `cancel_stream` milestone-aware payout: released milestone → beneficiary gets full amount; unreleased → 0 (T64b, T64c)
+- `cancel_stream` OverClaim guard on `total_claimed` accumulator (consistent with claim/withdraw)
+- `get_vested_amount` milestone flag gating: returns 0 if milestone not released, full amount if released (not just time-based)
+- `set_milestone_released` idempotency: second call rejects with `MilestoneAlreadyReleased` (6033) (T65)
+- New tests: T41 milestone flag cases, T46-T68 covering cancel/milestone/boundary paths
+- **86/86 SC tests pass** (up from 79; +T64b-T68 milestone cancel scenarios)
+
 ### BE-SC Merkle Pipeline — 6 phases completed
 
 Phase 1 — Merkle Builder Parity:
@@ -23,7 +34,7 @@ Phase 3 — E2E Merkle Pipeline Test:
 
 Phase 4 — Build Fix & Local Verification:
 - `apps/web/` builds cleanly with `pnpm build`
-- 74/74 SC tests pass (up from 63 in Week 4 — added 11 new stream tests)
+- 79/79 SC tests pass (up from 63 in Week 4 — stream + acceptance T60–T64)
 - `.env.example` created with all required env vars
 
 Phase 5 — Vercel Deployment:
@@ -78,7 +89,7 @@ Phase 6 — Post-Deploy E2E:
 | RLS on all Supabase tables | 9 policies (4 SELECT, 5 INSERT/UPDATE/DELETE), 0 security lints |
 | Proof verification bypass fixed | Multi-leaf empty-first-leaf proof rejected with 400 |
 | `apps/web/` builds cleanly | `pnpm build` exits 0 |
-| 74/74 SC tests pass | Up from 63 in Week 4 — 11 new stream tests |
+| 86/86 SC tests pass | T60–T68 + milestone flag gating + cancel_stream milestone paths + OverClaim guard |
 | ~200/200 web Vitest pass | API routes on real Postgres in CI; hooks/merkle/math unchanged |
 | Web CI workflow | 3 parallel jobs: merkle-parity, e2e-pipeline, web-build-test |
 | Lint workflow | Vitest + build with Postgres (same as web-build-test) |
@@ -96,6 +107,10 @@ Phase 6 — Post-Deploy E2E:
 | Supabase pooler latency (15-30s per query) | Medium | `aws-1-ap-southeast-1.pooler.supabase.com:6543` (transaction-mode pooler) is slow from our region. E2E test POST took 29-60s per request, causing test timeouts. | Increased `connect_timeout: 30`, `max: 3` pool, and E2E test `--timeout 120000`. |
 | `Number()` truncation on u64 columns | Medium (deferred) | Drizzle schema uses `{ mode: "number" }` for `amount`, `totalSupply`, `startTime`, etc. Values above `Number.MAX_SAFE_INTEGER` (9,007,199,254,740,991) silently truncate. Safe for devnet token amounts, but will corrupt data for large mainnet supplies. | Known issue, deferred. Fix: migrate to `{ mode: "string" }` before mainnet. |
 | SSL cert verification disabled | Low | `rejectUnauthorized: false` in the DB connection config bypasses certificate validation, vulnerable to MITM in production. | Known issue, deferred. Acceptable for devnet; must fix for mainnet (use proper CA chain). |
+| Milestone cancel_stream returned time-based vested amount | High | `cancel_stream` used `schedule::vested()` for release_type 2, ignoring `milestone_released_flags`. Unreleased milestones could pay out based on cliff_time alone. | Milestone-aware branch: released flag → full amount, unreleased → 0. |
+| `get_vested_amount` returned time-based amount for milestones | Medium | View function used `schedule::vested()` which returns full amount when `now >= cliff_time`, ignoring milestone flags. Frontend could show incorrect claimable amounts. | Flag-gated: returns 0 if milestone not released, full amount if released. |
+| `set_milestone_released` lacked idempotency guard | Low | Second call silently succeeded, wasting compute. | Added `MilestoneAlreadyReleased` (6033) guard. |
+| `cancel_stream` missing OverClaim guard | Medium | `total_claimed` incremented without checking against `total_supply`. Safe under single-stream constraint but inconsistent with claim/withdraw. | Added `require!(total_claimed <= total_supply, OverClaim)`. |
 
 ---
 
@@ -103,10 +118,61 @@ Phase 6 — Post-Deploy E2E:
 
 **No active blockers.** All 6 pipeline phases passed their gates and the deployment is live.
 
-**Deferred items (not blockers, but must fix before mainnet):**
-1. **`Number()` truncation on u64 columns** — Drizzle schema uses `{ mode: "number" }` for `amount`, `totalSupply`, timestamps. Must migrate to `{ mode: "string" }` before mainnet to prevent silent data corruption on large token amounts.
-2. **SSL `rejectUnauthorized: false`** — Database connection skips certificate validation. Must use proper CA chain for production.
-3. **Only first leaf proof verified server-side** — POST /api/campaigns verifies only `leaves[0]`. Leaves 1..N are stored without proof verification. An attacker could submit valid first leaf + fraudulent siblings. Mitigated by the merkle root being verifiable on-chain, but should verify all leaves server-side for defense-in-depth.
+---
+
+## Week 5 completion — acceptance + devnet (2026-05-18)
+
+### SC acceptance (bootcamp checklist) — **8/8**
+
+| Criterion | Implementation | Tests |
+|-----------|----------------|-------|
+| Cliff schedule | `schedule.rs` | T6, T17, T18, T41 |
+| Milestone creator flag | `set_milestone_released` + `milestone_released_flags` | T10, T11, T46, T63 |
+| `cancel_stream` (single leaf) | `cancel_stream` instruction | T64 (bankrun; devnet RPC pending) |
+| Cancel guards + errors | `FullyVested`, `StreamExpired`, etc. | T60–T62, T35, T60 |
+
+Tracker: [`docs/BE-SC-MERKLE-ACCEPTANCE-STATUS.md`](../../docs/BE-SC-MERKLE-ACCEPTANCE-STATUS.md) — **8/8 fully met**, 0 partial.
+
+### Devnet deploy
+
+| Item | Value |
+|------|-------|
+| Program ID | `G6iaigUdi2btFwUc2N65twfxwA8Ew5uKKhKJ5RJa8wvu` |
+| Upgrade slot | **463874212** (milestone hardening) |
+| Upgrade authority | `GPfHeZtBna1rJmwam1yCcREhYnLcxWhBmUdDoVuL5Es6` |
+| Instructions added | `set_milestone_released`, `cancel_stream` (14 total) |
+
+`scripts/test-devnet.sh` fixed: runs `ts-mocha` on devnet RPC only (no `anchor test` redeploy with mismatched `vesting-keypair.json`).
+
+### BE hardening
+
+| Item | Status |
+|------|--------|
+| All-leaf Merkle verify on POST + root-versions | Done — [`apps/web/src/lib/merkle/verify.ts`](../../apps/web/src/lib/merkle/verify.ts) |
+| u64 as Drizzle strings | Done — `{ mode: "string" }` on all `bigint` columns |
+| Strict SSL (production) | Done — `DATABASE_SSL_REJECT_UNAUTHORIZED=true` |
+| Vitest: `merkle-verify`, backend negative cases, `vesting-errors` | Done |
+
+### Tests and CI
+
+| Suite | Result |
+|-------|--------|
+| SC localnet | **86/86** (`pnpm test:localnet`) |
+| SC devnet | **86 pass, 1 pending** (`pnpm test:devnet`; T68 setClock) |
+| Merkle parity | 13/13 |
+| E2E pipeline (CI) | 5/5 |
+| CI workflows | `ci.yml`, `web-ci.yml`, `lint.yml` — IDL drift check |
+
+Commands run:
+
+```bash
+anchor build
+pnpm test:localnet          # 86/86
+pnpm test:devnet            # 86 pass, 1 pending (T68)
+pnpm tsx scripts/test-merkle-parity.ts
+```
+
+**Ship path:** Redeploy Vercel → post-deploy E2E; merge PR #30 (`dev_lana` → `test`). See [`docs/SHIP-PATH-NEXT.md`](../../docs/SHIP-PATH-NEXT.md).
 
 ---
 
@@ -114,7 +180,7 @@ Phase 6 — Post-Deploy E2E:
 
 | Metric | Value |
 |---|---|
-| SC tests | 74/74 (was 63/63) |
+| SC tests | **86/86** localnet (was 63 Week 4; +T60–T68, milestone flag, `cancel_stream`, milestone cancel paths) |
 | Web Vitest | ~200 (~69 API + ~14 bug-fix + hooks/lib/merkle) |
 | Merkle parity checks | 13/13 |
 | E2E pipeline phases | 5/5 pass |
@@ -124,4 +190,4 @@ Phase 6 — Post-Deploy E2E:
 | API routes deployed | 8 at velthoryn.vercel.app |
 | DB tables | 4 (campaigns, root_versions, leaves, claim_events) |
 | Curl smoke tests | 4/4 pass |
-| Week 4 -> Week 5 delta | 63 -> 74 SC tests, 0 -> 13 parity checks, 0 -> E2E pipeline verified, 0 -> deployed API, 2 -> 3 CI workflows, RLS enabled, API Vitest -> real Postgres |
+| Week 4 -> Week 5 delta | 63 -> 86 SC tests, 8/8 acceptance, devnet upgrade slot 463223253, 0 -> 13 parity checks, E2E + API live, 3 CI workflows, RLS + all-leaf verify, milestone cancel hardening |

@@ -43,4 +43,27 @@ describe("formatVestingError", () => {
       "cancelled",
     );
   });
+
+  it("maps FullyVested", () => {
+    expect(formatVestingError(new Error("FullyVested"))).toContain(
+      "fully vested",
+    );
+    expect(formatVestingError(new Error("0x178e"))).toContain("fully vested");
+  });
+
+  it("maps MilestoneNotReleased", () => {
+    expect(formatVestingError(new Error("MilestoneNotReleased"))).toContain(
+      "released",
+    );
+  });
+
+  it("maps StreamExpired", () => {
+    expect(formatVestingError(new Error("StreamExpired"))).toContain("ended");
+    expect(formatVestingError(new Error("0x178f"))).toContain("ended");
+  });
+
+  it("maps ProofTooLong", () => {
+    expect(formatVestingError(new Error("ProofTooLong"))).toContain("too long");
+    expect(formatVestingError(new Error("0x178d"))).toContain("too long");
+  });
 });

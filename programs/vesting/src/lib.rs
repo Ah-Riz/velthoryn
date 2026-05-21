@@ -45,6 +45,17 @@ pub mod vesting {
         instructions::cancel_campaign::handler(ctx)
     }
 
+    pub fn cancel_stream(ctx: Context<CancelStream>, args: WithdrawArgs) -> Result<()> {
+        instructions::cancel_stream::handler(ctx, args)
+    }
+
+    pub fn set_milestone_released(
+        ctx: Context<SetMilestoneReleased>,
+        milestone_idx: u8,
+    ) -> Result<()> {
+        instructions::set_milestone_released::handler(ctx, milestone_idx)
+    }
+
     pub fn update_root(
         ctx: Context<UpdateRoot>,
         new_root: [u8; 32],
@@ -80,7 +91,8 @@ pub mod vesting {
         leaf: VestingLeaf,
         cancelled_at: Option<i64>,
         now: i64,
+        milestone_released_flags: Option<[u8; 32]>,
     ) -> Result<u64> {
-        instructions::get_vested_amount::handler(ctx, leaf, cancelled_at, now)
+        instructions::get_vested_amount::handler(ctx, leaf, cancelled_at, now, milestone_released_flags)
     }
 }

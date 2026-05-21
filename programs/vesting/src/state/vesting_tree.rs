@@ -18,5 +18,19 @@ pub struct VestingTree {
     pub paused:           bool,
     pub pause_authority:  Option<Pubkey>,
     pub created_at:       i64,
+    /// Creator-controlled release flags for milestone leaves (bit = milestone_idx).
+    pub milestone_released_flags: [u8; 32],
     pub bump:             u8,
+}
+
+pub fn milestone_flag_is_set(flags: &[u8; 32], milestone_idx: u8) -> bool {
+    let byte_idx = milestone_idx as usize / 8;
+    let bit_idx = milestone_idx as usize % 8;
+    flags[byte_idx] & (1 << bit_idx) != 0
+}
+
+pub fn set_milestone_flag(flags: &mut [u8; 32], milestone_idx: u8) {
+    let byte_idx = milestone_idx as usize / 8;
+    let bit_idx = milestone_idx as usize % 8;
+    flags[byte_idx] |= 1 << bit_idx;
 }

@@ -1058,6 +1058,83 @@ describe("vesting clock-dependent tests (bankrun)", () => {
     expect(received).to.be.at.most(5100);
   });
 
+  it("T64: cancel_stream splits unlocked to beneficiary and locked to creator", async () => {
+    const { context, provider, program, creator, cancelAuthority } = freshCtx();
+    const AMOUNT = 10_000;
+    const beneficiary = await makeBeneficiaryTx(provider);
+
+    const { mint } = await createTestMintTx(provider, creator.publicKey);
+    await fundCreatorAtaTx(provider, mint, creator.publicKey, AMOUNT);
+
+    const [treePda] = await treePDA(PROGRAM_ID, creator.publicKey, mint, 9863);
+    const [vaultAuthPda] = await vaultAuthorityPDA(PROGRAM_ID, treePda);
+    const [crPda] = await claimRecordPDA(PROGRAM_ID, treePda, beneficiary.publicKey);
+    const vault = getAssociatedTokenAddressSync(mint, vaultAuthPda, true);
+    const beneficiaryAta = await createBeneficiaryAta(provider, mint, beneficiary.publicKey);
+    const creatorAta = getAssociatedTokenAddressSync(mint, creator.publicKey);
+
+    const now = await bankrunNow(context);
+    const cliff = now - 1000;
+    const end = now + 1000;
+    const withdrawArgs = {
+      releaseType: 1,
+      startTime: new BN(cliff),
+      cliffTime: new BN(cliff),
+      endTime: new BN(end),
+      milestoneIdx: 0,
+    };
+
+    await program.methods
+      .createStream({
+        campaignId: new BN(9863),
+        beneficiary: beneficiary.publicKey,
+        amount: new BN(AMOUNT),
+        releaseType: 1,
+        startTime: new BN(cliff),
+        cliffTime: new BN(cliff),
+        endTime: new BN(end),
+        milestoneIdx: 0,
+        cancellable: true,
+        cancelAuthority: cancelAuthority.publicKey,
+        pauseAuthority: null,
+      })
+      .accounts({
+        creator: creator.publicKey,
+        vestingTree: treePda,
+        vaultAuthority: vaultAuthPda,
+        vault,
+        sourceAta: creatorAta,
+        mint,
+      })
+      .signers([creator])
+      .rpc();
+
+    await warpClock(context, now);
+
+    await program.methods
+      .cancelStream(withdrawArgs)
+      .accounts({
+        creator: creator.publicKey,
+        beneficiary: beneficiary.publicKey,
+        vestingTree: treePda,
+        claimRecord: crPda,
+        vaultAuthority: vaultAuthPda,
+        vault,
+        beneficiaryAta,
+        creatorAta,
+        systemProgram: SystemProgram.programId,
+      })
+      .signers([creator])
+      .rpc();
+
+    const postBeneficiary = await getAccount(provider.connection, beneficiaryAta);
+    const postCreator = await getAccount(provider.connection, creatorAta);
+    const postVault = await getAccount(provider.connection, vault);
+    expect(Number(postBeneficiary.amount)).to.equal(5_000);
+    expect(Number(postCreator.amount)).to.equal(5_000);
+    expect(Number(postVault.amount)).to.equal(0);
+  });
+
   it("EXPLOIT 4: claim after full vault withdrawal -> InsufficientVault", async () => {
     const { context, provider, program, creator, cancelAuthority, pauseAuthority } = freshCtx();
     const beneficiary = await makeBeneficiaryTx(provider);

@@ -1,5 +1,9 @@
 use crate::state::VestingLeaf;
 
+/// Returns the time-based vested amount. For release_type 2 (Milestone), this
+/// returns `leaf.amount` once `now >= cliff_time` — but the caller MUST
+/// independently check `milestone_released_flags` before treating this as
+/// claimable. The flag gate is enforced at the instruction level, not here.
 pub fn vested(leaf: &VestingLeaf, now: i64) -> u64 {
     match leaf.release_type {
         0 if now >= leaf.cliff_time => leaf.amount,

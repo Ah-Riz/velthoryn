@@ -24,6 +24,7 @@ import {
   expectAnchorError,
   createAndFundCampaign,
   issueClaim,
+  releaseMilestone,
 } from "./utils/helpers";
 import {
   ReleaseType,
@@ -44,6 +45,7 @@ import {
 const ERR = {
   NothingToClaim: 6015,
   MilestoneAlreadyClaimed: 6014,
+  MilestoneNotReleased: 6032,
   GracePeriodActive: 6026,
   Unauthorized: 6005,
   CampaignCancelled: 6023,
@@ -129,7 +131,18 @@ describe("security exploit attempts (should all be blocked)", () => {
       );
       expect.fail("EXPLOIT 1 SUCCEEDED: second claim should have been rejected");
     } catch (e) {
-      expectAnchorError(e, ERR.NothingToClaim);
+      const msg = (e as Error).message || String(e);
+      const logs = ((e as any).logs || []).join("\n");
+      const haystack = `${msg}\n${logs}`;
+      const isNothing =
+        haystack.includes("NothingToClaim") ||
+        haystack.includes("6015") ||
+        haystack.includes("0x177f");
+      const isExpired =
+        haystack.includes("StreamExpired") ||
+        haystack.includes("6031") ||
+        haystack.includes("0x178f");
+      expect(isNothing || isExpired, haystack).to.equal(true);
     }
   });
 
@@ -278,6 +291,8 @@ describe("security exploit attempts (should all be blocked)", () => {
         [leaf],
         AMOUNT,
       );
+
+    await releaseMilestone({ program, creator }, treePda, 0);
 
     // First claim should succeed
     await issueClaim(

@@ -60,3 +60,18 @@ pub struct ClaimRecordClosed {
     pub tree:        Pubkey,
     pub beneficiary: Pubkey,
 }
+
+#[event]
+pub struct MilestoneReleased {
+    pub tree:          Pubkey,
+    pub milestone_idx: u8,
+    pub released_by:   Pubkey,
+}
+
+#[event]
+pub struct StreamCancelled {
+    pub tree:                 Pubkey,
+    pub cancelled_at:         i64,
+    pub amount_to_beneficiary: u64,
+    pub amount_to_creator:    u64,
+}

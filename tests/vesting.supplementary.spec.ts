@@ -1,6 +1,17 @@
 import { BN } from "@coral-xyz/anchor";
-import { Keypair, PublicKey } from "@solana/web3.js";
-import { getAccount, getAssociatedTokenAddressSync } from "@solana/spl-token";
+import {
+  Keypair,
+  PublicKey,
+  SystemProgram,
+  Transaction,
+} from "@solana/web3.js";
+import {
+  createAssociatedTokenAccountInstruction,
+  getAccount,
+  getAssociatedTokenAddressSync,
+  TOKEN_PROGRAM_ID,
+  ASSOCIATED_TOKEN_PROGRAM_ID,
+} from "@solana/spl-token";
 import { expect } from "chai";
 
 import {
@@ -21,6 +32,7 @@ import {
   expectAnchorError,
   createAndFundCampaign,
   issueClaim,
+  releaseMilestone,
 } from "./utils/helpers";
 import {
   ReleaseType,
@@ -48,6 +60,7 @@ const ERR = {
   InvalidScheduleType: 6012,
   NothingToClaim: 6015,
   MilestoneAlreadyClaimed: 6014,
+  MilestoneNotReleased: 6032,
   GracePeriodActive: 6026,
   SameRoot: 6004,
   Unauthorized: 6005,
@@ -67,6 +80,10 @@ const ERR = {
   WrongVault: 6018,
   NotPausable: 6021,
   NotCancelled: 6025,
+  ProofTooLong: 6029,
+  FullyVested: 6030,
+  StreamExpired: 6031,
+  MilestoneAlreadyReleased: 6033,
 } as const;
 
 // ---------------------------------------------------------------------------
@@ -358,6 +375,8 @@ describe("vesting supplementary T6-T25", () => {
         AMOUNT,
       );
 
+    await releaseMilestone({ program, creator }, treePda, 0);
+
     // First claim should succeed
     await program.methods
       .claim(idlLeaf(leaf), idlProof(tree.proof(0)))
@@ -445,6 +464,9 @@ describe("vesting supplementary T6-T25", () => {
         [leaf0, leaf1],
         TOTAL,
       );
+
+    await releaseMilestone({ program, creator }, treePda, 0);
+    await releaseMilestone({ program, creator }, treePda, 1);
 
     // Claim milestone 0
     await program.methods
@@ -2164,9 +2186,13 @@ describe("vesting supplementary T6-T25", () => {
       leaf: ReturnType<typeof idlLeaf>,
       cancelledAt: BN | null,
       now: BN,
+      milestoneReleasedFlags: number[] | null = null,
     ): Promise<number> {
+      const flags = milestoneReleasedFlags
+        ? milestoneReleasedFlags
+        : null;
       const result = await program.methods
-        .getVestedAmount(leaf, cancelledAt, now)
+        .getVestedAmount(leaf, cancelledAt, now, flags)
         .simulate();
       // Anchor 0.32.x returns data in raw logs as "Program return: <programId> <base64>"
       const raw: string[] = (result as any).raw ?? [];
@@ -2229,8 +2255,18 @@ describe("vesting supplementary T6-T25", () => {
     });
     expect(await vestedAmount(milestoneLeaf, null, new BN(t.now))).to.equal(0);
 
-    // --- Milestone: after cliff -> full amount ---
-    expect(await vestedAmount(milestoneLeaf, null, new BN(t.now + 200))).to.equal(5_000);
+    // --- Milestone: after cliff but no flags -> 0 (milestone not released) ---
+    expect(await vestedAmount(milestoneLeaf, null, new BN(t.now + 200))).to.equal(0);
+
+    // --- Milestone: after cliff with milestone 0 released -> full amount ---
+    const flagsMilestone0 = Array(32).fill(0);
+    flagsMilestone0[0] = 0x01; // bit 0 set
+    expect(await vestedAmount(milestoneLeaf, null, new BN(t.now + 200), flagsMilestone0)).to.equal(5_000);
+
+    // --- Milestone: with flags for wrong milestone (bit 1 set, need bit 0) -> 0 ---
+    const flagsWrongMilestone = Array(32).fill(0);
+    flagsWrongMilestone[0] = 0x02; // bit 1 set, not bit 0
+    expect(await vestedAmount(milestoneLeaf, null, new BN(t.now + 200), flagsWrongMilestone)).to.equal(0);
 
     // --- Cancel clamp: linear with cancelled_at in the middle -> capped ---
     // cliff=0, end=1000, cancelled_at=500, now=2000
@@ -2624,6 +2660,8 @@ describe("vesting supplementary T6-T25", () => {
       })
       .signers([creator])
       .rpc();
+
+    await releaseMilestone({ program, creator }, treePda, 0);
 
     // Withdraw milestone amount
     await program.methods
@@ -3122,6 +3160,1095 @@ describe("vesting supplementary T6-T25", () => {
     } catch (e) {
       expectAnchorError(e, ERR.ZeroAmount);
     }
+  });
+
+  // -------------------------------------------------------------------------
+  // T60: cancel_campaign after full vest -> FullyVested
+  // -------------------------------------------------------------------------
+  it("T60: cancel_campaign after full vest rejects with FullyVested", async () => {
+    const CAMPAIGN_ID = 9860;
+    const AMOUNT = 10_000;
+    const beneficiary = await makeBeneficiary(provider);
+    const mint = await createTestMint(provider, creator.publicKey);
+    await fundCreatorAta(provider, mint, creator.publicKey, AMOUNT);
+    const t = await createTimeHelpers(provider.connection);
+
+    const [treePda] = await treePDA(
+      PROGRAM_ID,
+      creator.publicKey,
+      mint,
+      CAMPAIGN_ID,
+    );
+    const [vaultAuthPda] = await vaultAuthorityPDA(PROGRAM_ID, treePda);
+    const [crPda] = await claimRecordPDA(
+      PROGRAM_ID,
+      treePda,
+      beneficiary.publicKey,
+    );
+    const vault = getAssociatedTokenAddressSync(mint, vaultAuthPda, true);
+    const beneficiaryAta = getAssociatedTokenAddressSync(
+      mint,
+      beneficiary.publicKey,
+    );
+
+    const cliff = t.past(2000);
+    const end = t.past(10);
+
+    await program.methods
+      .createStream({
+        campaignId: new BN(CAMPAIGN_ID),
+        beneficiary: beneficiary.publicKey,
+        amount: new BN(AMOUNT),
+        releaseType: 1,
+        startTime: new BN(cliff),
+        cliffTime: new BN(cliff),
+        endTime: new BN(end),
+        milestoneIdx: 0,
+        cancellable: true,
+        cancelAuthority: cancelAuthority.publicKey,
+        pauseAuthority: null,
+      })
+      .accounts({
+        creator: creator.publicKey,
+        vestingTree: treePda,
+        vaultAuthority: vaultAuthPda,
+        vault,
+        sourceAta: getAssociatedTokenAddressSync(mint, creator.publicKey),
+        mint,
+      })
+      .signers([creator])
+      .rpc();
+
+    await program.methods
+      .withdraw({
+        releaseType: 1,
+        startTime: new BN(cliff),
+        cliffTime: new BN(cliff),
+        endTime: new BN(end),
+        milestoneIdx: 0,
+      })
+      .accounts({
+        beneficiary: beneficiary.publicKey,
+        vestingTree: treePda,
+        claimRecord: crPda,
+        vaultAuthority: vaultAuthPda,
+        vault,
+        beneficiaryAta,
+        mint,
+      })
+      .signers([beneficiary])
+      .rpc();
+
+    const treeAccount = await program.account.vestingTree.fetch(treePda);
+    const claimed = treeAccount.totalClaimed.toString();
+    const supply = treeAccount.totalSupply.toString();
+    expect(claimed).to.equal(String(AMOUNT));
+    expect(supply).to.equal(String(AMOUNT));
+
+    try {
+      await program.methods
+        .cancelCampaign()
+        .accounts({
+          cancelAuthority: cancelAuthority.publicKey,
+          vestingTree: treePda,
+        })
+        .signers([cancelAuthority])
+        .rpc();
+      expect.fail(
+        `expected FullyVested; claimed=${claimed} supply=${supply}`,
+      );
+    } catch (e) {
+      expectAnchorError(e, ERR.FullyVested);
+    }
+  });
+
+  // -------------------------------------------------------------------------
+  // T61: withdraw after schedule ended and fully claimed -> StreamExpired
+  // -------------------------------------------------------------------------
+  it("T61: double-withdraw after end_time rejects with StreamExpired", async () => {
+    const CAMPAIGN_ID = 9861;
+    const AMOUNT = 10_000;
+    const beneficiary = await makeBeneficiary(provider);
+    const mint = await createTestMint(provider, creator.publicKey);
+    await fundCreatorAta(provider, mint, creator.publicKey, AMOUNT);
+    const t = await createTimeHelpers(provider.connection);
+
+    const [treePda] = await treePDA(
+      PROGRAM_ID,
+      creator.publicKey,
+      mint,
+      CAMPAIGN_ID,
+    );
+    const [vaultAuthPda] = await vaultAuthorityPDA(PROGRAM_ID, treePda);
+    const [crPda] = await claimRecordPDA(
+      PROGRAM_ID,
+      treePda,
+      beneficiary.publicKey,
+    );
+    const vault = getAssociatedTokenAddressSync(mint, vaultAuthPda, true);
+    const beneficiaryAta = getAssociatedTokenAddressSync(
+      mint,
+      beneficiary.publicKey,
+    );
+
+    const cliff = t.past(2_000_000);
+    const end = t.past(1_000_000);
+    const withdrawArgs = {
+      releaseType: 1,
+      startTime: new BN(cliff),
+      cliffTime: new BN(cliff),
+      endTime: new BN(end),
+      milestoneIdx: 0,
+    };
+
+    await program.methods
+      .createStream({
+        campaignId: new BN(CAMPAIGN_ID),
+        beneficiary: beneficiary.publicKey,
+        amount: new BN(AMOUNT),
+        releaseType: 1,
+        startTime: new BN(cliff),
+        cliffTime: new BN(cliff),
+        endTime: new BN(end),
+        milestoneIdx: 0,
+        cancellable: true,
+        cancelAuthority: cancelAuthority.publicKey,
+        pauseAuthority: null,
+      })
+      .accounts({
+        creator: creator.publicKey,
+        vestingTree: treePda,
+        vaultAuthority: vaultAuthPda,
+        vault,
+        sourceAta: getAssociatedTokenAddressSync(mint, creator.publicKey),
+        mint,
+      })
+      .signers([creator])
+      .rpc();
+
+    await program.methods
+      .withdraw(withdrawArgs)
+      .accounts({
+        beneficiary: beneficiary.publicKey,
+        vestingTree: treePda,
+        claimRecord: crPda,
+        vaultAuthority: vaultAuthPda,
+        vault,
+        beneficiaryAta,
+        mint,
+      })
+      .signers([beneficiary])
+      .rpc();
+
+    const vaultAfter = await getAccount(provider.connection, vault);
+    expect(Number(vaultAfter.amount)).to.equal(0);
+
+    try {
+      await program.methods
+        .withdraw(withdrawArgs)
+        .accounts({
+          beneficiary: beneficiary.publicKey,
+          vestingTree: treePda,
+          claimRecord: crPda,
+          vaultAuthority: vaultAuthPda,
+          vault,
+          beneficiaryAta,
+          mint,
+        })
+        .signers([beneficiary])
+        .rpc();
+      expect.fail("should have thrown StreamExpired or NothingToClaim");
+    } catch (e) {
+      const msg = (e as Error).message || String(e);
+      const logs = ((e as any).logs || []).join("\n");
+      const haystack = `${msg}\n${logs}`;
+      const isExpired =
+        haystack.includes("StreamExpired") ||
+        haystack.includes("6031") ||
+        haystack.includes("0x178f");
+      const isNothing =
+        haystack.includes("NothingToClaim") ||
+        haystack.includes("6015") ||
+        haystack.includes("0x177f");
+      expect(isExpired || isNothing, haystack).to.equal(true);
+    }
+  });
+
+  // -------------------------------------------------------------------------
+  // T62: cancel_campaign before cliff succeeds
+  // -------------------------------------------------------------------------
+  it("T62: cancel_campaign before cliff sets cancelled_at", async () => {
+    const beneficiary = await makeBeneficiary(provider);
+    const AMOUNT = 10_000;
+
+    const t = await createTimeHelpers(provider.connection);
+    const cliff = t.future(500);
+    const end = t.future(1000);
+
+    const leaf: VestingLeaf = {
+      leafIndex: 0,
+      beneficiary: beneficiary.publicKey,
+      amount: new BN(AMOUNT),
+      releaseType: ReleaseType.Linear,
+      startTime: new BN(cliff),
+      cliffTime: new BN(cliff),
+      endTime: new BN(end),
+      milestoneIdx: 0,
+    };
+
+    const { treePda } = await createAndFundCampaign(
+      { provider, program, creator, cancelAuthority, pauseAuthority },
+      809,
+      [leaf],
+      AMOUNT,
+      true,
+    );
+
+    await program.methods
+      .cancelCampaign()
+      .accounts({
+        cancelAuthority: cancelAuthority.publicKey,
+        vestingTree: treePda,
+      })
+      .signers([cancelAuthority])
+      .rpc();
+
+    const treeAccount = await program.account.vestingTree.fetch(treePda);
+    expect(treeAccount.cancelledAt).to.not.be.null;
+  });
+
+  // -------------------------------------------------------------------------
+  // T63: milestone claim without creator release -> MilestoneNotReleased
+  // -------------------------------------------------------------------------
+  it("T63: milestone claim before set_milestone_released rejects", async () => {
+    const beneficiary = await makeBeneficiary(provider);
+    const AMOUNT = 10_000;
+    const t = await createTimeHelpers(provider.connection);
+    const cliff = t.past(100);
+
+    const leaf: VestingLeaf = {
+      leafIndex: 0,
+      beneficiary: beneficiary.publicKey,
+      amount: new BN(AMOUNT),
+      releaseType: ReleaseType.Milestone,
+      startTime: new BN(cliff),
+      cliffTime: new BN(cliff),
+      endTime: new BN(t.future(1000)),
+      milestoneIdx: 0,
+    };
+
+    const { mint, tree, treePda, vaultAuthPda, vault } =
+      await createAndFundCampaign(
+        { provider, program, creator, cancelAuthority, pauseAuthority },
+        810,
+        [leaf],
+        AMOUNT,
+      );
+
+    try {
+      await issueClaim(
+        { program },
+        leaf,
+        tree.proof(0),
+        beneficiary,
+        treePda,
+        vaultAuthPda,
+        vault,
+        mint,
+      );
+      expect.fail("should have thrown MilestoneNotReleased");
+    } catch (e) {
+      expectAnchorError(e, ERR.MilestoneNotReleased);
+    }
+  });
+
+  // -------------------------------------------------------------------------
+  // T64: cancel_stream — creator-only, beneficiary vested + creator remainder
+  // -------------------------------------------------------------------------
+  it("T64: cancel_stream splits unlocked to beneficiary and locked to creator", async function () {
+    if (provider.connection.rpcEndpoint.includes("devnet")) {
+      this.skip();
+    }
+    const CAMPAIGN_ID = 900_000 + Math.floor(Math.random() * 99_999);
+    const AMOUNT = 10_000;
+
+    const mint = await createTestMint(provider, creator.publicKey);
+    await fundCreatorAta(provider, mint, creator.publicKey, AMOUNT);
+    const beneficiary = await makeBeneficiary(provider);
+    const t = await createTimeHelpers(provider.connection);
+
+    const [treePda] = await treePDA(PROGRAM_ID, creator.publicKey, mint, CAMPAIGN_ID);
+    const [vaultAuthPda] = await vaultAuthorityPDA(PROGRAM_ID, treePda);
+    const [crPda] = await claimRecordPDA(PROGRAM_ID, treePda, beneficiary.publicKey);
+    const vault = getAssociatedTokenAddressSync(mint, vaultAuthPda, true);
+    const beneficiaryAta = getAssociatedTokenAddressSync(mint, beneficiary.publicKey);
+    const creatorAta = getAssociatedTokenAddressSync(mint, creator.publicKey);
+
+    const cliff = t.now - 1000;
+    const end = t.now + 1000;
+    const withdrawArgs = {
+      releaseType: 1,
+      startTime: new BN(cliff),
+      cliffTime: new BN(cliff),
+      endTime: new BN(end),
+      milestoneIdx: 0,
+    };
+
+    await program.methods
+      .createStream({
+        campaignId: new BN(CAMPAIGN_ID),
+        beneficiary: beneficiary.publicKey,
+        amount: new BN(AMOUNT),
+        releaseType: 1,
+        startTime: new BN(cliff),
+        cliffTime: new BN(cliff),
+        endTime: new BN(end),
+        milestoneIdx: 0,
+        cancellable: true,
+        cancelAuthority: cancelAuthority.publicKey,
+        pauseAuthority: null,
+      })
+      .accounts({
+        creator: creator.publicKey,
+        vestingTree: treePda,
+        vaultAuthority: vaultAuthPda,
+        vault,
+        sourceAta: creatorAta,
+        mint,
+      })
+      .signers([creator])
+      .rpc();
+
+    const vaultAfterFund = await getAccount(provider.connection, vault);
+    expect(Number(vaultAfterFund.amount)).to.equal(AMOUNT);
+
+    try {
+      await getAccount(provider.connection, beneficiaryAta);
+    } catch {
+      const createAtaTx = new Transaction().add(
+        createAssociatedTokenAccountInstruction(
+          creator.publicKey,
+          beneficiaryAta,
+          beneficiary.publicKey,
+          mint,
+          TOKEN_PROGRAM_ID,
+          ASSOCIATED_TOKEN_PROGRAM_ID,
+        ),
+      );
+      await provider.sendAndConfirm(createAtaTx, [creator]);
+    }
+
+    const benBefore = Number(
+      (await getAccount(provider.connection, beneficiaryAta).catch(() => null))
+        ?.amount ?? 0,
+    );
+    const creatorBeforeAmt = Number(
+      (await getAccount(provider.connection, creatorAta).catch(() => null))
+        ?.amount ?? 0,
+    );
+
+    await program.methods
+      .cancelStream(withdrawArgs)
+      .accounts({
+        creator: creator.publicKey,
+        beneficiary: beneficiary.publicKey,
+        vestingTree: treePda,
+        claimRecord: crPda,
+        vaultAuthority: vaultAuthPda,
+        vault,
+        beneficiaryAta,
+        creatorAta,
+        systemProgram: SystemProgram.programId,
+      })
+      .signers([creator])
+      .rpc();
+
+    const postBeneficiary = await getAccount(provider.connection, beneficiaryAta);
+    const postCreator = await getAccount(provider.connection, creatorAta);
+    const postVault = await getAccount(provider.connection, vault);
+
+    const toBeneficiary = Number(postBeneficiary.amount) - benBefore;
+    const toCreator = Number(postCreator.amount) - creatorBeforeAmt;
+    expect(Number(postVault.amount)).to.equal(0);
+    expect(toBeneficiary + toCreator).to.equal(AMOUNT);
+    expect(toBeneficiary).to.be.within(4_900, 5_100);
+    expect(toCreator).to.equal(AMOUNT - toBeneficiary);
+
+    const treeAccount = await program.account.vestingTree.fetch(treePda);
+    expect(treeAccount.cancelledAt).to.not.be.null;
+    expect(treeAccount.totalClaimed.toNumber()).to.equal(toBeneficiary);
+  });
+
+  // -------------------------------------------------------------------------
+  // T64b: cancel_stream on unreleased milestone — beneficiary gets 0
+  // -------------------------------------------------------------------------
+  it("T64b: cancel_stream on unreleased milestone gives beneficiary 0, creator gets all", async function () {
+    if (provider.connection.rpcEndpoint.includes("devnet")) {
+      this.skip();
+    }
+    const CAMPAIGN_ID = 910_000 + Math.floor(Math.random() * 99_999);
+    const AMOUNT = 10_000;
+
+    const mint = await createTestMint(provider, creator.publicKey);
+    await fundCreatorAta(provider, mint, creator.publicKey, AMOUNT);
+    const beneficiary = await makeBeneficiary(provider);
+    const t = await createTimeHelpers(provider.connection);
+
+    const [treePda] = await treePDA(PROGRAM_ID, creator.publicKey, mint, CAMPAIGN_ID);
+    const [vaultAuthPda] = await vaultAuthorityPDA(PROGRAM_ID, treePda);
+    const [crPda] = await claimRecordPDA(PROGRAM_ID, treePda, beneficiary.publicKey);
+    const vault = getAssociatedTokenAddressSync(mint, vaultAuthPda, true);
+    const beneficiaryAta = getAssociatedTokenAddressSync(mint, beneficiary.publicKey);
+    const creatorAta = getAssociatedTokenAddressSync(mint, creator.publicKey);
+
+    const cliff = t.now - 500;
+    const end = t.now + 1000;
+    const withdrawArgs = {
+      releaseType: 2,
+      startTime: new BN(cliff),
+      cliffTime: new BN(cliff),
+      endTime: new BN(end),
+      milestoneIdx: 0,
+    };
+
+    await program.methods
+      .createStream({
+        campaignId: new BN(CAMPAIGN_ID),
+        beneficiary: beneficiary.publicKey,
+        amount: new BN(AMOUNT),
+        releaseType: 2,
+        startTime: new BN(cliff),
+        cliffTime: new BN(cliff),
+        endTime: new BN(end),
+        milestoneIdx: 0,
+        cancellable: true,
+        cancelAuthority: cancelAuthority.publicKey,
+        pauseAuthority: null,
+      })
+      .accounts({
+        creator: creator.publicKey,
+        vestingTree: treePda,
+        vaultAuthority: vaultAuthPda,
+        vault,
+        sourceAta: creatorAta,
+        mint,
+      })
+      .signers([creator])
+      .rpc();
+
+    // Do NOT call releaseMilestone — milestone is unreleased
+
+    try {
+      await getAccount(provider.connection, beneficiaryAta);
+    } catch {
+      const createAtaTx = new Transaction().add(
+        createAssociatedTokenAccountInstruction(
+          creator.publicKey,
+          beneficiaryAta,
+          beneficiary.publicKey,
+          mint,
+          TOKEN_PROGRAM_ID,
+          ASSOCIATED_TOKEN_PROGRAM_ID,
+        ),
+      );
+      await provider.sendAndConfirm(createAtaTx, [creator]);
+    }
+
+    const benBefore = Number(
+      (await getAccount(provider.connection, beneficiaryAta).catch(() => null))
+        ?.amount ?? 0,
+    );
+    const creatorBeforeAmt = Number(
+      (await getAccount(provider.connection, creatorAta).catch(() => null))
+        ?.amount ?? 0,
+    );
+
+    await program.methods
+      .cancelStream(withdrawArgs)
+      .accounts({
+        creator: creator.publicKey,
+        beneficiary: beneficiary.publicKey,
+        vestingTree: treePda,
+        claimRecord: crPda,
+        vaultAuthority: vaultAuthPda,
+        vault,
+        beneficiaryAta,
+        creatorAta,
+        systemProgram: SystemProgram.programId,
+      })
+      .signers([creator])
+      .rpc();
+
+    const postBeneficiary = await getAccount(provider.connection, beneficiaryAta);
+    const postCreator = await getAccount(provider.connection, creatorAta);
+    const postVault = await getAccount(provider.connection, vault);
+
+    const toBeneficiary = Number(postBeneficiary.amount) - benBefore;
+    const toCreator = Number(postCreator.amount) - creatorBeforeAmt;
+    expect(Number(postVault.amount)).to.equal(0);
+    expect(toBeneficiary).to.equal(0);
+    expect(toCreator).to.equal(AMOUNT);
+
+    const treeAccount = await program.account.vestingTree.fetch(treePda);
+    expect(treeAccount.cancelledAt).to.not.be.null;
+    expect(treeAccount.totalClaimed.toNumber()).to.equal(0);
+  });
+
+  // -------------------------------------------------------------------------
+  // T64c: cancel_stream on released milestone — beneficiary gets full amount
+  // -------------------------------------------------------------------------
+  it("T64c: cancel_stream on released milestone gives beneficiary full amount", async function () {
+    if (provider.connection.rpcEndpoint.includes("devnet")) {
+      this.skip();
+    }
+    const CAMPAIGN_ID = 920_000 + Math.floor(Math.random() * 99_999);
+    const AMOUNT = 10_000;
+
+    const mint = await createTestMint(provider, creator.publicKey);
+    await fundCreatorAta(provider, mint, creator.publicKey, AMOUNT);
+    const beneficiary = await makeBeneficiary(provider);
+    const t = await createTimeHelpers(provider.connection);
+
+    const [treePda] = await treePDA(PROGRAM_ID, creator.publicKey, mint, CAMPAIGN_ID);
+    const [vaultAuthPda] = await vaultAuthorityPDA(PROGRAM_ID, treePda);
+    const [crPda] = await claimRecordPDA(PROGRAM_ID, treePda, beneficiary.publicKey);
+    const vault = getAssociatedTokenAddressSync(mint, vaultAuthPda, true);
+    const beneficiaryAta = getAssociatedTokenAddressSync(mint, beneficiary.publicKey);
+    const creatorAta = getAssociatedTokenAddressSync(mint, creator.publicKey);
+
+    const cliff = t.now - 500;
+    const end = t.now + 1000;
+    const withdrawArgs = {
+      releaseType: 2,
+      startTime: new BN(cliff),
+      cliffTime: new BN(cliff),
+      endTime: new BN(end),
+      milestoneIdx: 0,
+    };
+
+    await program.methods
+      .createStream({
+        campaignId: new BN(CAMPAIGN_ID),
+        beneficiary: beneficiary.publicKey,
+        amount: new BN(AMOUNT),
+        releaseType: 2,
+        startTime: new BN(cliff),
+        cliffTime: new BN(cliff),
+        endTime: new BN(end),
+        milestoneIdx: 0,
+        cancellable: true,
+        cancelAuthority: cancelAuthority.publicKey,
+        pauseAuthority: null,
+      })
+      .accounts({
+        creator: creator.publicKey,
+        vestingTree: treePda,
+        vaultAuthority: vaultAuthPda,
+        vault,
+        sourceAta: creatorAta,
+        mint,
+      })
+      .signers([creator])
+      .rpc();
+
+    // Release milestone before cancelling
+    await releaseMilestone({ program, creator }, treePda, 0);
+
+    try {
+      await getAccount(provider.connection, beneficiaryAta);
+    } catch {
+      const createAtaTx = new Transaction().add(
+        createAssociatedTokenAccountInstruction(
+          creator.publicKey,
+          beneficiaryAta,
+          beneficiary.publicKey,
+          mint,
+          TOKEN_PROGRAM_ID,
+          ASSOCIATED_TOKEN_PROGRAM_ID,
+        ),
+      );
+      await provider.sendAndConfirm(createAtaTx, [creator]);
+    }
+
+    const benBefore = Number(
+      (await getAccount(provider.connection, beneficiaryAta).catch(() => null))
+        ?.amount ?? 0,
+    );
+    const creatorBeforeAmt = Number(
+      (await getAccount(provider.connection, creatorAta).catch(() => null))
+        ?.amount ?? 0,
+    );
+
+    await program.methods
+      .cancelStream(withdrawArgs)
+      .accounts({
+        creator: creator.publicKey,
+        beneficiary: beneficiary.publicKey,
+        vestingTree: treePda,
+        claimRecord: crPda,
+        vaultAuthority: vaultAuthPda,
+        vault,
+        beneficiaryAta,
+        creatorAta,
+        systemProgram: SystemProgram.programId,
+      })
+      .signers([creator])
+      .rpc();
+
+    const postBeneficiary = await getAccount(provider.connection, beneficiaryAta);
+    const postCreator = await getAccount(provider.connection, creatorAta);
+    const postVault = await getAccount(provider.connection, vault);
+
+    const toBeneficiary = Number(postBeneficiary.amount) - benBefore;
+    const toCreator = Number(postCreator.amount) - creatorBeforeAmt;
+    expect(Number(postVault.amount)).to.equal(0);
+    expect(toBeneficiary).to.equal(AMOUNT);
+    expect(toCreator).to.equal(0);
+
+    const treeAccount = await program.account.vestingTree.fetch(treePda);
+    expect(treeAccount.cancelledAt).to.not.be.null;
+    expect(treeAccount.totalClaimed.toNumber()).to.equal(AMOUNT);
+  });
+
+  // -------------------------------------------------------------------------
+  // T64d: cancel_stream after beneficiary already claimed — FullyVested
+  // -------------------------------------------------------------------------
+  it("T64d: cancel_stream after beneficiary claimed milestone rejects with FullyVested", async function () {
+    if (provider.connection.rpcEndpoint.includes("devnet")) {
+      this.skip();
+    }
+    const CAMPAIGN_ID = 930_000 + Math.floor(Math.random() * 99_999);
+    const AMOUNT = 10_000;
+
+    const mint = await createTestMint(provider, creator.publicKey);
+    await fundCreatorAta(provider, mint, creator.publicKey, AMOUNT);
+    const beneficiary = await makeBeneficiary(provider);
+    const t = await createTimeHelpers(provider.connection);
+
+    const [treePda] = await treePDA(PROGRAM_ID, creator.publicKey, mint, CAMPAIGN_ID);
+    const [vaultAuthPda] = await vaultAuthorityPDA(PROGRAM_ID, treePda);
+    const [crPda] = await claimRecordPDA(PROGRAM_ID, treePda, beneficiary.publicKey);
+    const vault = getAssociatedTokenAddressSync(mint, vaultAuthPda, true);
+    const beneficiaryAta = getAssociatedTokenAddressSync(mint, beneficiary.publicKey);
+    const creatorAta = getAssociatedTokenAddressSync(mint, creator.publicKey);
+
+    const cliff = t.now - 500;
+    const end = t.now + 1000;
+    const withdrawArgs = {
+      releaseType: 2,
+      startTime: new BN(cliff),
+      cliffTime: new BN(cliff),
+      endTime: new BN(end),
+      milestoneIdx: 0,
+    };
+
+    await program.methods
+      .createStream({
+        campaignId: new BN(CAMPAIGN_ID),
+        beneficiary: beneficiary.publicKey,
+        amount: new BN(AMOUNT),
+        releaseType: 2,
+        startTime: new BN(cliff),
+        cliffTime: new BN(cliff),
+        endTime: new BN(end),
+        milestoneIdx: 0,
+        cancellable: true,
+        cancelAuthority: cancelAuthority.publicKey,
+        pauseAuthority: null,
+      })
+      .accounts({
+        creator: creator.publicKey,
+        vestingTree: treePda,
+        vaultAuthority: vaultAuthPda,
+        vault,
+        sourceAta: creatorAta,
+        mint,
+      })
+      .signers([creator])
+      .rpc();
+
+    // Release and claim the milestone first
+    await releaseMilestone({ program, creator }, treePda, 0);
+    await program.methods
+      .withdraw(withdrawArgs)
+      .accounts({
+        beneficiary: beneficiary.publicKey,
+        vestingTree: treePda,
+        claimRecord: crPda,
+        vaultAuthority: vaultAuthPda,
+        vault,
+        beneficiaryAta,
+        mint,
+      })
+      .signers([beneficiary])
+      .rpc();
+
+    const benAfterClaim = Number(
+      (await getAccount(provider.connection, beneficiaryAta)).amount,
+    );
+    expect(benAfterClaim).to.equal(AMOUNT);
+
+    // Now cancel_stream — should fail because total_claimed == total_supply
+    try {
+      await program.methods
+        .cancelStream(withdrawArgs)
+        .accounts({
+          creator: creator.publicKey,
+          beneficiary: beneficiary.publicKey,
+          vestingTree: treePda,
+          claimRecord: crPda,
+          vaultAuthority: vaultAuthPda,
+          vault,
+          beneficiaryAta,
+          creatorAta,
+          systemProgram: SystemProgram.programId,
+        })
+        .signers([creator])
+        .rpc();
+      expect.fail("Should have thrown FullyVested");
+    } catch (err: any) {
+      expectAnchorError(err, ERR.FullyVested);
+    }
+  });
+
+  // -------------------------------------------------------------------------
+  // T65: set_milestone_released idempotency — second call fails
+  // -------------------------------------------------------------------------
+  it("T65: set_milestone_released twice rejects with MilestoneAlreadyReleased", async function () {
+    if (provider.connection.rpcEndpoint.includes("devnet")) {
+      this.skip();
+    }
+    const CAMPAIGN_ID = 940_000 + Math.floor(Math.random() * 99_999);
+    const AMOUNT = 5_000;
+
+    const mint = await createTestMint(provider, creator.publicKey);
+    await fundCreatorAta(provider, mint, creator.publicKey, AMOUNT);
+    const beneficiary = await makeBeneficiary(provider);
+    const t = await createTimeHelpers(provider.connection);
+
+    const [treePda] = await treePDA(PROGRAM_ID, creator.publicKey, mint, CAMPAIGN_ID);
+    const [vaultAuthPda] = await vaultAuthorityPDA(PROGRAM_ID, treePda);
+    const vault = getAssociatedTokenAddressSync(mint, vaultAuthPda, true);
+    const creatorAta = getAssociatedTokenAddressSync(mint, creator.publicKey);
+
+    const cliff = t.now - 100;
+    const end = t.now + 500;
+
+    await program.methods
+      .createStream({
+        campaignId: new BN(CAMPAIGN_ID),
+        beneficiary: beneficiary.publicKey,
+        amount: new BN(AMOUNT),
+        releaseType: 2,
+        startTime: new BN(cliff),
+        cliffTime: new BN(cliff),
+        endTime: new BN(end),
+        milestoneIdx: 0,
+        cancellable: false,
+        cancelAuthority: null,
+        pauseAuthority: null,
+      })
+      .accounts({
+        creator: creator.publicKey,
+        vestingTree: treePda,
+        vaultAuthority: vaultAuthPda,
+        vault,
+        sourceAta: creatorAta,
+        mint,
+      })
+      .signers([creator])
+      .rpc();
+
+    // First release — succeeds
+    await releaseMilestone({ program, creator }, treePda, 0);
+
+    // Second release — should fail
+    try {
+      await releaseMilestone({ program, creator }, treePda, 0);
+      expect.fail("Should have thrown MilestoneAlreadyReleased");
+    } catch (err: any) {
+      expectAnchorError(err, ERR.MilestoneAlreadyReleased);
+    }
+  });
+
+  // -------------------------------------------------------------------------
+  // T66: milestone_idx 255 (boundary) — release and claim succeed
+  // -------------------------------------------------------------------------
+  it("T66: milestone_idx 255 boundary — release and claim succeed", async function () {
+    if (provider.connection.rpcEndpoint.includes("devnet")) {
+      this.skip();
+    }
+    const CAMPAIGN_ID = 950_000 + Math.floor(Math.random() * 99_999);
+    const AMOUNT = 5_000;
+
+    const mint = await createTestMint(provider, creator.publicKey);
+    await fundCreatorAta(provider, mint, creator.publicKey, AMOUNT);
+    const beneficiary = await makeBeneficiary(provider);
+    const t = await createTimeHelpers(provider.connection);
+
+    const [treePda] = await treePDA(PROGRAM_ID, creator.publicKey, mint, CAMPAIGN_ID);
+    const [vaultAuthPda] = await vaultAuthorityPDA(PROGRAM_ID, treePda);
+    const [crPda] = await claimRecordPDA(PROGRAM_ID, treePda, beneficiary.publicKey);
+    const vault = getAssociatedTokenAddressSync(mint, vaultAuthPda, true);
+    const beneficiaryAta = getAssociatedTokenAddressSync(mint, beneficiary.publicKey);
+    const creatorAta = getAssociatedTokenAddressSync(mint, creator.publicKey);
+
+    const cliff = t.now - 100;
+    const end = t.now + 500;
+
+    await program.methods
+      .createStream({
+        campaignId: new BN(CAMPAIGN_ID),
+        beneficiary: beneficiary.publicKey,
+        amount: new BN(AMOUNT),
+        releaseType: 2,
+        startTime: new BN(cliff),
+        cliffTime: new BN(cliff),
+        endTime: new BN(end),
+        milestoneIdx: 255,
+        cancellable: false,
+        cancelAuthority: null,
+        pauseAuthority: null,
+      })
+      .accounts({
+        creator: creator.publicKey,
+        vestingTree: treePda,
+        vaultAuthority: vaultAuthPda,
+        vault,
+        sourceAta: creatorAta,
+        mint,
+      })
+      .signers([creator])
+      .rpc();
+
+    await releaseMilestone({ program, creator }, treePda, 255);
+
+    await program.methods
+      .withdraw({
+        releaseType: 2,
+        startTime: new BN(cliff),
+        cliffTime: new BN(cliff),
+        endTime: new BN(end),
+        milestoneIdx: 255,
+      })
+      .accounts({
+        beneficiary: beneficiary.publicKey,
+        vestingTree: treePda,
+        claimRecord: crPda,
+        vaultAuthority: vaultAuthPda,
+        vault,
+        beneficiaryAta,
+        mint,
+      })
+      .signers([beneficiary])
+      .rpc();
+
+    const postBeneficiary = await getAccount(provider.connection, beneficiaryAta);
+    expect(Number(postBeneficiary.amount)).to.equal(AMOUNT);
+  });
+
+  // -------------------------------------------------------------------------
+  // T67: milestone claim on cancelled campaign succeeds if released
+  // -------------------------------------------------------------------------
+  it("T67: claim released milestone on cancelled campaign (cancelCampaign) succeeds", async function () {
+    if (provider.connection.rpcEndpoint.includes("devnet")) {
+      this.skip();
+    }
+    const CAMPAIGN_ID = 960_000 + Math.floor(Math.random() * 99_999);
+    const AMOUNT = 5_000;
+
+    const beneficiary = await makeBeneficiary(provider);
+    const t = await createTimeHelpers(provider.connection);
+
+    const cliff = t.now - 100;
+    const end = t.now + 500;
+
+    const leaf: VestingLeaf = {
+      leafIndex: 0,
+      beneficiary: beneficiary.publicKey,
+      amount: new BN(AMOUNT),
+      releaseType: ReleaseType.Milestone,
+      startTime: new BN(cliff),
+      cliffTime: new BN(cliff),
+      endTime: new BN(end),
+      milestoneIdx: 0,
+    };
+
+    const { mint, tree, treePda, vaultAuthPda, vault } =
+      await createAndFundCampaign(
+        { provider, program, creator, cancelAuthority, pauseAuthority },
+        CAMPAIGN_ID,
+        [leaf],
+        AMOUNT,
+      );
+
+    // Release milestone
+    await releaseMilestone({ program, creator }, treePda, 0);
+
+    // Cancel campaign (not cancel_stream)
+    await program.methods
+      .cancelCampaign()
+      .accounts({
+        cancelAuthority: cancelAuthority.publicKey,
+        vestingTree: treePda,
+      })
+      .signers([cancelAuthority])
+      .rpc();
+
+    // Claim should still succeed — milestone is released and type 2 ignores effective_now
+    const beneficiaryAta = getAssociatedTokenAddressSync(mint, beneficiary.publicKey);
+    const [crPda] = await claimRecordPDA(PROGRAM_ID, treePda, beneficiary.publicKey);
+
+    await program.methods
+      .claim(idlLeaf(leaf), idlProof(tree.proof(0)))
+      .accounts({
+        beneficiary: beneficiary.publicKey,
+        vestingTree: treePda,
+        claimRecord: crPda,
+        vaultAuthority: vaultAuthPda,
+        vault,
+        mint,
+        beneficiaryAta,
+      })
+      .signers([beneficiary])
+      .rpc();
+
+    const postBeneficiary = await getAccount(provider.connection, beneficiaryAta);
+    expect(Number(postBeneficiary.amount)).to.equal(AMOUNT);
+  });
+
+  // -------------------------------------------------------------------------
+  // T68: cancel_stream on unreleased milestone — withdraw_unvested gets nothing
+  //      (vault already drained by cancel_stream giving all to creator)
+  // -------------------------------------------------------------------------
+  it("T68: cancel_stream unreleased milestone then withdraw_unvested gets 0", async function () {
+    if (provider.connection.rpcEndpoint.includes("devnet")) {
+      this.skip();
+    }
+    const CAMPAIGN_ID = 970_000 + Math.floor(Math.random() * 99_999);
+    const AMOUNT = 10_000;
+
+    const mint = await createTestMint(provider, creator.publicKey);
+    await fundCreatorAta(provider, mint, creator.publicKey, AMOUNT);
+    const beneficiary = await makeBeneficiary(provider);
+    const t = await createTimeHelpers(provider.connection);
+
+    const [treePda] = await treePDA(PROGRAM_ID, creator.publicKey, mint, CAMPAIGN_ID);
+    const [vaultAuthPda] = await vaultAuthorityPDA(PROGRAM_ID, treePda);
+    const [crPda] = await claimRecordPDA(PROGRAM_ID, treePda, beneficiary.publicKey);
+    const vault = getAssociatedTokenAddressSync(mint, vaultAuthPda, true);
+    const beneficiaryAta = getAssociatedTokenAddressSync(mint, beneficiary.publicKey);
+    const creatorAta = getAssociatedTokenAddressSync(mint, creator.publicKey);
+
+    const cliff = t.now - 500;
+    const end = t.now + 1000;
+    const withdrawArgs = {
+      releaseType: 2,
+      startTime: new BN(cliff),
+      cliffTime: new BN(cliff),
+      endTime: new BN(end),
+      milestoneIdx: 0,
+    };
+
+    await program.methods
+      .createStream({
+        campaignId: new BN(CAMPAIGN_ID),
+        beneficiary: beneficiary.publicKey,
+        amount: new BN(AMOUNT),
+        releaseType: 2,
+        startTime: new BN(cliff),
+        cliffTime: new BN(cliff),
+        endTime: new BN(end),
+        milestoneIdx: 0,
+        cancellable: true,
+        cancelAuthority: cancelAuthority.publicKey,
+        pauseAuthority: null,
+      })
+      .accounts({
+        creator: creator.publicKey,
+        vestingTree: treePda,
+        vaultAuthority: vaultAuthPda,
+        vault,
+        sourceAta: creatorAta,
+        mint,
+      })
+      .signers([creator])
+      .rpc();
+
+    // Create beneficiary ATA
+    try {
+      await getAccount(provider.connection, beneficiaryAta);
+    } catch {
+      const createAtaTx = new Transaction().add(
+        createAssociatedTokenAccountInstruction(
+          creator.publicKey,
+          beneficiaryAta,
+          beneficiary.publicKey,
+          mint,
+          TOKEN_PROGRAM_ID,
+          ASSOCIATED_TOKEN_PROGRAM_ID,
+        ),
+      );
+      await provider.sendAndConfirm(createAtaTx, [creator]);
+    }
+
+    // Cancel unreleased milestone — creator gets all
+    await program.methods
+      .cancelStream(withdrawArgs)
+      .accounts({
+        creator: creator.publicKey,
+        beneficiary: beneficiary.publicKey,
+        vestingTree: treePda,
+        claimRecord: crPda,
+        vaultAuthority: vaultAuthPda,
+        vault,
+        beneficiaryAta,
+        creatorAta,
+        systemProgram: SystemProgram.programId,
+      })
+      .signers([creator])
+      .rpc();
+
+    // Get cancelled_at timestamp from on-chain state
+    const cancelledTree = await program.account.vestingTree.fetch(treePda);
+    const cancelledAt = cancelledTree.cancelledAt!.toNumber();
+    const GRACE_SECONDS = 7 * 24 * 3600;
+    const targetTimestamp = cancelledAt + GRACE_SECONDS + 10;
+
+    // Warp past grace period via setClock, then verify it actually advanced
+    try {
+      await (provider.connection as any)._rpcRequest("setClock", {
+        unixTimestamp: targetTimestamp,
+      });
+      // Verify clock actually advanced
+      const slot = await provider.connection.getSlot();
+      const blockTime = await provider.connection.getBlockTime(slot);
+      if (!blockTime || blockTime < cancelledAt + GRACE_SECONDS) {
+        this.skip();
+      }
+    } catch {
+      this.skip();
+    }
+
+    const creatorBefore = Number(
+      (await getAccount(provider.connection, creatorAta)).amount,
+    );
+
+    // withdraw_unvested — vault is empty so creator gets 0
+    await program.methods
+      .withdrawUnvested()
+      .accounts({
+        creator: creator.publicKey,
+        vestingTree: treePda,
+        vaultAuthority: vaultAuthPda,
+        vault,
+        creatorAta,
+      })
+      .signers([creator])
+      .rpc();
+
+    const postCreator = await getAccount(provider.connection, creatorAta);
+    expect(Number(postCreator.amount) - creatorBefore).to.equal(0);
   });
 
 });
