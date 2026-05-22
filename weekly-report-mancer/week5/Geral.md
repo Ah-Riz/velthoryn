@@ -1,4 +1,4 @@
-# Weekly Report — Geral (Week 5)
+nb# Weekly Report — Geral (Week 5)
 
 ## What I built this week
 
@@ -80,6 +80,48 @@ Final integration — all remaining program instructions wired to UI:
 - Synced IDL with deployed program + wallet rejection handling
 - Skipped `ci/build-test` on `dev_geral` (no keypair secret)
 
+### Security Hardening & Gap Analysis (May 22)
+
+Full security audit + gap analysis against Sablier/Streamflow:
+- CSP headers + X-Frame-Options + XCTO + Referrer-Policy + Permissions-Policy
+- `cargo clippy --workspace -- -D warnings` clean (0 warnings)
+- No `unwrap()`/`todo!()`/`unimplemented!()` in production Rust code
+- Error messages filtered to prevent internal state leakage
+- DB truncation guard (blocks TRUNCATE on Supabase/pooler URLs in tests)
+- `pnpm audit`: next.js upgraded 15.5.15 → 15.5.18 (0 critical)
+- Root rotation confirmation dialog, pause authority warning, 60s min cliff validation
+- Identified critical Pause+Cancel exploit (documented in `research-docs/week5/fix.md`)
+
+### UI Redesign — Per-Stream Card System (May 22)
+
+Complete redesign of all 3 create pages:
+- **Cliff page**: General Details card + per-stream cards (amount, recipient, start, cliff, Apply All)
+- **Linear page**: Same pattern + optional cliff + end time per card
+- **Milestone page**: Shared recipient + per-milestone cards (amount, unlock time, auto-index)
+- Manual/CSV mode toggle, form reset, token symbol + Max button
+- CSV: file upload, download template per type, human-readable datetime, duplicate beneficiary validation
+
+### Claim Flow Fixes (May 22)
+
+- Fixed `toAnchorLeaf`: camelCase (Anchor auto-converts to snake_case)
+- Fixed `handleWithdraw`: raw unix timestamps (datetime-local truncates seconds)
+- Multi-leaf claim selector with per-beneficiary ClaimRecord status
+- Claim sync to DB with 3x retry, cancel dialog amount formatting
+
+### Sablier-Style Token Picker + SOL Wrap (May 22)
+
+- Redesigned TokenPickerModal: dark theme, search, solscan links
+- SOL "Wrap required" → WrapSolModal; wSOL separate selectable row
+- `useWrapSol` hook: wrap (createATA + transfer + syncNative) / unwrap (closeAccount)
+- Success animation, correct SOL/wSOL balance display, auto-refetch after wrap
+
+### Real-Time Dashboard (May 22)
+
+- WebSocket subscription for campaign detail auto-refresh
+- 30s polling for campaign list + beneficiary campaigns
+- Claimable banner + "As Recipient" stat card
+- Implements Feature #2 from Week 2 research (Transparency / Real-Time Dashboard)
+
 ---
 
 ## How we split the work
@@ -117,14 +159,19 @@ Final integration — all remaining program instructions wired to UI:
 | 39 Vitest files, 393 tests | All pass |
 | Next.js build | Clean, no type errors |
 | Vercel deployment | Live, all routes responding |
+| SOL wrap/unwrap modal | Sablier-style, success animation, auto-refetch |
+| Vesting curve chart (SVG) | Cliff/Linear/Milestone visualization |
+| CSV bulk upload + file drag-and-drop | Template download per type, human-readable datetime |
+| Real-time dashboard | WebSocket + 30s polling, claimable banner |
+| Security headers (CSP) | All major headers configured |
+| Multi-leaf claim selector | Per-beneficiary claimed status from ClaimRecord PDA |
 
 ### Not yet demo'd (needs setup)
 
 | Item | Blocker |
 |---|---|
-| Multi-milestone release panel (live) | Needs multi-recipient campaign from `create_campaign` |
-| Close claim record (live) | Needs fully-claimed stream |
-| Bulk CSV upload (live) | Needs multi-recipient flow end-to-end |
+| Multi-milestone release panel (live) | Needs multi-recipient campaign — script created (`scripts/create-multi-milestone.ts`) |
+| FIX-1: Pause+Cancel exploit | Needs smart contract change (Lana's domain) |
 
 ---
 
@@ -144,14 +191,16 @@ Final integration — all remaining program instructions wired to UI:
 | Metric | Value |
 |---|---|
 | Pages/routes built | **11** |
-| Components created | **27** (campaign detail, create, list, landing) |
-| Custom hooks | **14** |
+| Components created | **30+** (campaign detail, create, list, landing, token picker, wrap modal) |
+| Custom hooks | **16** (+ useWrapSol, useWSOLBalance) |
 | Test files | **39** |
 | Tests passing | **393** |
 | Authority helpers | **6** |
 | Program instructions with UI | **14/14** (100%) |
 | Error codes mapped | **34** (all with user-friendly messages) |
-| Lines added (from landing page commit) | **+14,372** across 133 files |
+| Security checklist items done | **13/15** (93%) |
+| Week 2 priority features implemented | **4/4** (100%) |
+| Lines added (total across all commits) | **~16,000+** |
 | Landing page components | **15** |
 | Build status | ✅ Clean |
 | Deployment | ✅ velthoryn.vercel.app |

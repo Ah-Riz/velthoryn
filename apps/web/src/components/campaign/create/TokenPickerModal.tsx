@@ -1,6 +1,8 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { useConnection, useWallet } from "@solana/wallet-adapter-react";
+import { NATIVE_MINT, getAssociatedTokenAddressSync, getAccount } from "@solana/spl-token";
 import { POPULAR_TOKENS } from "@/lib/constants/popular-tokens";
 import { useWalletTokens } from "@/hooks/useWalletTokens";
 import { useTokenMetadata } from "@/hooks/useTokenMetadata";
@@ -29,15 +31,38 @@ export function TokenPickerModal({
   onSelect: (mint: string, decimals: number) => void;
   selectedMint: string;
 }) {
+  const { connection } = useConnection();
+  const { publicKey } = useWallet();
   const [search, setSearch] = useState("");
   const [showWrapModal, setShowWrapModal] = useState(false);
-  const { tokens: walletTokens, loading: walletLoading } = useWalletTokens();
+  const [solBalance, setSolBalance] = useState<number | null>(null);
+  const [wsolBalance, setWsolBalance] = useState<number>(0);
+  const { tokens: walletTokens, loading: walletLoading, refetch: refetchWalletTokens } = useWalletTokens();
   const { metadata: customToken, loading: customLoading, error: customError } = useTokenMetadata(search);
   const backdropRef = useRef<HTMLDivElement>(null);
 
+  // Fetch SOL + wSOL balances
+  const fetchBalances = useCallback(async () => {
+    if (!publicKey || !connection) return;
+    try {
+      const lamports = await connection.getBalance(publicKey);
+      setSolBalance(lamports / 1e9);
+    } catch { setSolBalance(null); }
+    try {
+      const ata = getAssociatedTokenAddressSync(NATIVE_MINT, publicKey);
+      const account = await getAccount(connection, ata);
+      setWsolBalance(Number(account.amount) / 1e9);
+    } catch { setWsolBalance(0); }
+  }, [connection, publicKey]);
+
+  // Fetch on open + poll every 5s while open
   useEffect(() => {
-    if (open) setSearch("");
-  }, [open]);
+    if (!open) return;
+    setSearch("");
+    fetchBalances();
+    const interval = setInterval(fetchBalances, 5000);
+    return () => clearInterval(interval);
+  }, [open, fetchBalances]);
 
   useEffect(() => {
     if (!open) return;
@@ -57,13 +82,22 @@ export function TokenPickerModal({
       (t.mintAddress.includes(search.trim())),
   );
 
-  function handleTokenClick(mint: string, decimals: number, isNativeSol?: boolean) {
-    if (isNativeSol) {
-      setShowWrapModal(true);
-      return;
-    }
+  function getPopularBalance(token: { mint: string; symbol: string; isNativeSol?: boolean }): string {
+    if (token.isNativeSol) return solBalance !== null ? solBalance.toFixed(4) : "–";
+    if (token.symbol === "wSOL") return wsolBalance.toFixed(4);
+    const walletMatch = walletTokens.find((w) => w.mintAddress === token.mint);
+    return walletMatch ? walletMatch.uiAmount : "–";
+  }
+
+  function handleTokenClick(mint: string, decimals: number) {
     onSelect(mint, decimals);
     onClose();
+  }
+
+  async function handleWrapSuccess() {
+    setShowWrapModal(false);
+    await fetchBalances();
+    await refetchWalletTokens();
   }
 
   return (
@@ -98,8 +132,9 @@ export function TokenPickerModal({
           </div>
         </div>
 
-        {/* Token List */}
-        <div className="flex-1 overflow-y-auto px-3 pb-3">
+        {/* Token List — hidden scrollbar */}
+        <div className="flex-1 overflow-y-auto px-3 pb-3" style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}>
+          <style>{`.token-list::-webkit-scrollbar { display: none; }`}</style>
           {/* Popular */}
           {filteredPopular.length > 0 && (
             <div className="px-2 pt-2 pb-1">
@@ -109,8 +144,7 @@ export function TokenPickerModal({
           {filteredPopular.map((token) => {
             const isNativeSol = !!token.isNativeSol;
             const isWsol = token.symbol === "wSOL";
-            const walletMatch = walletTokens.find((w) => w.mintAddress === token.mint);
-            const balance = walletMatch ? walletMatch.uiAmount : "–";
+            const balance = getPopularBalance(token);
             return (
               <button
                 key={token.mint + token.symbol}
@@ -118,7 +152,7 @@ export function TokenPickerModal({
                 onClick={() => {
                   if (isNativeSol) {
                     setShowWrapModal(true);
-                  } else if (isWsol && balance === "–") {
+                  } else if (isWsol && wsolBalance === 0) {
                     setShowWrapModal(true);
                   } else {
                     handleTokenClick(token.mint, token.decimals);
@@ -244,11 +278,7 @@ export function TokenPickerModal({
       <WrapSolModal
         isOpen={showWrapModal}
         onClose={() => setShowWrapModal(false)}
-        onSuccess={() => {
-          setShowWrapModal(false);
-          // Refetch wallet tokens so wSOL balance updates
-          // Token picker stays open — user clicks wSOL row to select
-        }}
+        onSuccess={handleWrapSuccess}
       />
     </div>
   );
