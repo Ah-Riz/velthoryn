@@ -10,9 +10,10 @@ function renderDialog(overrides = {}) {
     onConfirm: vi.fn(),
     onClose: vi.fn(),
     isLoading: false,
-    totalSupply: 10000n,
-    totalClaimed: 2000n,
-    vestedAmount: 5000n,
+    totalSupply: 100n,
+    totalClaimed: 20n,
+    vestedAmount: 50n,
+    mintDecimals: 0,
     ...overrides,
   };
   const result = render(createElement(CancelConfirmDialog, props));
@@ -35,9 +36,9 @@ describe("CancelConfirmDialog", () => {
 
   it("shows correct token breakdown", () => {
     renderDialog();
-    expect(screen.getByText("2000 tokens")).toBeTruthy();
-    expect(screen.getByText("~3000 tokens")).toBeTruthy();
-    expect(screen.getByText("~5000 tokens")).toBeTruthy();
+    expect(screen.getByText("20 tokens")).toBeTruthy();
+    expect(screen.getByText("~30 tokens")).toBeTruthy();
+    expect(screen.getByText("~50 tokens")).toBeTruthy();
   });
 
   it("calls onConfirm when confirm button clicked", () => {
@@ -63,13 +64,13 @@ describe("CancelConfirmDialog", () => {
   });
 
   it("shows zero unclaimed when all vested is claimed", () => {
-    renderDialog({ totalClaimed: 5000n, vestedAmount: 5000n });
+    renderDialog({ totalSupply: 100n, totalClaimed: 50n, vestedAmount: 50n });
     expect(screen.getByText("~0 tokens")).toBeTruthy();
   });
 
   it("handles zero vested amount", () => {
     renderDialog({ vestedAmount: 0n, totalClaimed: 0n });
-    expect(screen.getByText("~10000 tokens")).toBeTruthy();
+    expect(screen.getByText("~100 tokens")).toBeTruthy();
   });
 
   it("shows mode toggle when isSingleStream with onConfirmStream", () => {
