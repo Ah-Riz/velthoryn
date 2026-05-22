@@ -54,5 +54,6 @@ export function useCampaignList(filters?: CampaignListFilters) {
     },
     enabled: filters !== undefined,
     staleTime: 5_000,
+    refetchInterval: 30_000,
   });
 }

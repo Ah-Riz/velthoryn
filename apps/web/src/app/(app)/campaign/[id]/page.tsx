@@ -270,6 +270,21 @@ export default function CampaignPage({ params }: { params: Promise<{ id: string 
     fetchTree();
   }, [fetchTree]);
 
+  // Real-time: subscribe to on-chain account changes for auto-refresh
+  useEffect(() => {
+    if (!treeAddress) return;
+    let subId: number | undefined;
+    try {
+      const treePubkey = new PublicKey(treeAddress);
+      subId = connection.onAccountChange(treePubkey, () => {
+        fetchTree();
+      }, "confirmed");
+    } catch { /* invalid address, skip */ }
+    return () => {
+      if (subId !== undefined) connection.removeAccountChangeListener(subId);
+    };
+  }, [treeAddress, connection, fetchTree]);
+
   useEffect(() => {
     if (!treeMint) return;
     connection.getParsedAccountInfo(treeMint).then((info) => {

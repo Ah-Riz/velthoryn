@@ -43,5 +43,6 @@ export function useBeneficiaryCampaigns(address: string | undefined) {
     },
     enabled: !!address,
     staleTime: 5_000,
+    refetchInterval: 30_000,
   });
 }
