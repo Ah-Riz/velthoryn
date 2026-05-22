@@ -179,7 +179,7 @@ export default function CampaignsPage() {
     const seen = new Set(dbSenderCampaigns.map((campaign) => campaign.treeAddress));
     const localOnly = allCampaignsQuery.error
       ? localCampaigns.senderCampaigns.filter(
-          (campaign) => !seen.has(campaign.treeAddress),
+          (campaign) => !seen.has(campaign.treeAddress) && campaign.creator === walletAddress,
         )
       : [];
 

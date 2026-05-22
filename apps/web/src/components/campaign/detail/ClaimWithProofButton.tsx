@@ -148,12 +148,21 @@ export function ClaimWithProofButton({
 
       toast("Tokens claimed successfully!", "success");
       setMyClaimedAmount((prev) => prev + BigInt(selected.leaf.amount));
-      // Sync claim event to DB via transaction signature
-      fetch(`/api/claims/sync`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ signature: sig }),
-      }).catch(() => {});
+      // Sync claim event to DB with retry
+      const syncClaim = async (retries = 3) => {
+        for (let i = 0; i < retries; i++) {
+          try {
+            const res = await fetch(`/api/claims/sync`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ signature: sig }),
+            });
+            if (res.ok) return;
+          } catch { /* retry */ }
+          if (i < retries - 1) await new Promise((r) => setTimeout(r, 2000 * (i + 1)));
+        }
+      };
+      syncClaim().catch(() => {});
       onSuccess();
     } catch (err: unknown) {
       if (err instanceof Error && /User rejected|Connection rejected/i.test(err.message)) return;
@@ -169,6 +178,9 @@ export function ClaimWithProofButton({
       {leaves.length > 1 && (
         <div className="space-y-2">
           <p className="text-[12px] font-medium text-[#8b92a5]">Select allocation to claim</p>
+          {leaves.length > 1 && leaves.every((l) => l.leaf.beneficiary === leaves[0].leaf.beneficiary) && (
+            <p className="text-[11px] text-amber-400">Note: Multiple allocations for your wallet. Each can only be claimed sequentially.</p>
+          )}
           <div className="space-y-1.5">
             {leaves.map((entry, i) => {
               const claimed = leafClaimedStatus[i];

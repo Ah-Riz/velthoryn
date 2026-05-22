@@ -1155,7 +1155,11 @@ export default function CampaignPage({ params }: { params: Promise<{ id: string 
               )}
 
               {program && (
-                <PauseToggleButton
+                <>
+                  {treeState.pauseAuthority && treeState.creator && !treeState.pauseAuthority.equals(treeState.creator) && (
+                    <p className="text-[11px] text-amber-400/80">Pause authority differs from creator. Pausing blocks all claims.</p>
+                  )}
+                  <PauseToggleButton
                   program={program}
                   publicKey={publicKey}
                   treePubkey={new PublicKey(treeAddress)}
@@ -1181,6 +1185,7 @@ export default function CampaignPage({ params }: { params: Promise<{ id: string 
                   }}
                   toast={toast}
                 />
+                </>
               )}
 
               {canShowCancel && (

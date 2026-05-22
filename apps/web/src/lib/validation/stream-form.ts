@@ -63,6 +63,8 @@ export function validateSchedule(
   if (isNaN(startUnix) || isNaN(cliffUnix) || isNaN(endUnix)) return "All dates are required.";
   if (cliffUnix < startUnix) return "Cliff time must be on or after start time.";
   if (endUnix < cliffUnix) return "End time must be on or after cliff time.";
+  if (cliffUnix - startUnix > 0 && cliffUnix - startUnix < 60)
+    return "Cliff must be at least 60 seconds after start (Solana clock tolerance).";
   if (releaseType === 0 && endUnix !== cliffUnix)
     return "For cliff vesting, end time should equal cliff time.";
   if (releaseType === 2 && endUnix !== cliffUnix)

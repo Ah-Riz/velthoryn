@@ -55,6 +55,10 @@ export function RootRotationCard({
       return;
     }
 
+    if (!window.confirm("Warning: Rotating the root will invalidate all existing proofs. Recipients will not be able to claim until new leaf data is indexed. Continue?")) {
+      return;
+    }
+
     setLoading(true);
     try {
       const result = await updateRoot({
