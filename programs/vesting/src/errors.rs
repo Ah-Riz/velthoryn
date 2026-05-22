@@ -56,8 +56,6 @@ pub enum VestingError {
     CampaignCancelled,
     #[msg("Campaign is not paused")]
     NotPaused,
-    #[msg("Completed campaigns cannot be paused, unpaused, or cancelled")]
-    CampaignCompleted,
 
     #[msg("Campaign is not cancelled")]
     NotCancelled,
@@ -71,16 +69,4 @@ pub enum VestingError {
 
     #[msg("Merkle proof exceeds maximum allowed length for this campaign")]
     ProofTooLong,
-
-    #[msg("Campaign is fully vested; cannot cancel")]
-    FullyVested,
-
-    #[msg("Stream schedule has ended; nothing left to claim")]
-    StreamExpired,
-
-    #[msg("Milestone has not been released by the creator")]
-    MilestoneNotReleased,
-
-    #[msg("Milestone has already been released")]
-    MilestoneAlreadyReleased,
 }

@@ -5,11 +5,9 @@ use anchor_spl::token::{Mint, Token, TokenAccount, Transfer};
 use crate::constants::MAX_MERKLE_PROOF_LEN;
 use crate::errors::VestingError;
 use crate::events::Claimed;
-use crate::math::merkle::leaf_hash;
-use crate::math::merkle::max_proof_len_for_leaf_count;
-use crate::math::merkle::verify_merkle_proof;
+use crate::math::merkle::{leaf_hash, max_proof_len_for_leaf_count, verify_merkle_proof};
 use crate::math::schedule;
-use crate::state::{milestone_flag_is_set, ClaimRecord, VestingLeaf, VestingTree};
+use crate::state::{ClaimRecord, VestingLeaf, VestingTree};
 
 #[derive(Accounts)]
 #[instruction(leaf: VestingLeaf, _proof: Vec<[u8; 32]>)]
@@ -45,9 +43,6 @@ pub struct Claim<'info> {
     #[account(mut, address = vesting_tree.vault @ VestingError::WrongVault)]
     pub vault: Account<'info, TokenAccount>,
 
-    #[account(address = vesting_tree.mint @ VestingError::MintMismatch)]
-    pub mint: Account<'info, Mint>,
-
     #[account(
         init_if_needed,
         payer = beneficiary,
@@ -55,6 +50,9 @@ pub struct Claim<'info> {
         associated_token::authority = beneficiary,
     )]
     pub beneficiary_ata: Account<'info, TokenAccount>,
+
+    #[account(address = vesting_tree.mint @ VestingError::MintMismatch)]
+    pub mint: Account<'info, Mint>,
 
     pub token_program: Program<'info, Token>,
     pub associated_token_program: Program<'info, AssociatedToken>,
@@ -121,21 +119,14 @@ pub fn handler(ctx: Context<Claim>, leaf: VestingLeaf, proof: Vec<[u8; 32]>) -> 
     };
 
     let claimable = if leaf.release_type == 2 {
-        require!(
-            milestone_flag_is_set(&tree.milestone_released_flags, leaf.milestone_idx),
-            VestingError::MilestoneNotReleased
-        );
-        leaf.amount
+        if effective_now >= leaf.cliff_time {
+            leaf.amount
+        } else {
+            0
+        }
     } else {
         schedule::vested(&leaf, effective_now).saturating_sub(cr.claimed_amount)
     };
-
-    if claimable == 0 && leaf.release_type != 2 {
-        let fully_claimed = cr.claimed_amount >= leaf.amount;
-        if effective_now >= leaf.end_time || fully_claimed {
-            return Err(VestingError::StreamExpired.into());
-        }
-    }
 
     require!(claimable > 0, VestingError::NothingToClaim);
     require!(

@@ -1,0 +1,8 @@
+[fuzz.metrics]
+enabled = true
+
+
+[[fuzz.programs]]
+address = "G6iaigUdi2btFwUc2N65twfxwA8Ew5uKKhKJ5RJa8wvu"
+program = "../target/deploy/vesting.so"
+ 
