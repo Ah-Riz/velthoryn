@@ -1,3 +1,5 @@
+#![allow(ambiguous_glob_reexports)]
+
 pub mod create_campaign;
 pub mod create_stream;
 pub mod fund_campaign;

@@ -20,6 +20,7 @@ type TxState =
   | { type: "idle" }
   | { type: "loading"; label: string }
   | { type: "success"; results: CreateStreamResult[] }
+  | { type: "partial"; results: CreateStreamResult[]; total: number; errorMsg: string }
   | { type: "error"; msg: string };
 
 export default function MilestoneCreatePage() {
@@ -164,7 +165,7 @@ export default function MilestoneCreatePage() {
       }
       if (results.length > 0) {
         toast(`${results.length} of ${milestones.length} milestones created. Remaining failed.`, "error");
-        setTxState({ type: "success", results });
+        setTxState({ type: "partial", results, total: milestones.length, errorMsg: formatVestingError(error) });
         return;
       }
       setTxState({ type: "error", msg: formatVestingError(error) });
@@ -322,6 +323,29 @@ export default function MilestoneCreatePage() {
               href={txState.results[0].shareUrl}
               linkLabel="Open first stream"
             />
+          )}
+          {txState.type === "partial" && (
+            <div className={`${CARD} p-5 space-y-3`}>
+              <p className="text-[13px] font-medium text-amber-400">
+                Partial Success: {txState.results.length} of {txState.total} milestones created
+              </p>
+              <ul className="space-y-1">
+                {txState.results.map((r, i) => (
+                  <li key={r.sig} className="flex items-center gap-2 text-[11px]">
+                    <span className="text-emerald-400">✓</span>
+                    <span className="text-[#8b92a5]">Milestone #{i + 1}</span>
+                    <a href={r.shareUrl} target="_blank" rel="noopener noreferrer" className="font-mono text-white/70 underline">{r.sig.slice(0, 8)}…</a>
+                  </li>
+                ))}
+                {Array.from({ length: txState.total - txState.results.length }, (_, i) => (
+                  <li key={`failed-${i}`} className="flex items-center gap-2 text-[11px]">
+                    <span className="text-red-400">✗</span>
+                    <span className="text-[#8b92a5]">Milestone #{txState.results.length + i + 1} — failed</span>
+                  </li>
+                ))}
+              </ul>
+              <p className="text-[11px] text-red-300">{txState.errorMsg}</p>
+            </div>
           )}
           {txState.type === "error" && <ErrorCard title="Transaction Failed" body={txState.msg} />}
         </div>

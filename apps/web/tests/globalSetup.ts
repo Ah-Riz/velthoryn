@@ -29,6 +29,17 @@ export default function globalSetup() {
     );
   }
 
+  // Warn if pointing at Supabase (tests will truncate tables!)
+  const dbUrl = process.env.DATABASE_URL;
+  if (dbUrl.includes("supabase.co") || dbUrl.includes("supabase.in")) {
+    console.warn(
+      "\n⚠️  WARNING: DATABASE_URL points to Supabase. API tests that require DB " +
+      "will skip destructive operations to protect your data.\n" +
+      "   For full test coverage, use a local Postgres:\n" +
+      "   DATABASE_URL=postgresql://ci:ci@127.0.0.1:5432/ci pnpm test\n",
+    );
+  }
+
   if (process.env.CI || !process.env.DRIZZLE_PUSH) {
     return;
   }

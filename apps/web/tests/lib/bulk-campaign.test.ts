@@ -23,7 +23,7 @@ describe("parseBulkCsv", () => {
     expect(result.rows[1].amountRaw).toBe("2500");
   });
 
-  it("rejects milestone rows for bulk create", () => {
+  it("parses milestone rows with valid milestoneIdx", () => {
     const csv = [
       "beneficiary,amount,releaseType,startTime,cliffTime,endTime,milestoneIdx",
       "11111111111111111111111111111111,1000,Milestone,1735689600,1735776000,1735776000,1",
@@ -31,8 +31,10 @@ describe("parseBulkCsv", () => {
 
     const result = parseBulkCsv(csv, null);
 
-    expect(result.rows).toHaveLength(0);
-    expect(result.issues.some((issue) => issue.message.includes("Milestone rows"))).toBe(true);
+    expect(result.issues).toEqual([]);
+    expect(result.rows).toHaveLength(1);
+    expect(result.rows[0].releaseType).toBe(2);
+    expect(result.rows[0].milestoneIdx).toBe(1);
   });
 
   it("normalizes decimal amounts when mint precision is known", () => {
@@ -53,9 +55,9 @@ describe("prepareBulkCampaign", () => {
     const parsed = parseBulkCsv(bulkCsvTemplate(), null);
     const prepared = prepareBulkCampaign(parsed.rows);
 
-    expect(prepared.leafCount).toBe(2);
-    expect(prepared.totalSupply).toBe("3500");
-    expect(prepared.releaseMix).toEqual({ cliff: 1, linear: 1 });
+    expect(prepared.leafCount).toBe(3);
+    expect(prepared.totalSupply).toBe("4000");
+    expect(prepared.releaseMix).toEqual({ cliff: 1, linear: 1, milestone: 1 });
     expect(prepared.merkleRoot).toHaveLength(64);
     expect(prepared.leaves[0].proof.length).toBeGreaterThan(0);
   });
@@ -78,8 +80,8 @@ describe("buildCreateCampaignIndexPayload", () => {
       prepared,
     });
 
-    expect(payload.leafCount).toBe(2);
-    expect(payload.totalSupply).toBe("3500");
+    expect(payload.leafCount).toBe(3);
+    expect(payload.totalSupply).toBe("4000");
     expect(payload.pauseAuthority).toBe("11111111111111111111111111111111");
     expect(payload.leaves[1].leafIndex).toBe(1);
   });

@@ -118,7 +118,13 @@ export function formatVestingError(err: unknown): string {
   if (raw.includes("AccountNotInitialized")) {
     return "A required account is missing on-chain. The stream may not exist or was not funded.";
   }
-  if (raw.includes("InsufficientFunds") || /\b0x1\b/.test(raw)) {
+  if (raw.includes("InsufficientFunds")) {
+    return "Insufficient SOL for transaction fees. Try: solana airdrop 2 --url devnet";
+  }
+  if (/custom program error: 0x1\b/.test(raw)) {
+    return "Transaction failed: account already exists or insufficient funds. Try a different Campaign ID.";
+  }
+  if (/\b0x1\b/.test(raw) && !raw.includes("custom program error")) {
     return "Insufficient SOL for transaction fees. Try: solana airdrop 2 --url devnet";
   }
   if (raw.includes("User rejected")) {
@@ -136,6 +142,11 @@ export function formatVestingError(err: unknown): string {
 
   if (raw.includes("Failed to fetch") || raw.includes("NetworkError") || raw.includes("ECONNREFUSED")) {
     return "Network error. Check your connection and try again.";
+  }
+
+  // Avoid leaking internal details (RPC URLs, stack traces, account keys)
+  if (raw.length > 200 || raw.includes("at ") || raw.includes("http")) {
+    return "Transaction failed. Please try again.";
   }
 
   return raw;

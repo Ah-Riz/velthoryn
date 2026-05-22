@@ -22,6 +22,7 @@ import { CloseClaimRecordButton } from "@/components/campaign/detail/CloseClaimR
 import { WithdrawUnvestedButton } from "@/components/campaign/detail/WithdrawUnvestedButton";
 import { ClaimWithProofButton } from "@/components/campaign/detail/ClaimWithProofButton";
 import { RootRotationCard } from "@/components/campaign/detail/RootRotationCard";
+import { VestingChart } from "@/components/campaign/detail/VestingChart";
 import { useToast } from "@/components/shell/Toast";
 import {
   getVestingTypeLabel,
@@ -889,6 +890,20 @@ export default function CampaignPage({ params }: { params: Promise<{ id: string 
                 </div>
               </div>
             </div>
+          )}
+
+          {/* Vesting Curve Chart */}
+          {cliffTime && endTime && (
+            <VestingChart
+              releaseType={releaseType}
+              startTs={datetimeLocalToUnix(startTime || cliffTime)}
+              cliffTs={datetimeLocalToUnix(cliffTime)}
+              endTs={datetimeLocalToUnix(endTime)}
+              totalAmount={totalSupply}
+              vestedAmount={vested}
+              cancelledAt={cancelledAtBigint ? Number(cancelledAtBigint) : null}
+              milestoneCount={isMilestone ? (treeState?.leafCount ?? 1) : undefined}
+            />
           )}
 
           {isMilestone && (

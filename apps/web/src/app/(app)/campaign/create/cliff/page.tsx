@@ -4,7 +4,7 @@ import { useState } from "react";
 import { useWallet } from "@solana/wallet-adapter-react";
 import { datetimeLocalToUnix } from "@/lib/stream/datetime";
 import { validateCreateStreamForm, validatePublicKey, hasErrors, type FormErrors } from "@/lib/validation/stream-form";
-import { bulkCsvTemplate, parseBulkCsv, prepareBulkCampaign, type BulkCsvParseResult, type PreparedBulkCampaign } from "@/lib/campaign/bulk";
+import { bulkCsvTemplateForType, parseBulkCsv, prepareBulkCampaign, type BulkCsvParseResult, type PreparedBulkCampaign } from "@/lib/campaign/bulk";
 import { useCreateCampaign } from "@/hooks/useCreateCampaign";
 import { useCreateStream, type CreateStreamResult } from "@/hooks/useCreateStream";
 import { useWalletTokens } from "@/hooks/useWalletTokens";
@@ -322,9 +322,10 @@ export default function CliffCreatePage() {
                 csvText={csvText}
                 onCsvTextChange={(v) => { setCsvText(v); setCsvResult(null); setTxState({ type: "idle" }); }}
                 onParse={handleCsvParse}
-                csvTemplate={bulkCsvTemplate()}
+                csvTemplate={bulkCsvTemplateForType("cliff")}
                 csvResult={csvResult}
                 prepared={prepared}
+                vestingType="cliff"
               />
             )}
           </div>

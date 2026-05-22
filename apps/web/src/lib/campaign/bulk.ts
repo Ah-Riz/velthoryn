@@ -31,11 +31,11 @@ export type BulkCsvRow = {
   beneficiary: string;
   amountInput: string;
   amountRaw: string;
-  releaseType: 0 | 1;
+  releaseType: 0 | 1 | 2;
   startTime: number;
   cliffTime: number;
   endTime: number;
-  milestoneIdx: 0;
+  milestoneIdx: number;
 };
 
 export type BulkCsvParseResult = {
@@ -50,12 +50,13 @@ export type PreparedBulkCampaign = {
   releaseMix: {
     cliff: number;
     linear: number;
+    milestone: number;
   };
   leaves: Array<{
     leafIndex: number;
     beneficiary: string;
     amount: string;
-    releaseType: 0 | 1;
+    releaseType: 0 | 1 | 2;
     startTime: string;
     cliffTime: string;
     endTime: string;
@@ -227,10 +228,7 @@ export function parseBulkCsv(
 
     const releaseType = parseReleaseType(releaseTypeValue);
     if (releaseType === null) {
-      rowIssues.push("releaseType must be Cliff, Linear, 0, or 1.");
-    }
-    if (releaseType === 2) {
-      rowIssues.push("Milestone rows are not available in bulk create yet.");
+      rowIssues.push("releaseType must be Cliff, Linear, Milestone, 0, 1, or 2.");
     }
 
     const startTime = parseTimestamp(startTimeRaw);
@@ -240,7 +238,7 @@ export function parseBulkCsv(
       startTime,
       cliffTime,
       endTime,
-      releaseType === 0 || releaseType === 1 ? releaseType : 1,
+      releaseType ?? 1,
     );
     if (scheduleError) rowIssues.push(scheduleError);
 
@@ -250,10 +248,14 @@ export function parseBulkCsv(
         rowIssues.push("milestoneIdx must be an integer.");
       } else {
         milestoneIdx = Number(milestoneIdxRaw);
+        if (milestoneIdx > 255) rowIssues.push("milestoneIdx must be 0–255.");
       }
     }
-    if (milestoneIdx !== 0) {
+    if (releaseType !== 2 && milestoneIdx !== 0) {
       rowIssues.push("milestoneIdx must be 0 for cliff and linear rows.");
+    }
+    if (releaseType === 2 && milestoneIdx === 0 && !milestoneIdxRaw) {
+      rowIssues.push("milestoneIdx is required for milestone rows.");
     }
 
     if (rowIssues.length > 0) {
@@ -271,11 +273,11 @@ export function parseBulkCsv(
       beneficiary,
       amountInput,
       amountRaw,
-      releaseType: releaseType as 0 | 1,
+      releaseType: releaseType as 0 | 1 | 2,
       startTime,
       cliffTime,
       endTime,
-      milestoneIdx: 0,
+      milestoneIdx,
     });
   }
 
@@ -303,17 +305,19 @@ export function prepareBulkCampaign(rows: BulkCsvRow[]): PreparedBulkCampaign {
   let totalSupply = 0n;
   let cliffCount = 0;
   let linearCount = 0;
+  let milestoneCount = 0;
 
   const leaves = leavesForTree.map((leaf, index) => {
     totalSupply += leaf.amount;
     if (leaf.releaseType === 0) cliffCount += 1;
     if (leaf.releaseType === 1) linearCount += 1;
+    if (leaf.releaseType === 2) milestoneCount += 1;
 
     return {
       leafIndex: leaf.leafIndex,
       beneficiary: leaf.beneficiary,
       amount: leaf.amount.toString(),
-      releaseType: leaf.releaseType as 0 | 1,
+      releaseType: leaf.releaseType as 0 | 1 | 2,
       startTime: leaf.startTs.toString(),
       cliffTime: leaf.cliffTs.toString(),
       endTime: leaf.endTs.toString(),
@@ -329,6 +333,7 @@ export function prepareBulkCampaign(rows: BulkCsvRow[]): PreparedBulkCampaign {
     releaseMix: {
       cliff: cliffCount,
       linear: linearCount,
+      milestone: milestoneCount,
     },
     leaves,
   };
@@ -366,5 +371,34 @@ export function bulkCsvTemplate(): string {
     BULK_CSV_HEADERS.join(","),
     "11111111111111111111111111111111,1000,Cliff,1735689600,1735776000,1735776000,0",
     "11111111111111111111111111111112,2500,Linear,1735689600,1735776000,1738368000,0",
+    "11111111111111111111111111111113,500,Milestone,1735689600,1735862400,1735862400,1",
+  ].join("\n");
+}
+
+export function bulkCsvTemplateForType(type: "cliff" | "linear" | "milestone"): string {
+  const header = BULK_CSV_HEADERS.join(",");
+  if (type === "cliff") {
+    return [
+      header,
+      "# Cliff: beneficiary, amount, releaseType=Cliff, startTime, cliffTime (unlock date), endTime (= cliffTime), milestoneIdx=0",
+      "RECIPIENT_ADDRESS_1,1000,Cliff,1735689600,1735776000,1735776000,0",
+      "RECIPIENT_ADDRESS_2,2000,Cliff,1735689600,1735776000,1735776000,0",
+    ].join("\n");
+  }
+  if (type === "linear") {
+    return [
+      header,
+      "# Linear: beneficiary, amount, releaseType=Linear, startTime, cliffTime (optional, same as start if none), endTime (full unlock), milestoneIdx=0",
+      "RECIPIENT_ADDRESS_1,1000,Linear,1735689600,1735689600,1738368000,0",
+      "RECIPIENT_ADDRESS_2,2500,Linear,1735689600,1735776000,1738368000,0",
+    ].join("\n");
+  }
+  // milestone
+  return [
+    header,
+    "# Milestone: beneficiary, amount, releaseType=Milestone, startTime, cliffTime (= unlock date), endTime (= cliffTime), milestoneIdx (0-255)",
+    "RECIPIENT_ADDRESS_1,500,Milestone,1735689600,1735862400,1735862400,0",
+    "RECIPIENT_ADDRESS_2,500,Milestone,1735689600,1736035200,1736035200,1",
+    "RECIPIENT_ADDRESS_3,500,Milestone,1735689600,1736208000,1736208000,2",
   ].join("\n");
 }
