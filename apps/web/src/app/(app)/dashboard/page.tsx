@@ -100,10 +100,28 @@ export default function DashboardPage() {
         statuses.includes("Claimable"),
     ).length;
 
+    // Total Value Locked (sender campaigns: totalSupply - totalClaimed)
+    let tvl = 0n;
+    for (const c of senderCampaigns) {
+      const supply = BigInt(c.totalSupply?.toString() ?? "0");
+      const claimed = BigInt(c.totalClaimed?.toString() ?? "0");
+      if (supply > claimed) tvl += supply - claimed;
+    }
+
+    // Claimable now (recipient campaigns where status is Claimable)
+    let claimableCount = 0;
+    for (const campaign of recipientCampaigns) {
+      const status = getRecipientStreamStatus(campaign, nowTs);
+      if (status === "Claimable") claimableCount++;
+    }
+
     return {
       total: statusesByTree.size,
       active: activeCount,
       sender: senderCampaigns.length,
+      recipient: recipientCampaigns.length,
+      tvl,
+      claimableCount,
     };
   }, [recipientCampaigns, senderCampaigns]);
 
@@ -130,10 +148,27 @@ export default function DashboardPage() {
         </div>
       ) : (
         <>
-          <div className="grid gap-4 sm:grid-cols-3">
+          {/* Claimable Banner */}
+          {counts.claimableCount > 0 && (
+            <Link href="/campaigns" className="flex items-center gap-3 rounded-2xl border border-emerald-500/20 bg-emerald-500/[0.05] p-5 transition hover:border-emerald-500/40">
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-emerald-500/20 text-emerald-400">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M22 11.08V12a10 10 0 11-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+              </div>
+              <div className="flex-1">
+                <p className="text-[14px] font-medium text-emerald-400">
+                  {counts.claimableCount} stream{counts.claimableCount > 1 ? "s" : ""} ready to claim!
+                </p>
+                <p className="text-[12px] text-[#8b92a5]">You have tokens available for withdrawal. Click to view.</p>
+              </div>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="text-[#8b92a5]"><polyline points="9 18 15 12 9 6"/></svg>
+            </Link>
+          )}
+
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
             <StatCard label="Total Streams" value={isLoading ? "..." : String(counts.total)} sub="All campaigns" />
             <StatCard label="Active" value={isLoading ? "..." : String(counts.active)} sub="Currently vesting" accent />
             <StatCard label="As Sender" value={isLoading ? "..." : String(counts.sender)} sub="Streams you created" />
+            <StatCard label="As Recipient" value={isLoading ? "..." : String(counts.recipient)} sub="Streams you receive" />
           </div>
 
           <div>
