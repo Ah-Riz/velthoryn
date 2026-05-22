@@ -131,12 +131,18 @@ function applyScheduleToForm(
     setCliffTime: (v: string) => void;
     setEndTime: (v: string) => void;
     setMilestoneIdx: (v: string) => void;
+    setRawStartTs?: (v: number | null) => void;
+    setRawCliffTs?: (v: number | null) => void;
+    setRawEndTs?: (v: number | null) => void;
   },
 ) {
   setters.setReleaseType(leaf.releaseType);
   setters.setStartTime(unixToDatetimeLocal(leaf.startTime));
   setters.setCliffTime(unixToDatetimeLocal(leaf.cliffTime));
   setters.setEndTime(unixToDatetimeLocal(leaf.endTime));
+  setters.setRawStartTs?.(leaf.startTime);
+  setters.setRawCliffTs?.(leaf.cliffTime);
+  setters.setRawEndTs?.(leaf.endTime);
   setters.setMilestoneIdx(String(leaf.milestoneIdx));
 }
 
@@ -171,6 +177,10 @@ export default function CampaignPage({ params }: { params: Promise<{ id: string 
   const [cliffTime, setCliffTime] = useState("");
   const [endTime, setEndTime] = useState("");
   const [milestoneIdx, setMilestoneIdx] = useState("0");
+  // Raw unix timestamps for withdraw (avoids datetime-local second truncation)
+  const [rawStartTs, setRawStartTs] = useState<number | null>(null);
+  const [rawCliffTs, setRawCliffTs] = useState<number | null>(null);
+  const [rawEndTs, setRawEndTs] = useState<number | null>(null);
   const [scheduleSource, setScheduleSource] = useState<ScheduleSource>("none");
   const [showManualSchedule, setShowManualSchedule] = useState(false);
   const [expectedBeneficiary, setExpectedBeneficiary] = useState<string | null>(null);
@@ -331,6 +341,9 @@ export default function CampaignPage({ params }: { params: Promise<{ id: string 
         setCliffTime,
         setEndTime,
         setMilestoneIdx,
+        setRawStartTs,
+        setRawCliffTs,
+        setRawEndTs,
       });
       setExpectedBeneficiary(proofQuery.data.leaf.beneficiary);
       setScheduleSource("api");
@@ -687,11 +700,17 @@ export default function CampaignPage({ params }: { params: Promise<{ id: string 
       const { getAssociatedTokenAddressSync } = await import("@solana/spl-token");
       const beneficiaryAta = getAssociatedTokenAddressSync(treeState.mint, publicKey);
 
-      const startTs = startTime
+      const startTs = rawStartTs !== null
+        ? new BN(rawStartTs)
+        : startTime
         ? new BN(datetimeLocalToUnix(startTime))
         : new BN(0);
-      const cliffTs = new BN(datetimeLocalToUnix(cliffTime));
-      const endTs = new BN(datetimeLocalToUnix(endTime));
+      const cliffTs = rawCliffTs !== null
+        ? new BN(rawCliffTs)
+        : new BN(datetimeLocalToUnix(cliffTime));
+      const endTs = rawEndTs !== null
+        ? new BN(rawEndTs)
+        : new BN(datetimeLocalToUnix(endTime));
 
       if (process.env.NODE_ENV === "development") {
         const { verifyVestedAmount } = await import("@/lib/vesting/verify-onchain");
