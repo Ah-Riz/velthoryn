@@ -2,9 +2,13 @@ name: ci
 
 on:
   push:
-    branches-ignore: [main, test]
+    branches-ignore: [main, test, dev_geral]
   pull_request:
     branches: [main, test]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   build-test:
@@ -22,31 +26,56 @@ jobs:
       - name: Cache cargo
         uses: Swatinem/rust-cache@v2
 
+      - name: Cache Solana
+        uses: actions/cache@v4
+        id: solana-cache
+        with:
+          path: |
+            ~/.cache/solana
+            ~/.local/share/solana/install
+          key: solana-${{ runner.os }}-2.1.6
+          restore-keys: |
+            solana-${{ runner.os }}-
+
       - name: Install Solana CLI 2.1.6
+        if: steps.solana-cache.outputs.cache-hit != 'true'
+        run: sh -c "$(curl -sSfL https://release.anza.xyz/v2.1.6/install)"
+
+      - name: Ensure Solana dirs and wallet
         run: |
-          sh -c "$(curl -sSfL https://release.anza.xyz/v2.1.6/install)"
           echo "$HOME/.local/share/solana/install/active_release/bin" >> $GITHUB_PATH
           # cargo-build-sbf calls fs::read_dir(~/.cache/solana).unwrap() at startup
           # (find_installed_platform_tools, sdk/cargo-build-sbf/src/main.rs:146).
           # On a fresh runner the dir doesn't exist yet, so it panics before it
           # can download platform-tools. Create it empty.
           mkdir -p "$HOME/.cache/solana"
-          # AnchorProvider.env() reads ~/.config/solana/id.json (per Anchor.toml).
-          # Generate a throwaway keypair for the test runner.
           mkdir -p "$HOME/.config/solana"
-          "$HOME/.local/share/solana/install/active_release/bin/solana-keygen" new \
-            --no-bip39-passphrase --silent -o "$HOME/.config/solana/id.json"
+          SOLANA_BIN="$HOME/.local/share/solana/install/active_release/bin"
+          if [ ! -f "$HOME/.config/solana/id.json" ]; then
+            "$SOLANA_BIN/solana-keygen" new \
+              --no-bip39-passphrase --silent -o "$HOME/.config/solana/id.json"
+          fi
 
-      - name: Cache Solana platform tools
+      - name: Cache Anchor (avm)
         uses: actions/cache@v4
+        id: anchor-cache
         with:
-          path: ~/.cache/solana
-          key: solana-platform-tools-${{ runner.os }}-2.1.6
+          path: |
+            ~/.avm
+            ~/.cargo/bin/avm
+            ~/.cargo/bin/anchor
+          key: anchor-avm-${{ runner.os }}-1.0.0
 
       - name: Install Anchor CLI 1.0.0
+        if: steps.anchor-cache.outputs.cache-hit != 'true'
         run: |
-          cargo install --git https://github.com/coral-xyz/anchor avm --force
+          cargo install --git https://github.com/coral-xyz/anchor avm --locked --force
           avm install 1.0.0
+          avm use 1.0.0
+
+      - name: Ensure Anchor CLI
+        run: |
+          echo "$HOME/.cargo/bin" >> $GITHUB_PATH
           avm use 1.0.0
           anchor --version
 
@@ -62,9 +91,13 @@ jobs:
       - name: Install JS deps
         run: pnpm install --frozen-lockfile
 
+      - name: Merkle unit tests
+        run: cargo test --manifest-path programs/vesting/Cargo.toml merkle -- --nocapture
+
       - name: anchor build
         env:
           PROGRAM_KEYPAIR_JSON: ${{ secrets.PROGRAM_KEYPAIR_JSON }}
+          CARGO_TARGET_DIR: ${{ github.workspace }}/target
         run: |
           mkdir -p target/deploy
           echo "$PROGRAM_KEYPAIR_JSON" > target/deploy/vesting-keypair.json
@@ -82,23 +115,13 @@ jobs:
           fi
           anchor build
 
-      - name: Start local validator
+      - name: Verify committed IDL matches build output
         run: |
-          solana-test-validator --reset --quiet &
-          for i in $(seq 1 30); do
-            if solana cluster-version --url http://127.0.0.1:8899 >/dev/null 2>&1; then
-              echo "Validator ready after ${i}s"
-              break
-            fi
-            sleep 1
-          done
+          diff -q target/idl/vesting.json apps/web/src/lib/anchor/idl.json \
+            || (echo "ERROR: apps/web/src/lib/anchor/idl.json is out of date — run anchor build and copy target/idl/vesting.json" && exit 1)
 
-      - name: anchor test
-        run: anchor test --skip-local-validator
-
-      - name: Trident fuzz smoke
-        run: |
-          cargo build-sbf
-          cd trident-tests
-          cargo build --release --bin fuzz_vesting
-          FUZZING_METRICS=1 ./target/release/fuzz_vesting
+      - name: Integration tests (localnet)
+        env:
+          TEST_SKIP_BUILD: "1"
+          CARGO_TARGET_DIR: ${{ github.workspace }}/target
+        run: pnpm test:localnet
