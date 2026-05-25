@@ -81,7 +81,8 @@
           ]
         },
         {
-          "name": "beneficiary"
+          "name": "beneficiary",
+          "writable": true
         },
         {
           "name": "vesting_tree",
@@ -147,6 +148,7 @@
         },
         {
           "name": "vault_authority",
+          "optional": true,
           "pda": {
             "seeds": [
               {
@@ -178,18 +180,22 @@
         },
         {
           "name": "vault",
-          "writable": true
+          "writable": true,
+          "optional": true
         },
         {
           "name": "beneficiary_ata",
-          "writable": true
+          "writable": true,
+          "optional": true
         },
         {
           "name": "creator_ata",
-          "writable": true
+          "writable": true,
+          "optional": true
         },
         {
           "name": "token_program",
+          "optional": true,
           "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
         }
       ],
@@ -282,6 +288,7 @@
         },
         {
           "name": "vault_authority",
+          "optional": true,
           "pda": {
             "seeds": [
               {
@@ -313,11 +320,13 @@
         },
         {
           "name": "vault",
-          "writable": true
+          "writable": true,
+          "optional": true
         },
         {
           "name": "beneficiary_ata",
           "writable": true,
+          "optional": true,
           "pda": {
             "seeds": [
               {
@@ -406,14 +415,17 @@
           }
         },
         {
-          "name": "mint"
+          "name": "mint",
+          "optional": true
         },
         {
           "name": "token_program",
+          "optional": true,
           "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
         },
         {
           "name": "associated_token_program",
+          "optional": true,
           "address": "ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL"
         },
         {
@@ -696,6 +708,106 @@
       ]
     },
     {
+      "name": "create_campaign_native",
+      "discriminator": [
+        95,
+        250,
+        254,
+        224,
+        254,
+        29,
+        131,
+        157
+      ],
+      "accounts": [
+        {
+          "name": "creator",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "vesting_tree",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  116,
+                  114,
+                  101,
+                  101
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "creator"
+              },
+              {
+                "kind": "const",
+                "value": [
+                  0,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0
+                ]
+              },
+              {
+                "kind": "arg",
+                "path": "args.campaign_id"
+              }
+            ]
+          }
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        },
+        {
+          "name": "rent",
+          "address": "SysvarRent111111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "args",
+          "type": {
+            "defined": {
+              "name": "CreateCampaignArgs"
+            }
+          }
+        }
+      ]
+    },
+    {
       "name": "create_stream",
       "discriminator": [
         71,
@@ -899,6 +1011,106 @@
       ]
     },
     {
+      "name": "create_stream_native",
+      "discriminator": [
+        164,
+        231,
+        118,
+        209,
+        162,
+        57,
+        55,
+        43
+      ],
+      "accounts": [
+        {
+          "name": "creator",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "vesting_tree",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  116,
+                  114,
+                  101,
+                  101
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "creator"
+              },
+              {
+                "kind": "const",
+                "value": [
+                  0,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0
+                ]
+              },
+              {
+                "kind": "arg",
+                "path": "args.campaign_id"
+              }
+            ]
+          }
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        },
+        {
+          "name": "rent",
+          "address": "SysvarRent111111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "args",
+          "type": {
+            "defined": {
+              "name": "CreateStreamArgs"
+            }
+          }
+        }
+      ]
+    },
+    {
       "name": "fund_campaign",
       "discriminator": [
         109,
@@ -964,6 +1176,70 @@
         {
           "name": "token_program",
           "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+        }
+      ],
+      "args": [
+        {
+          "name": "amount",
+          "type": "u64"
+        }
+      ]
+    },
+    {
+      "name": "fund_campaign_native",
+      "discriminator": [
+        239,
+        234,
+        36,
+        240,
+        76,
+        241,
+        102,
+        97
+      ],
+      "accounts": [
+        {
+          "name": "creator",
+          "writable": true,
+          "signer": true,
+          "relations": [
+            "vesting_tree"
+          ]
+        },
+        {
+          "name": "vesting_tree",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  116,
+                  114,
+                  101,
+                  101
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "creator"
+              },
+              {
+                "kind": "account",
+                "path": "vesting_tree.mint",
+                "account": "VestingTree"
+              },
+              {
+                "kind": "account",
+                "path": "vesting_tree.campaign_id",
+                "account": "VestingTree"
+              }
+            ]
+          }
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
         }
       ],
       "args": [
@@ -1327,6 +1603,7 @@
         },
         {
           "name": "vault_authority",
+          "optional": true,
           "pda": {
             "seeds": [
               {
@@ -1358,14 +1635,17 @@
         },
         {
           "name": "vault",
-          "writable": true
+          "writable": true,
+          "optional": true
         },
         {
-          "name": "mint"
+          "name": "mint",
+          "optional": true
         },
         {
           "name": "beneficiary_ata",
           "writable": true,
+          "optional": true,
           "pda": {
             "seeds": [
               {
@@ -1455,10 +1735,12 @@
         },
         {
           "name": "token_program",
+          "optional": true,
           "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
         },
         {
           "name": "associated_token_program",
+          "optional": true,
           "address": "ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL"
         },
         {
@@ -1532,6 +1814,7 @@
         },
         {
           "name": "vault_authority",
+          "optional": true,
           "pda": {
             "seeds": [
               {
@@ -1564,17 +1847,21 @@
         {
           "name": "vault",
           "writable": true,
-          "relations": [
-            "vesting_tree"
-          ]
+          "optional": true
         },
         {
           "name": "creator_ata",
-          "writable": true
+          "writable": true,
+          "optional": true
         },
         {
           "name": "token_program",
+          "optional": true,
           "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
         }
       ],
       "args": []
@@ -1928,6 +2215,16 @@
       "code": 6034,
       "name": "MilestoneAlreadyReleased",
       "msg": "Milestone has already been released"
+    },
+    {
+      "code": 6035,
+      "name": "NativeSolVaultNotEmpty",
+      "msg": "Native SOL vault still holds lamports after final drain"
+    },
+    {
+      "code": 6036,
+      "name": "NativeSolRentViolation",
+      "msg": "Native SOL transfer would drop PDA below rent-exempt minimum"
     }
   ],
   "types": [

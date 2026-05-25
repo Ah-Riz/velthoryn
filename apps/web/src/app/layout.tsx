@@ -4,6 +4,7 @@ import "./landing/landing.css";
 import { WalletProvider } from "@/components/providers/WalletProvider";
 import { WalletTokensProvider } from "@/components/providers/WalletTokensProvider";
 import { QueryProvider } from "@/components/providers/QueryProvider";
+import { Analytics } from "@vercel/analytics/next";
 
 export const metadata: Metadata = {
   title: "Velthoryn",
@@ -29,6 +30,7 @@ export default function RootLayout({
             <WalletTokensProvider>{children}</WalletTokensProvider>
           </WalletProvider>
         </QueryProvider>
+        <Analytics />
       </body>
     </html>
   );

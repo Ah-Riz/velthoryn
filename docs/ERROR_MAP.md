@@ -1,6 +1,6 @@
 # Error code map — tutorial checklist vs Velthoryn
 
-Velthoryn uses `VestingError` in [`programs/vesting/src/errors.rs`](../programs/vesting/src/errors.rs). Anchor custom errors start at **6000** (`0x1770`).
+Velthoryn uses `VestingError` in [`programs/vesting/src/errors.rs`](../programs/vesting/src/errors.rs). Anchor custom errors start at **6000** (`0x1770`). **36 variants** total.
 
 This table maps common **bootcamp / tutorial** names to the on-chain variants and tests that exercise them.
 
@@ -21,6 +21,8 @@ This table maps common **bootcamp / tutorial** names to the on-chain variants an
 | Campaign paused | `CampaignPaused` | 6009 | `0x1779` | `withdraw` while `paused` | T45 |
 | Multi-recipient on `withdraw` | `NotSingleStream` | 6028 | `0x178c` | `leaf_count != 1` | T40 |
 | Oversized Merkle proof | `ProofTooLong` | 6029 | `0x178d` | `proof.len() > 32` or `proof.len() > ceil(log2(leaf_count))` | EXPLOIT 4 |
+| Native SOL vault not empty after drain | `NativeSolVaultNotEmpty` | 6036 | `0x1794` | PDA still holds lamports after final claim/cancel | Native SOL tests |
+| Native SOL rent violation | `NativeSolRentViolation` | 6037 | `0x1795` | Transfer would drop PDA below rent-exempt minimum | Native SOL tests |
 
 ## Full error list
 

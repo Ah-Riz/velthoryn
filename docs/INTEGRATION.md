@@ -2,7 +2,7 @@
 
 Audience: Geral and anyone building against the on-chain program from TypeScript.
 
-> **Status:** All **14** instruction handlers are fully implemented with real logic. The program is deployed on devnet (latest upgrade slot **463223253**). **79/79** integration tests pass via `pnpm test:localnet`; `pnpm test:devnet` reports **79 passing, 1 pending** (T64 on public RPC; T64 in bankrun). Merkle leaf hashing is byte-verified against the TS encoder.
+> **Status:** All **17** instruction handlers (14 SPL + 3 native SOL variants) are fully implemented. The program is deployed on devnet (latest upgrade slot **463874212**). **98** integration tests pass (86 SPL + 12 native SOL). Merkle leaf hashing is byte-verified against the TS encoder. Native SOL vesting allows campaigns in raw SOL without wrapping — see [`docs/NATIVE_SOL_VESTING.md`](NATIVE_SOL_VESTING.md).
 
 ## What you need
 

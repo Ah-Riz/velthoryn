@@ -2,17 +2,18 @@
 
 ## Test Suite Overview
 
-**265 tests total** — all passing (on-chain security suite includes 11 exploit tests).
+**277 tests total** — all passing (on-chain security suite includes 11 exploit tests + 12 native SOL tests).
 
-- On-chain (Anchor): 86 tests across 5 files (up from 79 — added T64b–T68 milestone cancel tests + milestone flag gating in T41)
+- On-chain (Anchor): 98 tests across 6 files (86 SPL + 12 native SOL)
 - Web (Vitest): ~200 tests across 20 files (API routes use real Postgres in CI)
 - Trident fuzz: smoke test in CI (`trident-tests/fuzz_vesting`)
 
 | Test File | Tests | Purpose |
 |-----------|-------|---------|
-| `tests/vesting.spec.ts` | 2 | Smoke tests (program ID, IDL structure) |
+| `tests/vesting.spec.ts` | 2 | Smoke tests (program ID, IDL structure — 17 instructions) |
 | `tests/vesting.supplementary.spec.ts` | 62 | Integration tests covering all instructions (incl. T41 milestone flags, T63–T68 cancel/milestone) |
 | `tests/vesting.clock.spec.ts` | 12 | Clock-dependent tests via `solana-bankrun` (incl. T64 `cancel_stream`) |
+| `tests/vesting-native-sol.spec.ts` | 12 | Native SOL vesting lifecycle tests (create, withdraw, claim, cancel, fund, withdraw_unvested + error guards) |
 | `tests/security.spec.ts` | 11 | Security exploit tests (EXPLOIT 1–11) |
 | `tests/golden_vector.spec.ts` | 1 | Cross-language hash verification |
 
@@ -24,10 +25,10 @@ Use a **persistent** `solana-test-validator`. `anchor test` alone can flake on S
 
 ```bash
 pnpm test:localnet
-# Starts validator if needed, upgrades program (anchor deploy), then 86/86 passing (~3m)
+# Starts validator if needed, upgrades program (anchor deploy), then 86/86 SPL tests passing (~3m)
 ```
 
-CI: [`ci.yml`](../.github/workflows/ci.yml) runs `anchor build`, IDL drift check, then `pnpm test:localnet` with `TEST_SKIP_BUILD=1`. [`web-ci.yml`](../.github/workflows/web-ci.yml) runs merkle parity, E2E pipeline, and Vitest with Postgres 15.
+CI: [`ci.yml`](../.github/workflows/ci.yml) runs `anchor build`, IDL drift check, native SOL tests (bankrun), then `pnpm test:localnet` with `TEST_SKIP_BUILD=1`. [`web-ci.yml`](../.github/workflows/web-ci.yml) runs merkle parity, E2E pipeline, and Vitest with Postgres 15.
 
 Legacy one-shot (may flake):
 
@@ -54,6 +55,30 @@ These use `solana-bankrun` + `anchor-bankrun` for deterministic clock control vi
 | T55 | Cancel-time clamped withdraw | +500s for cancel, +2000s for withdraw |
 | EXPLOIT 4 | Claim after vault drained | +604800s |
 | EXPLOIT 11 | withdraw → close → withdraw (double payout) | Various |
+
+### Native SOL Tests (bankrun)
+
+```bash
+pnpm exec ts-mocha -p ./tsconfig.json -t 1000000 tests/vesting-native-sol.spec.ts
+# Expected: 12/12 PASS
+```
+
+Uses `solana-bankrun` for deterministic testing. No external validator needed. Tests the full native SOL lifecycle: create stream/campaign → withdraw/claim → cancel → withdraw_unvested, plus error guards (over-claim, early claim, unauthorized cancel, over-funding).
+
+| Test | What it verifies |
+|------|-----------------|
+| create_stream with native SOL | Stream creation + SOL deposit + state validation |
+| withdraw partial vested SOL | Partial withdrawal, PDA lamports decrease |
+| withdraw final vested SOL drains PDA | Full claim drains PDA including rent |
+| cancel native SOL stream splits lamports | Vested → beneficiary, unvested → creator |
+| create_campaign with native SOL | Multi-recipient campaign with Merkle root |
+| fund_campaign with native SOL | Additional SOL funding via system CPI |
+| claim from native SOL campaign | Merkle proof + native SOL claim |
+| withdraw_unvested from cancelled native SOL campaign | Post-grace drain to creator |
+| over-claim on native SOL fails | `InsufficientVault` guard |
+| claim before cliff returns NothingToClaim | Schedule enforcement |
+| cancel by non-creator fails | `Unauthorized` authority guard |
+| fund beyond total_supply fails | `OverFunded` guard |
 
 ### Devnet
 

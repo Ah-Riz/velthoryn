@@ -70,3 +70,64 @@ pub fn handler(ctx: Context<FundCampaign>, amount: u64) -> Result<()> {
 
     Ok(())
 }
+
+// ---------------------------------------------------------------------------
+// Native SOL path — transfers lamports from creator to the vesting-tree PDA.
+// ---------------------------------------------------------------------------
+
+#[derive(Accounts)]
+pub struct FundCampaignNative<'info> {
+    #[account(mut)]
+    pub creator: Signer<'info>,
+
+    #[account(
+        mut,
+        has_one = creator @ VestingError::Unauthorized,
+        seeds = [
+            b"tree",
+            creator.key().as_ref(),
+            vesting_tree.mint.as_ref(),
+            &vesting_tree.campaign_id.to_le_bytes(),
+        ],
+        bump = vesting_tree.bump,
+    )]
+    pub vesting_tree: Account<'info, crate::state::VestingTree>,
+
+    pub system_program: Program<'info, System>,
+}
+
+pub fn handler_native(ctx: Context<FundCampaignNative>, amount: u64) -> Result<()> {
+    require!(amount > 0, VestingError::ZeroAmount);
+    require!(
+        ctx.accounts.vesting_tree.cancelled_at.is_none(),
+        VestingError::CampaignCancelled
+    );
+
+    // For native SOL, compute funded amount from PDA lamports minus rent.
+    let pda_info = ctx.accounts.vesting_tree.to_account_info();
+    let rent_min = Rent::get()?.minimum_balance(pda_info.data_len());
+    let currently_funded = pda_info.lamports().saturating_sub(rent_min);
+    let new_balance = currently_funded
+        .checked_add(amount)
+        .ok_or(VestingError::Overflow)?;
+    require!(
+        new_balance <= ctx.accounts.vesting_tree.total_supply,
+        VestingError::OverFunded
+    );
+
+    // Transfer SOL from creator to PDA via system_program::transfer
+    let cpi_accounts = anchor_lang::system_program::Transfer {
+        from: ctx.accounts.creator.to_account_info(),
+        to: ctx.accounts.vesting_tree.to_account_info(),
+    };
+    let cpi_ctx = CpiContext::new(ctx.accounts.system_program.key(), cpi_accounts);
+    anchor_lang::system_program::transfer(cpi_ctx, amount)?;
+
+    emit!(CampaignFunded {
+        tree: ctx.accounts.vesting_tree.key(),
+        amount,
+        vault_balance_after: ctx.accounts.vesting_tree.to_account_info().lamports(),
+    });
+
+    Ok(())
+}

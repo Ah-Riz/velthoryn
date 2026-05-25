@@ -46,13 +46,13 @@ pub struct Withdraw<'info> {
 
     /// CHECK: PDA — only used as signer for vault CPI.
     #[account(seeds = [b"vault_authority", vesting_tree.key().as_ref()], bump)]
-    pub vault_authority: UncheckedAccount<'info>,
+    pub vault_authority: Option<UncheckedAccount<'info>>,
 
     #[account(mut, address = vesting_tree.vault @ VestingError::WrongVault)]
-    pub vault: Account<'info, TokenAccount>,
+    pub vault: Option<Account<'info, TokenAccount>>,
 
     #[account(address = vesting_tree.mint @ VestingError::MintMismatch)]
-    pub mint: Account<'info, Mint>,
+    pub mint: Option<Account<'info, Mint>>,
 
     #[account(
         init_if_needed,
@@ -60,10 +60,10 @@ pub struct Withdraw<'info> {
         associated_token::mint = mint,
         associated_token::authority = beneficiary,
     )]
-    pub beneficiary_ata: Account<'info, TokenAccount>,
+    pub beneficiary_ata: Option<Account<'info, TokenAccount>>,
 
-    pub token_program: Program<'info, Token>,
-    pub associated_token_program: Program<'info, AssociatedToken>,
+    pub token_program: Option<Program<'info, Token>>,
+    pub associated_token_program: Option<Program<'info, AssociatedToken>>,
     pub system_program: Program<'info, System>,
 }
 
@@ -143,10 +143,20 @@ pub fn handler(ctx: Context<Withdraw>, args: WithdrawArgs) -> Result<()> {
     }
 
     require!(claimable > 0, VestingError::NothingToClaim);
-    require!(
-        ctx.accounts.vault.amount >= claimable,
-        VestingError::InsufficientVault
-    );
+
+    // Vault balance check — token-agnostic (SPL vs native)
+    let is_native = tree.is_native();
+    let total_supply = tree.total_supply;
+
+    let vault_balance = if is_native {
+        let pda_info = ctx.accounts.vesting_tree.to_account_info();
+        let rent_min = Rent::get()?.minimum_balance(pda_info.data_len());
+        pda_info.lamports().saturating_sub(rent_min)
+    } else {
+        let vault = ctx.accounts.vault.as_ref().ok_or(VestingError::WrongVault)?;
+        vault.amount
+    };
+    require!(vault_balance >= claimable, VestingError::InsufficientVault);
 
     let new_total = tree
         .total_claimed
@@ -154,7 +164,7 @@ pub fn handler(ctx: Context<Withdraw>, args: WithdrawArgs) -> Result<()> {
         .ok_or(VestingError::Overflow)?;
     require!(new_total <= tree.total_supply, VestingError::OverClaim);
 
-    // State mutations BEFORE CPI (CEI pattern)
+    // State mutations BEFORE transfer (CEI pattern)
     cr.claimed_amount = cr
         .claimed_amount
         .checked_add(claimable)
@@ -169,25 +179,76 @@ pub fn handler(ctx: Context<Withdraw>, args: WithdrawArgs) -> Result<()> {
 
     ctx.accounts.vesting_tree.total_claimed = new_total;
 
-    // SPL token transfer CPI
-    let bump = ctx.bumps.vault_authority;
-    let signer_seeds: &[&[&[u8]]] = &[&[
-        b"vault_authority",
-        tree_key.as_ref(),
-        &[bump],
-    ]];
+    // Transfer
+    if is_native {
+        // Native SOL: direct lamport debit from PDA to beneficiary
+        let pda_info = ctx.accounts.vesting_tree.to_account_info();
+        let beneficiary_info = ctx.accounts.beneficiary.to_account_info();
+        let rent_min = Rent::get()?.minimum_balance(pda_info.data_len());
 
-    let cpi_accounts = Transfer {
-        from: ctx.accounts.vault.to_account_info(),
-        to: ctx.accounts.beneficiary_ata.to_account_info(),
-        authority: ctx.accounts.vault_authority.to_account_info(),
-    };
-    let cpi_ctx = CpiContext::new_with_signer(
-        ctx.accounts.token_program.key(),
-        cpi_accounts,
-        signer_seeds,
-    );
-    anchor_spl::token::transfer(cpi_ctx, claimable)?;
+        // On final claim, drain all lamports (including rent) since the PDA
+        // will no longer hold any balance.
+        let is_final = new_total == total_supply;
+        let transfer_amount = if is_final {
+            pda_info.lamports()
+        } else {
+            claimable
+        };
+
+        // Ensure we don't drop below rent-exempt minimum unless this is the final drain
+        if !is_final {
+            require!(
+                pda_info.lamports().saturating_sub(transfer_amount) >= rent_min,
+                VestingError::NativeSolRentViolation
+            );
+        }
+
+        **pda_info.try_borrow_mut_lamports()? = pda_info
+            .lamports()
+            .checked_sub(transfer_amount)
+            .ok_or(VestingError::Overflow)?;
+        **beneficiary_info.try_borrow_mut_lamports()? = beneficiary_info
+            .lamports()
+            .checked_add(transfer_amount)
+            .ok_or(VestingError::Overflow)?;
+    } else {
+        // SPL token transfer CPI
+        let vault = ctx.accounts.vault.as_ref().ok_or(VestingError::WrongVault)?;
+        let beneficiary_ata = ctx
+            .accounts
+            .beneficiary_ata
+            .as_ref()
+            .ok_or(VestingError::MintMismatch)?;
+        let vault_authority = ctx
+            .accounts
+            .vault_authority
+            .as_ref()
+            .ok_or(VestingError::WrongVault)?;
+        let token_program = ctx
+            .accounts
+            .token_program
+            .as_ref()
+            .ok_or(VestingError::MintMismatch)?;
+
+        let bump = ctx.bumps.vault_authority.expect("bump must exist when vault_authority is Some");
+        let signer_seeds: &[&[&[u8]]] = &[&[
+            b"vault_authority",
+            tree_key.as_ref(),
+            &[bump],
+        ]];
+
+        let cpi_accounts = Transfer {
+            from: vault.to_account_info(),
+            to: beneficiary_ata.to_account_info(),
+            authority: vault_authority.to_account_info(),
+        };
+        let cpi_ctx = CpiContext::new_with_signer(
+            token_program.key(),
+            cpi_accounts,
+            signer_seeds,
+        );
+        anchor_spl::token::transfer(cpi_ctx, claimable)?;
+    }
 
     let milestone_idx = if leaf.release_type == 2 {
         Some(leaf.milestone_idx)

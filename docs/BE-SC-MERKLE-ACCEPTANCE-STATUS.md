@@ -2,7 +2,7 @@
 
 **One place to remember:** what BE–SC Merkle delivered, how the bootcamp acceptance list maps to the code, and verification commands.
 
-**Last updated:** 2026-05-21
+**Last updated:** 2026-05-25
 **Branch / PR:** `dev_lana` → `test` — [PR #30](https://github.com/Ah-Riz/velthoryn/pull/30)  
 **Deployed API:** [velthoryn.vercel.app](https://velthoryn.vercel.app) (redeploy after BE hardening merge)
 
@@ -15,8 +15,8 @@
 | 1 | Merkle parity — TS SDK vs `apps/web` builder | **13/13** (`scripts/test-merkle-parity.ts`) |
 | 2 | DB schema — 4 tables + indexes on Supabase | **Done** |
 | 3 | E2E — prepare → POST → GET proof → verify (3 release types) | **5/5** (`scripts/test-be-merkle-pipeline.ts`) |
-| 4 | Local build + **86/86** SC tests | **Pass** (`pnpm test:localnet`; keypair must match `G6iaig…`) |
-| 4b | Devnet SC (`pnpm test:devnet`) | **86 pass, 1 pending** (T68 setClock) — upgrade slot **463874212** |
+| 4 | Local build + **98/98** SC tests (86 SPL + 12 native SOL) | **Pass** (`pnpm test:localnet`; keypair must match `G6iaig…`) |
+| 4b | Devnet SC (`pnpm test:devnet`) | **93 pass, 9 pending** (T64–T68 bankrun-only) — upgrade slot **464782646** |
 | 5 | Vercel deploy — 8 API routes | **Live** |
 | 6 | Post-deploy E2E (`--url`, `--timeout`) | **Pass** (re-run after Vercel redeploy) |
 
