@@ -1,0 +1,23 @@
+---
+description: Smart contract conventions for the vesting program. Activates when editing Solana/Anchor code.
+globs: ["programs/vesting/**", "tests/**/*.spec.ts"]
+alwaysApply: false
+---
+
+# Vesting Program Conventions
+
+- Anchor 1.0.0 with `anchor-lang` and `anchor-spl`
+- Program ID: `G6iaigUdi2btFwUc2N65twfxwA8Ew5uKKhKJ5RJa8wvu`
+- All arithmetic uses checked ops (`checked_add`, `saturating_sub`, u128 intermediates)
+- CEI pattern: mutate state before CPI
+- Events emitted after every state mutation
+- Test runner: `anchor test` (picks up `*.spec.ts`)
+- 86 tests pass (87 minus 1 skipped)
+- Bankrun tests in `vesting.clock.spec.ts` for precise timestamp manipulation
+- Grace period: `GRACE_PERIOD_SECS = 604800` (7 days), defined in `constants.rs`
+
+## Known issue (as of Phase 00)
+
+- `cancel_campaign` does NOT reset `paused` → pause+cancel exploit
+- Fix: add `tree.paused = false` in cancel_campaign handler
+- Defense-in-depth: change pause guard to `require!(!tree.paused || tree.cancelled_at.is_some())`

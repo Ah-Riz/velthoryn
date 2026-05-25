@@ -3,7 +3,7 @@
 **Spec:** `production-security-ops`
 **Phase:** P0 (Security Gate) + P1 (Operational Baseline)
 **Blocks:** All other specs
-**Prerequisite:** `docs/GAP-ANALYSIS-ROADMAP.md` reviewed
+**Prerequisite:** `docs/roadmap/00-GAP-ANALYSIS.md` reviewed
 
 ---
 
@@ -43,12 +43,7 @@
   - Handle OPTIONS preflight: return 204 with CORS headers
   - Pass through all other requests
 - [ ] Update `apps/web/next.config.ts`
-  - Add `headers()` function returning:
-    - `X-Frame-Options: DENY`
-    - `X-Content-Type-Options: nosniff`
-    - `Strict-Transport-Security: max-age=63072000; includeSubDomains; preload`
-    - `Referrer-Policy: strict-origin-when-cross-origin`
-    - `Permissions-Policy: camera=(), microphone=(), geolocation=()`
+  - **NOTE:** `headers()` function already exists with X-Frame-Options, X-Content-Type-Options, Referrer-Policy, Permissions-Policy, and CSP. Only ADD `Strict-Transport-Security: max-age=63072000; includeSubDomains; preload` to the existing array. Do NOT replace the existing headers.
 - [ ] Add `ALLOWED_ORIGIN` to `.env.example`
 - [ ] **Verify:** `curl -H "Origin: http://evil.com"` rejected; `curl -H "Origin: https://velthoryn.vercel.app"` accepted; security headers present on all responses
 

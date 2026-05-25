@@ -14,7 +14,7 @@ The SC already supports unlimited-recipient campaigns via `create_campaign` + `f
 
 **User need:** 5/8 users ranked automation first. Projects set up campaign once → recipients pull tokens → program enforces schedule.
 
-**Source:** `docs/GAP-ANALYSIS-ROADMAP.md` — Feature 1: Bulk Send.
+**Source:** `docs/roadmap/00-GAP-ANALYSIS.md` — Feature 1: Bulk Send.
 
 ---
 

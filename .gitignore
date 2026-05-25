@@ -45,6 +45,7 @@ yarn.lock
 
 # IDE / OS
 .idea/
+.cursor/
 .vscode/*
 !.vscode/extensions.json
 !.vscode/settings.json

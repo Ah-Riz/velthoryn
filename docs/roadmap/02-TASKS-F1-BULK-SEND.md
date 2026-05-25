@@ -9,13 +9,14 @@
 
 ## F1.1 — Add workspace Merkle dependency
 
+- [ ] In root `pnpm-workspace.yaml`, add `"clients/*"` to the packages list (currently only `apps/*`)
 - [ ] In `apps/web/package.json`, add:
   ```json
-  "@velthoryn/merkle": "workspace:*"
+  "@velthoryn/client": "workspace:*"
   ```
-- [ ] Verify workspace config in root `pnpm-workspace.yaml` includes `clients/ts`
+  Note: the actual package name in `clients/ts/package.json` is `@velthoryn/client`, NOT `@velthoryn/merkle`
 - [ ] Run `pnpm install` from root
-- [ ] Verify `import { prepareCampaign } from "@velthoryn/merkle"` resolves in `apps/web`
+- [ ] Verify `import { prepareCampaign } from "@velthoryn/client"` resolves in `apps/web`
 - [ ] **Verify:** `pnpm build` in `apps/web` succeeds with the workspace import
 
 ## F1.2 — TS schedule math mirror

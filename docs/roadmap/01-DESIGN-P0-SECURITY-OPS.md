@@ -12,7 +12,7 @@
 
 The BE API (`apps/web/src/app/api/`) has 8 routes live on Vercel. Zero have authentication, rate limiting, or security headers. The event indexer (`lib/indexer/claim-events.ts`) runs manually, has no checkpointing, and uses non-transactional writes. This spec hardens the BE to production grade before any new feature endpoints ship.
 
-**Source:** `docs/GAP-ANALYSIS-ROADMAP.md` — P0 items S1-S6, P1 items O1-O7.
+**Source:** `docs/roadmap/00-GAP-ANALYSIS.md` — P0 items S1-S6, P1 items O1-O7.
 
 ---
 

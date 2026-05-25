@@ -14,7 +14,7 @@ The SC emits 11 event types. The BE currently only indexes `Claimed` events. Thi
 
 **User need:** 4/8 users lack visibility into distribution timelines. Every state change emits an event. Every account field is publicly readable.
 
-**Source:** `docs/GAP-ANALYSIS-ROADMAP.md` — Feature 2: Transparency.
+**Source:** `docs/roadmap/00-GAP-ANALYSIS.md` — Feature 2: Transparency.
 
 ---
 

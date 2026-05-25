@@ -1,0 +1,25 @@
+---
+description: BE-DB-SC-Merkle production roadmap specs. Reference when implementing features from docs/roadmap/. Covers: SC remediation, security, bulk send, dashboard, clawback, hardening.
+globs:
+alwaysApply: false
+---
+
+# Roadmap Specs
+
+Implementation order: Phase 00 → P0 → F1 / F2 → F3 / F4.
+
+## Phase mapping
+
+| Roadmap prefix | .claude/specs/ folder | Phase |
+|---|---|---|
+| 00-SC-REMEDIATION | sc-remediation | 00 — SC exploit fix (blocks all) |
+| 01-P0-SECURITY-OPS | production-security-ops | P0+P1 — Security gate |
+| 02-F1-BULK-SEND | bulk-send | F1 — Server-side tree building |
+| 03-F2-DASHBOARD | dashboard-transparency | F2 — Event indexing + timeline |
+| 04-F3-CLAWBACK | clawback-api | F3 — Unsigned tx endpoints |
+| 05-F4-HARDENING | vesting-ux-hardening | F4+P2 — Simulation + monitoring |
+
+Each phase has requirements.md, design.md, and tasks.md in both locations.
+
+@docs/roadmap/README.md
+@docs/roadmap/00-GAP-ANALYSIS.md

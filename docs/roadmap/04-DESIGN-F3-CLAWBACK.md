@@ -14,7 +14,7 @@ The SC has `cancel_campaign`, `cancel_stream`, `withdraw_unvested`, and `set_mil
 
 **User need:** If a campaign is canceled, recipients retain already vested tokens; remainder returns to project after 7-day grace period. Directly addresses operational disruption when contributors leave.
 
-**Source:** `docs/GAP-ANALYSIS-ROADMAP.md` — Feature 4: Automatic Clawback.
+**Source:** `docs/roadmap/00-GAP-ANALYSIS.md` — Feature 4: Automatic Clawback.
 
 ---
 

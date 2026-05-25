@@ -1,0 +1,25 @@
+---
+description: Web API conventions for the Next.js app. Activates when editing API routes or backend code.
+globs: ["apps/web/src/app/api/**", "apps/web/src/lib/**"]
+alwaysApply: false
+---
+
+# Web API Conventions
+
+- Next.js App Router API routes (`apps/web/src/app/api/`)
+- Database: Supabase PostgreSQL via `postgres` driver + Drizzle ORM
+- Schema: `apps/web/src/lib/db/schema.ts`
+- BigInt columns use `{ mode: "bigint" }` — must serialize as `.toString()` in responses
+- `jsonResponse()` helper in `apps/web/src/lib/api/json-response.ts` handles BigInt serialization
+- Auth: `verifyAdminKey()` in `apps/web/src/lib/auth.ts` (admin routes only)
+- Package name: `@velthoryn/client` (NOT `@velthoryn/merkle`) for workspace Merkle SDK
+- Workspace: `pnpm-workspace.yaml` lists `apps/*` only — must add `clients/*` before using workspace deps
+- Security headers already configured in `next.config.ts` (X-Frame-Options, CSP, etc.)
+- `.env.example` exists with all current vars
+
+## Missing (as of Phase 00)
+
+- No rate limiting
+- No auth on POST routes (campaigns, root-versions, status, claims/sync)
+- No CORS middleware
+- `PATCH /api/campaigns/[treeAddress]/status` should be removed — status from indexer only
