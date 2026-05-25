@@ -120,6 +120,11 @@ jobs:
           diff -q target/idl/vesting.json apps/web/src/lib/anchor/idl.json \
             || (echo "ERROR: apps/web/src/lib/anchor/idl.json is out of date — run anchor build and copy target/idl/vesting.json" && exit 1)
 
+      - name: Native SOL vesting tests (bankrun)
+        env:
+          CARGO_TARGET_DIR: ${{ github.workspace }}/target
+        run: pnpm exec ts-mocha -p ./tsconfig.json -t 1000000 'tests/vesting-native-sol.spec.ts'
+
       - name: Integration tests (localnet)
         env:
           TEST_SKIP_BUILD: "1"

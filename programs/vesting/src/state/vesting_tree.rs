@@ -1,5 +1,9 @@
 use anchor_lang::prelude::*;
 
+/// Marker pubkey for native SOL campaigns. When `VestingTree.mint == NATIVE_SOL_MINT`,
+/// the campaign holds lamports directly in the PDA instead of a vault ATA.
+pub const NATIVE_SOL_MINT: Pubkey = Pubkey::new_from_array([0u8; 32]);
+
 #[account]
 #[derive(InitSpace)]
 pub struct VestingTree {
@@ -21,6 +25,12 @@ pub struct VestingTree {
     /// Creator-controlled release flags for milestone leaves (bit = milestone_idx).
     pub milestone_released_flags: [u8; 32],
     pub bump:             u8,
+}
+
+impl VestingTree {
+    pub fn is_native(&self) -> bool {
+        self.mint == NATIVE_SOL_MINT
+    }
 }
 
 pub fn milestone_flag_is_set(flags: &[u8; 32], milestone_idx: u8) -> bool {

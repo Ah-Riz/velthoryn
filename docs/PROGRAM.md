@@ -3,19 +3,19 @@
 This document describes the on-chain program at `programs/vesting/`. All instructions and math modules are **LIVE** and fully implemented.
 
 Program ID: `G6iaigUdi2btFwUc2N65twfxwA8Ew5uKKhKJ5RJa8wvu`
-Deployed: devnet (latest upgrade at slot **463223253**, ~447KB allocation). Local keypair at `target/deploy/vesting-keypair.json` (gitignored; must match `G6iaig…` or use upgrade-authority wallet for deploy).
+Deployed: devnet (latest upgrade at slot **464782646**, ~492KB allocation). Local keypair at `target/deploy/vesting-keypair.json` (gitignored; must match `G6iaig…` or use upgrade-authority wallet for deploy).
 
 ## File map
 
 ```
 programs/vesting/src/
-├── lib.rs                  # #[program] dispatcher — wires the 14 entry points
+├── lib.rs                  # #[program] dispatcher — wires the 17 entry points
 ├── constants.rs            # GRACE_PERIOD_SECS, MAX_MERKLE_PROOF_LEN
-├── errors.rs               # VestingError enum (34 variants including ProofTooLong, MilestoneAlreadyReleased)
+├── errors.rs               # VestingError enum (36 variants including native SOL guards)
 ├── events.rs               # 9 event types (CampaignCreated, Claimed, RootUpdated, …)
 ├── state/
-│   ├── mod.rs              # re-exports
-│   ├── vesting_tree.rs     # VestingTree #[account] — campaign PDA
+│   ├── mod.rs              # re-exports (includes NATIVE_SOL_MINT)
+│   ├── vesting_tree.rs     # VestingTree #[account] — campaign PDA, is_native() helper
 │   ├── claim_record.rs     # ClaimRecord  #[account] — per-(tree, beneficiary) PDA
 │   └── leaf.rs             # VestingLeaf — Borsh struct, NOT an account (lives in Merkle tree)
 ├── math/
@@ -24,16 +24,16 @@ programs/vesting/src/
 │   └── merkle.rs           # leaf_hash(), verify_merkle_proof() — LIVE
 └── instructions/
     ├── mod.rs              # re-exports
-    ├── create_campaign.rs  # LIVE
-    ├── create_stream.rs    # LIVE — atomic single-recipient campaign + fund
-    ├── fund_campaign.rs    # LIVE
-    ├── claim.rs            # LIVE
-    ├── withdraw.rs         # LIVE — simplified claim for single-recipient streams
+    ├── create_campaign.rs  # LIVE + handler_native (native SOL)
+    ├── create_stream.rs    # LIVE + handler_native (native SOL)
+    ├── fund_campaign.rs    # LIVE + handler_native (native SOL)
+    ├── claim.rs            # LIVE — dual-path: SPL CPI or native SOL lamport transfer
+    ├── withdraw.rs         # LIVE — dual-path: SPL CPI or native SOL lamport transfer
     ├── cancel_campaign.rs  # LIVE
-    ├── cancel_stream.rs    # LIVE — single-leaf cancel (vested → beneficiary, remainder → creator)
+    ├── cancel_stream.rs    # LIVE — dual-path: SPL CPI or native SOL lamport split
     ├── set_milestone_released.rs # LIVE — creator milestone boolean flags
     ├── update_root.rs      # LIVE
-    ├── withdraw_unvested.rs# LIVE
+    ├── withdraw_unvested.rs# LIVE — dual-path: SPL CPI or native SOL lamport drain
     ├── pause_campaign.rs   # LIVE (exposes pause_handler + unpause_handler)
     ├── close_claim_record.rs # LIVE
     └── get_vested_amount.rs  # LIVE (view function)
@@ -44,15 +44,18 @@ programs/vesting/src/
 | Entry point          | Args                                                     | Role |
 | -------------------- | -------------------------------------------------------- | -------------------- |
 | `create_campaign`    | `CreateCampaignArgs`                                     | Initialize a `VestingTree` PDA + token vault. Validates root, leaf_count, total_supply, cancel_authority. |
+| `create_campaign_native` | `CreateCampaignArgs`                                 | Same for native SOL — PDA holds lamports directly, no vault ATA. `mint = NATIVE_SOL_MINT`. |
 | `create_stream`      | `CreateStreamArgs`                                       | Atomic single-recipient campaign creation + funding in one transaction. Computes Merkle root on-chain for a single-leaf tree. |
+| `create_stream_native` | `CreateStreamArgs`                                     | Same for native SOL — `system_program::transfer` funds the PDA. |
 | `fund_campaign`      | `amount: u64`                                            | Transfer SPL tokens from creator into the vault, capped at `total_supply`. |
-| `claim`              | `leaf: VestingLeaf, proof: Vec<[u8; 32]>`                | Verify proof against current root, run schedule math, transfer vested delta to beneficiary, update `ClaimRecord`. |
-| `withdraw`           | `WithdrawArgs`                                           | Simplified claim for single-recipient streams (leaf_count == 1). Reconstructs the leaf on-chain and verifies `leaf_hash == merkle_root` — no Merkle proof needed. |
+| `fund_campaign_native` | `amount: u64`                                          | Same for native SOL — SOL transfer to PDA via system CPI. Tracks funded amount via PDA lamports minus rent-exempt minimum. |
+| `claim`              | `leaf: VestingLeaf, proof: Vec<[u8; 32]>`                | Verify proof against current root, run schedule math, transfer vested delta to beneficiary. SPL: token CPI. Native SOL: direct lamport debit from PDA. |
+| `withdraw`           | `WithdrawArgs`                                           | Simplified claim for single-recipient streams (leaf_count == 1). Dual-path: SPL CPI or native SOL lamport transfer. |
 | `cancel_campaign`    | —                                                        | Cancel-authority sets `cancelled_at = now`. Starts the 7-day grace clock. |
-| `cancel_stream`      | `WithdrawArgs`                                           | Creator-only for `leaf_count == 1`: vested → beneficiary, vault remainder → creator. Milestone-aware: released milestone → beneficiary gets full amount; unreleased → 0. OverClaim guard on `total_claimed`. |
+| `cancel_stream`      | `WithdrawArgs`                                           | Creator-only for `leaf_count == 1`: vested → beneficiary, remainder → creator. Dual-path. Milestone-aware. OverClaim guard on `total_claimed`. |
 | `set_milestone_released` | `milestone_idx: u8`                                | Creator sets bit in `milestone_released_flags`. Idempotency guard: second call rejects with `MilestoneAlreadyReleased`. |
 | `update_root`        | `new_root: [u8; 32], new_leaf_count: u32`                | Cancel-authority rotates the Merkle root (per-recipient clawback). |
-| `withdraw_unvested`  | —                                                        | After grace, creator sweeps `vault_balance − vested_total_at_cancel`. |
+| `withdraw_unvested`  | —                                                        | After grace, creator sweeps unvested balance. SPL: token CPI. Native SOL: drain PDA lamports to creator. |
 | `pause_campaign`     | —                                                        | Pause-authority blocks claims. |
 | `unpause_campaign`   | — (shares Accounts with pause_campaign)                  | Resume a paused campaign. |
 | `close_claim_record` | —                                                        | Reclaim rent on a finished `ClaimRecord`. Checks `total_entitled > 0 && claimed_amount >= total_entitled` or post-grace. |
@@ -67,7 +70,8 @@ Args are defined alongside their instruction (`CreateCampaignArgs` lives in `ins
 | Field              | Type             | Notes |
 | ------------------ | ---------------- | ----- |
 | `creator`          | `Pubkey`         | Funded the campaign. Owns `cancel`/`fund`/`withdraw_unvested`. |
-| `mint`             | `Pubkey`         | SPL mint distributed by this campaign. |
+| `mint`             | `Pubkey`         | SPL mint distributed by this campaign. `NATIVE_SOL_MINT` (all-zeros) signals native SOL. |
+| `is_native()`      | `bool`           | Returns `true` when `mint == NATIVE_SOL_MINT`. Used to branch transfer logic. |
 | `vault`            | `Pubkey`         | ATA holding the campaign's tokens. Owned by `vault_authority`. |
 | `vault_authority`  | `Pubkey`         | PDA = `["vault_authority", tree.key()]`. |
 | `campaign_id`      | `u64`            | Caller-supplied ID. Lets one creator+mint pair host multiple campaigns. |

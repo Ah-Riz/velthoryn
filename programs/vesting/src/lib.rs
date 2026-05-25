@@ -26,12 +26,30 @@ pub mod vesting {
         instructions::create_campaign::handler(ctx, args)
     }
 
+    pub fn create_campaign_native(
+        ctx: Context<CreateCampaignNative>,
+        args: CreateCampaignArgs,
+    ) -> Result<()> {
+        instructions::create_campaign::handler_native(ctx, args)
+    }
+
     pub fn create_stream(ctx: Context<CreateStream>, args: CreateStreamArgs) -> Result<()> {
         instructions::create_stream::handler(ctx, args)
     }
 
+    pub fn create_stream_native(
+        ctx: Context<CreateStreamNative>,
+        args: CreateStreamArgs,
+    ) -> Result<()> {
+        instructions::create_stream::handler_native(ctx, args)
+    }
+
     pub fn fund_campaign(ctx: Context<FundCampaign>, amount: u64) -> Result<()> {
         instructions::fund_campaign::handler(ctx, amount)
+    }
+
+    pub fn fund_campaign_native(ctx: Context<FundCampaignNative>, amount: u64) -> Result<()> {
+        instructions::fund_campaign::handler_native(ctx, amount)
     }
 
     pub fn claim(

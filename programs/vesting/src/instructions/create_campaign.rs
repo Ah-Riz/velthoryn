@@ -4,7 +4,7 @@ use anchor_spl::token::{Mint, Token, TokenAccount};
 
 use crate::errors::VestingError;
 use crate::events::CampaignCreated;
-use crate::state::VestingTree;
+use crate::state::{VestingTree, NATIVE_SOL_MINT};
 
 #[derive(AnchorSerialize, AnchorDeserialize, Clone, InitSpace)]
 pub struct CreateCampaignArgs {
@@ -71,6 +71,79 @@ pub fn handler(ctx: Context<CreateCampaign>, args: CreateCampaignArgs) -> Result
     tree.mint = ctx.accounts.mint.key();
     tree.vault = ctx.accounts.vault.key();
     tree.vault_authority = ctx.accounts.vault_authority.key();
+    tree.campaign_id = args.campaign_id;
+    tree.merkle_root = args.merkle_root;
+    tree.leaf_count = args.leaf_count;
+    tree.total_supply = args.total_supply;
+    tree.total_claimed = 0;
+    tree.cancellable = args.cancellable;
+    tree.cancel_authority = args.cancel_authority;
+    tree.cancelled_at = None;
+    tree.paused = false;
+    tree.pause_authority = args.pause_authority;
+    tree.created_at = Clock::get()?.unix_timestamp;
+    tree.milestone_released_flags = [0u8; 32];
+    tree.bump = ctx.bumps.vesting_tree;
+
+    emit!(CampaignCreated {
+        tree: tree.key(),
+        creator: tree.creator,
+        mint: tree.mint,
+        total_supply: args.total_supply,
+        leaf_count: args.leaf_count,
+        cancellable: args.cancellable,
+    });
+
+    Ok(())
+}
+
+// ---------------------------------------------------------------------------
+// Native SOL path — no SPL token accounts, no mint, no vault ATA.
+// ---------------------------------------------------------------------------
+
+#[derive(Accounts)]
+#[instruction(args: CreateCampaignArgs)]
+pub struct CreateCampaignNative<'info> {
+    #[account(mut)]
+    pub creator: Signer<'info>,
+
+    #[account(
+        init,
+        payer = creator,
+        space = 8 + VestingTree::INIT_SPACE,
+        seeds = [
+            b"tree",
+            creator.key().as_ref(),
+            NATIVE_SOL_MINT.as_ref(),
+            &args.campaign_id.to_le_bytes(),
+        ],
+        bump,
+    )]
+    pub vesting_tree: Account<'info, VestingTree>,
+
+    pub system_program: Program<'info, System>,
+    pub rent: Sysvar<'info, Rent>,
+}
+
+pub fn handler_native(
+    ctx: Context<CreateCampaignNative>,
+    args: CreateCampaignArgs,
+) -> Result<()> {
+    require!(args.merkle_root != [0u8; 32], VestingError::EmptyRoot);
+    require!(args.leaf_count > 0, VestingError::EmptyCampaign);
+    require!(args.total_supply > 0, VestingError::ZeroAmount);
+    if args.cancellable {
+        require!(
+            args.cancel_authority.is_some(),
+            VestingError::MissingCancelAuthority
+        );
+    }
+
+    let tree = &mut ctx.accounts.vesting_tree;
+    tree.creator = ctx.accounts.creator.key();
+    tree.mint = NATIVE_SOL_MINT;
+    tree.vault = Pubkey::default();
+    tree.vault_authority = Pubkey::default();
     tree.campaign_id = args.campaign_id;
     tree.merkle_root = args.merkle_root;
     tree.leaf_count = args.leaf_count;
