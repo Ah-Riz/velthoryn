@@ -4333,6 +4333,8 @@ describe("vesting supplementary T6-T25", () => {
       beneficiary.publicKey,
     );
 
+    const preBeneficiary = await getAccount(provider.connection, beneficiaryAta);
+
     await program.methods
       .claim(idlLeaf(leaf), idlProof(tree.proof(0)))
       .accounts({
@@ -4348,7 +4350,9 @@ describe("vesting supplementary T6-T25", () => {
       .rpc();
 
     const postBeneficiary = await getAccount(provider.connection, beneficiaryAta);
-    expect(Number(postBeneficiary.amount)).to.equal(expectedVested);
+    expect(
+      Number(postBeneficiary.amount) - Number(preBeneficiary.amount),
+    ).to.equal(expectedVested);
   });
 
   // -------------------------------------------------------------------------

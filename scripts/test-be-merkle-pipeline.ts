@@ -167,12 +167,32 @@ interface PostResponse {
   creator: string;
 }
 
+async function createAuthHeader(
+  creator: Keypair,
+): Promise<string> {
+  const nonceRes = await fetchWithTimeout(`${BASE_URL}/api/auth/nonce`);
+  if (!nonceRes.ok) {
+    throw new Error(`GET /api/auth/nonce failed: HTTP ${nonceRes.status}`);
+  }
+  const { nonce } = (await nonceRes.json()) as { nonce: string };
+  const message = {
+    nonce,
+    timestamp: Date.now(),
+    wallet: creator.publicKey.toBase58(),
+  };
+  const messageBytes = Buffer.from(JSON.stringify(message), "utf8");
+  const signature = creator.sign(messageBytes);
+  const token = `${Buffer.from(signature).toString("base64")}.${messageBytes.toString("base64")}`;
+  return `Bearer ${token}`;
+}
+
 async function postCampaign(
   prepared: ReturnType<typeof prepareCampaign>,
   _recipients: CampaignRecipient[]
 ): Promise<PostResponse> {
+  const creatorKeypair = Keypair.generate();
   const treeAddress = Keypair.generate().publicKey.toBase58();
-  const creator = Keypair.generate().publicKey.toBase58();
+  const creator = creatorKeypair.publicKey.toBase58();
   const mint = Keypair.generate().publicKey.toBase58();
   const now = Math.floor(Date.now() / 1000);
 
@@ -205,9 +225,13 @@ async function postCampaign(
     })),
   };
 
+  const authorization = await createAuthHeader(creatorKeypair);
   const res = await fetchWithTimeout(`${BASE_URL}/api/campaigns`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: {
+      "Content-Type": "application/json",
+      authorization,
+    },
     body: JSON.stringify(body),
   });
 
