@@ -31,21 +31,25 @@ export function MilestoneReleasePanel({
 }: Props) {
   const [loadingIdx, setLoadingIdx] = useState<number | null>(null);
   const [page, setPage] = useState(0);
-
-  if (!canRelease || leafCount <= 1) return null;
-
   const count = Math.min(leafCount, 256);
   const totalPages = Math.ceil(count / PAGE_SIZE);
   const pageStart = page * PAGE_SIZE;
   const pageEnd = Math.min(pageStart + PAGE_SIZE, count);
   const pageItems = Array.from({ length: pageEnd - pageStart }, (_, i) => pageStart + i);
 
-  const { releasedCount, unreleasedCount } = useMemo(() => {
+  const releasedCount = useMemo(() => {
     let released = 0;
     for (let i = 0; i < count; i++) {
       if (isMilestoneTriggered(milestoneReleasedFlags, i)) released++;
     }
-    return { releasedCount: released, unreleasedCount: count - released };
+    return released;
+  }, [milestoneReleasedFlags, count]);
+
+  const nextUnreleased = useMemo(() => {
+    for (let i = 0; i < count; i++) {
+      if (!isMilestoneTriggered(milestoneReleasedFlags, i)) return i;
+    }
+    return null;
   }, [milestoneReleasedFlags, count]);
 
   async function handleRelease(idx: number) {
@@ -65,12 +69,7 @@ export function MilestoneReleasePanel({
     }
   }
 
-  const nextUnreleased = useMemo(() => {
-    for (let i = 0; i < count; i++) {
-      if (!isMilestoneTriggered(milestoneReleasedFlags, i)) return i;
-    }
-    return null;
-  }, [milestoneReleasedFlags, count]);
+  if (!canRelease || leafCount <= 1) return null;
 
   return (
     <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-4">

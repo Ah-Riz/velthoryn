@@ -155,12 +155,51 @@ function issue(rowNumber: number | "header", message: string): BulkCsvIssue {
 }
 
 function validateBeneficiary(value: string): string | null {
-  if (!value.trim()) return "Beneficiary is required.";
+  if (!value.trim()) return "Enter a beneficiary wallet.";
   try {
     new PublicKey(value.trim());
     return null;
   } catch {
-    return "Beneficiary must be a valid Solana address.";
+    return "Enter a valid Solana wallet address.";
+  }
+}
+
+function humanizeAmountError(message: string): string {
+  switch (message) {
+    case "Required.":
+      return "Enter an amount.";
+    case "Must be a positive integer (no decimals).":
+      return "Use a whole number only.";
+    case "Must be a positive number.":
+      return "Enter a valid number.";
+    case "Must be greater than zero.":
+      return "Amount must be greater than 0.";
+    case "Invalid number.":
+      return "Invalid amount.";
+    default:
+      if (message.startsWith("Supports up to ")) {
+        return `Too many decimal places. ${message}`;
+      }
+      return message;
+  }
+}
+
+function humanizeScheduleError(message: string): string {
+  switch (message) {
+    case "All dates are required.":
+      return "Enter the start, cliff/unlock, and end times.";
+    case "Cliff time must be on or after start time.":
+      return "Cliff/unlock time cannot be earlier than the start time.";
+    case "End time must be on or after cliff time.":
+      return "End time cannot be earlier than the cliff/unlock time.";
+    case "Cliff must be at least 60 seconds after start (Solana clock tolerance).":
+      return "Leave at least 60 seconds between the start time and cliff/unlock time.";
+    case "For cliff vesting, end time should equal cliff time.":
+      return "For cliff vesting, end time must match the cliff time.";
+    case "For milestone vesting, end time should equal unlock time.":
+      return "For milestone vesting, end time must match the unlock time.";
+    default:
+      return message;
   }
 }
 
@@ -172,7 +211,7 @@ export function parseBulkCsv(
   if (rows.length === 0) {
     return {
       rows: [],
-      issues: [issue("header", "CSV is empty.")],
+      issues: [issue("header", "Your CSV is empty.")],
     };
   }
 
@@ -193,7 +232,7 @@ export function parseBulkCsv(
 
   for (const header of requiredHeaders) {
     if (!headerMap.has(normalizeHeader(header))) {
-      issues.push(issue("header", `Missing required header: ${header}`));
+      issues.push(issue("header", `Missing required column: ${header}.`));
     }
   }
 
@@ -223,11 +262,11 @@ export function parseBulkCsv(
     if (beneficiaryError) rowIssues.push(beneficiaryError);
 
     const amountError = validateAmountWithDecimals(amountInput, mintDecimals);
-    if (amountError) rowIssues.push(`Amount: ${amountError}`);
+    if (amountError) rowIssues.push(humanizeAmountError(amountError));
 
     const releaseType = parseReleaseType(releaseTypeValue);
     if (releaseType === null) {
-      rowIssues.push("releaseType must be Cliff, Linear, Milestone, 0, 1, or 2.");
+      rowIssues.push("Unknown vesting type. Use Cliff, Linear, Milestone, or 0, 1, 2.");
     }
 
     const startTime = parseTimestamp(startTimeRaw);
@@ -239,22 +278,22 @@ export function parseBulkCsv(
       endTime,
       releaseType ?? 1,
     );
-    if (scheduleError) rowIssues.push(scheduleError);
+    if (scheduleError) rowIssues.push(humanizeScheduleError(scheduleError));
 
     let milestoneIdx = 0;
     if (milestoneIdxRaw) {
       if (!/^\d+$/.test(milestoneIdxRaw)) {
-        rowIssues.push("milestoneIdx must be an integer.");
+        rowIssues.push("Milestone index must be a whole number.");
       } else {
         milestoneIdx = Number(milestoneIdxRaw);
-        if (milestoneIdx > 255) rowIssues.push("milestoneIdx must be 0–255.");
+        if (milestoneIdx > 255) rowIssues.push("Milestone index must be between 0 and 255.");
       }
     }
     if (releaseType !== 2 && milestoneIdx !== 0) {
-      rowIssues.push("milestoneIdx must be 0 for cliff and linear rows.");
+      rowIssues.push("For cliff and linear rows, milestone index must be 0.");
     }
     if (releaseType === 2 && milestoneIdx === 0 && !milestoneIdxRaw) {
-      rowIssues.push("milestoneIdx is required for milestone rows.");
+      rowIssues.push("Enter a milestone index for this milestone row.");
     }
 
     if (rowIssues.length > 0) {
@@ -281,24 +320,50 @@ export function parseBulkCsv(
   }
 
   if (parsedRows.length === 0 && issues.length === 0) {
-    issues.push(issue("header", "CSV must include at least one data row."));
+    issues.push(issue("header", "Add at least one data row to the CSV."));
   }
 
-  // Check for duplicate beneficiaries (1 ClaimRecord per beneficiary per tree).
-  // Milestone leaves (releaseType 2) are exempt — same wallet can hold multiple
-  // milestones with different milestone_idx in one campaign.
-  const hasMilestone = parsedRows.some((r) => r.releaseType === 2);
-  if (!hasMilestone) {
-    const beneficiaryCounts = new Map<string, number[]>();
-    for (const row of parsedRows) {
-      const existing = beneficiaryCounts.get(row.beneficiary) ?? [];
+  // Duplicate rules:
+  // - Cliff / Linear: one beneficiary may appear only once per campaign.
+  // - Milestone: one beneficiary may appear multiple times, but each
+  //   beneficiary + milestoneIdx pair must be unique.
+  const nonMilestoneBeneficiaryCounts = new Map<string, number[]>();
+  const milestoneKeys = new Map<string, number[]>();
+
+  for (const row of parsedRows) {
+    if (row.releaseType === 2) {
+      const key = `${row.beneficiary}:${row.milestoneIdx}`;
+      const existing = milestoneKeys.get(key) ?? [];
       existing.push(row.rowNumber);
-      beneficiaryCounts.set(row.beneficiary, existing);
+      milestoneKeys.set(key, existing);
+      continue;
     }
-    for (const [addr, rows] of beneficiaryCounts) {
-      if (rows.length > 1) {
-        issues.push(issue(rows[1], `Duplicate beneficiary ${addr.slice(0, 8)}… — each recipient can only appear once per campaign.`));
-      }
+
+    const existing = nonMilestoneBeneficiaryCounts.get(row.beneficiary) ?? [];
+    existing.push(row.rowNumber);
+    nonMilestoneBeneficiaryCounts.set(row.beneficiary, existing);
+  }
+
+  for (const [addr, rows] of nonMilestoneBeneficiaryCounts) {
+    if (rows.length > 1) {
+      issues.push(
+        issue(
+          rows[1],
+          `Wallet ${addr.slice(0, 8)}… appears more than once. For cliff and linear campaigns, each wallet can only appear once.`,
+        ),
+      );
+    }
+  }
+
+  for (const [key, rows] of milestoneKeys) {
+    if (rows.length > 1) {
+      const [addr, milestoneIdx] = key.split(":");
+      issues.push(
+        issue(
+          rows[1],
+          `Wallet ${addr.slice(0, 8)}… already uses milestone #${milestoneIdx}. For the same wallet, each milestone needs a different index.`,
+        ),
+      );
     }
   }
 

@@ -41,23 +41,25 @@ export default function DashboardPage() {
   const localCampaigns = useLocalCampaigns(walletAddress);
 
   const senderCampaigns = useMemo(() => {
-    const dbCampaigns = (senderQuery.data?.campaigns ?? []) as Array<{
+    const dbCampaigns = ((senderQuery.data?.campaigns ?? []) as Array<{
       treeAddress: string;
       paused: boolean;
       cancelledAt: number | null;
       totalSupply: number | string;
       totalClaimed: number | string;
-    }>;
+      creator: string;
+    }>).filter((campaign) => campaign.creator === walletAddress);
     const seen = new Set(dbCampaigns.map((c) => c.treeAddress));
     const localOnly = senderQuery.error
       ? localCampaigns.senderCampaigns.filter((c) => !seen.has(c.treeAddress))
       : [];
     return [...dbCampaigns, ...localOnly];
-  }, [senderQuery.data?.campaigns, senderQuery.error, localCampaigns.senderCampaigns]);
+  }, [senderQuery.data?.campaigns, senderQuery.error, localCampaigns.senderCampaigns, walletAddress]);
 
   const recipientCampaigns = useMemo(() => {
     const dbCampaigns = (recipientQuery.data?.campaigns ?? []) as Array<{
       treeAddress: string;
+      creator: string;
       paused: boolean;
       cancelledAt: number | null;
       myClaimed: number | string;
@@ -75,30 +77,46 @@ export default function DashboardPage() {
     return [...dbCampaigns, ...localOnly];
   }, [recipientQuery.data?.campaigns, recipientQuery.error, localCampaigns.recipientCampaigns]);
 
-  const counts = useMemo(() => {
+  const rows = useMemo(() => {
     const nowTs = BigInt(Math.floor(Date.now() / 1000));
-    const statusesByTree = new Map<
+    const map = new Map<
       string,
-      Array<"Active" | "Scheduled" | "Claimable" | "Claimed" | "Paused" | "Cancelled">
+      {
+        role: "sender" | "recipient" | "both";
+        senderStatus?: ReturnType<typeof getSenderStreamStatus>;
+        recipientStatus?: ReturnType<typeof getRecipientStreamStatus>;
+      }
     >();
 
     for (const campaign of senderCampaigns) {
-      const existing = statusesByTree.get(campaign.treeAddress) ?? [];
-      existing.push(getSenderStreamStatus(campaign));
-      statusesByTree.set(campaign.treeAddress, existing);
+      map.set(campaign.treeAddress, {
+        role: "sender",
+        senderStatus: getSenderStreamStatus(campaign),
+      });
     }
 
     for (const campaign of recipientCampaigns) {
-      const existing = statusesByTree.get(campaign.treeAddress) ?? [];
-      existing.push(getRecipientStreamStatus(campaign, nowTs));
-      statusesByTree.set(campaign.treeAddress, existing);
+      const existing = map.get(campaign.treeAddress);
+      const recipientStatus = getRecipientStreamStatus(campaign, nowTs);
+      if (existing) {
+        map.set(campaign.treeAddress, {
+          ...existing,
+          role: campaign.creator === walletAddress ? "both" : "recipient",
+          recipientStatus,
+        });
+      } else {
+        map.set(campaign.treeAddress, {
+          role: "recipient",
+          recipientStatus,
+        });
+      }
     }
 
-    const activeCount = [...statusesByTree.values()].filter(
-      (statuses) =>
-        statuses.includes("Active") ||
-        statuses.includes("Claimable"),
-    ).length;
+    return [...map.entries()];
+  }, [recipientCampaigns, senderCampaigns, walletAddress]);
+
+  const counts = useMemo(() => {
+    const activeCount = rows.filter(([, row]) => row.senderStatus === "Active" || row.recipientStatus === "Claimable").length;
 
     // Total Value Locked (sender campaigns: totalSupply - totalClaimed)
     let tvl = 0n;
@@ -110,20 +128,19 @@ export default function DashboardPage() {
 
     // Claimable now (recipient campaigns where status is Claimable)
     let claimableCount = 0;
-    for (const campaign of recipientCampaigns) {
-      const status = getRecipientStreamStatus(campaign, nowTs);
-      if (status === "Claimable") claimableCount++;
+    for (const [, row] of rows) {
+      if (row.recipientStatus === "Claimable") claimableCount++;
     }
 
     return {
-      total: statusesByTree.size,
+      total: rows.length,
       active: activeCount,
-      sender: senderCampaigns.length,
-      recipient: recipientCampaigns.length,
+      sender: rows.filter(([, row]) => row.role === "sender" || row.role === "both").length,
+      recipient: rows.filter(([, row]) => row.role === "recipient" || row.role === "both").length,
       tvl,
       claimableCount,
     };
-  }, [recipientCampaigns, senderCampaigns]);
+  }, [rows, senderCampaigns]);
 
   const isLoading = senderQuery.isLoading || recipientQuery.isLoading || localCampaigns.isLoading;
 

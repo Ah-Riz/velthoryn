@@ -146,7 +146,7 @@ export function formatVestingError(err: unknown): string {
     raw.includes("rejected by user") ||
     raw.includes("Connection rejected")
   ) {
-    return "Transaction cancelled in wallet.";
+    return "Wallet approval did not complete.";
   }
 
   const vestingKey = matchVestingCode(raw);

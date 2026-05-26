@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useCallback, useMemo } from "react";
+import { useState, useRef, useCallback, useMemo, useEffect } from "react";
 
 type VestingChartProps = {
   releaseType: number;
@@ -14,14 +14,13 @@ type VestingChartProps = {
   formatAmount?: (raw: bigint) => string;
 };
 
-type TimeRange = "1d" | "1w" | "1m" | "3m" | "1y" | "all";
+type TimeRange = "1d" | "1w" | "1m" | "1y" | "all";
 
 const TIME_RANGES: { key: TimeRange; label: string; seconds: number }[] = [
-  { key: "1d", label: "1D", seconds: 86400 },
-  { key: "1w", label: "1W", seconds: 604800 },
-  { key: "1m", label: "1M", seconds: 2592000 },
-  { key: "3m", label: "3M", seconds: 7776000 },
-  { key: "1y", label: "1Y", seconds: 31536000 },
+  { key: "1d", label: "Daily", seconds: 86400 },
+  { key: "1w", label: "Weekly", seconds: 604800 },
+  { key: "1m", label: "Monthly", seconds: 2592000 },
+  { key: "1y", label: "Yearly", seconds: 31536000 },
   { key: "all", label: "All", seconds: 0 },
 ];
 
@@ -129,13 +128,21 @@ function getSmartDefault(startTs: number, endTs: number, now: number): TimeRange
   return "all";
 }
 
+function getCompletedDefault(startTs: number, endTs: number): TimeRange {
+  const totalDuration = endTs - startTs;
+  if (totalDuration <= 86400 * 14) return "1d";
+  if (totalDuration <= 86400 * 90) return "1w";
+  if (totalDuration <= 86400 * 540) return "1m";
+  return "1y";
+}
+
 export function VestingChart({
   releaseType,
   startTs,
   cliffTs,
   endTs,
   totalAmount,
-  vestedAmount,
+  vestedAmount: _vestedAmount,
   cancelledAt,
   milestoneCount = 1,
   formatAmount = defaultFmtAmount,
@@ -151,13 +158,25 @@ export function VestingChart({
   const chartW = W - padLeft - padRight;
   const chartH = H - padTop - padBottom;
 
-  const [timeRange, setTimeRange] = useState<TimeRange>(() => getSmartDefault(startTs, endTs, now));
+  const [timeRange, setTimeRange] = useState<TimeRange>(() =>
+    now >= endTs ? getCompletedDefault(startTs, endTs) : getSmartDefault(startTs, endTs, now),
+  );
+  const [userChangedRange, setUserChangedRange] = useState(false);
 
   const effectiveEnd = cancelledAt && cancelledAt < endTs ? cancelledAt : endTs;
   const vestingComplete = now >= effectiveEnd;
   const finalPct = cancelledAt
     ? Math.min(100, ((effectiveEnd - cliffTs) / (endTs - cliffTs)) * 100)
     : 100;
+
+  useEffect(() => {
+    if (userChangedRange) return;
+    if (vestingComplete) {
+      setTimeRange(getCompletedDefault(startTs, endTs));
+      return;
+    }
+    setTimeRange(getSmartDefault(startTs, endTs, now));
+  }, [userChangedRange, vestingComplete, startTs, endTs, now]);
 
   const { viewStart, viewEnd } = useMemo(() => {
     if (timeRange === "all") {
@@ -245,7 +264,15 @@ export function VestingChart({
   }
 
   const nowX = x(Math.min(now, tMax));
-  const progressPct = totalAmount > 0n ? Number((vestedAmount * 100n) / totalAmount) : 0;
+  const nowCurvePct = vestedPctAt(
+    Math.min(now, effectiveEnd),
+    releaseType,
+    startTs,
+    cliffTs,
+    endTs,
+    cancelledAt ?? null,
+    milestoneCount,
+  );
 
   const svgRef = useRef<SVGSVGElement>(null);
   const [hover, setHover] = useState<{ svgX: number; t: number; pct: number } | null>(null);
@@ -317,7 +344,10 @@ export function VestingChart({
                 <button
                   key={r.key}
                   type="button"
-                  onClick={() => setTimeRange(r.key)}
+                  onClick={() => {
+                    setUserChangedRange(true);
+                    setTimeRange(r.key);
+                  }}
                   className={`rounded-md px-2 py-0.5 text-[10px] font-medium transition ${
                     timeRange === r.key
                       ? "bg-violet-500/20 text-violet-400"
@@ -403,7 +433,7 @@ export function VestingChart({
         {now >= tMin && now <= tMax && (
           <>
             <line x1={nowX} y1={PAD.top} x2={nowX} y2={H - PAD.bottom} stroke="#a78bfa" strokeWidth="1" strokeDasharray="3,3" />
-            <circle cx={nowX} cy={y(progressPct)} r="4" fill="#a78bfa" />
+            <circle cx={nowX} cy={y(nowCurvePct)} r="4" fill="#a78bfa" />
             <text x={nowX} y={PAD.top - 4} textAnchor="middle" className="fill-[#a78bfa]" style={{ fontSize: 7, fontWeight: 600 }}>
               {vestingComplete ? "DONE" : "NOW"}
             </text>

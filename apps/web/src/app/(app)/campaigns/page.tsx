@@ -177,7 +177,9 @@ export default function CampaignsPage() {
   const localCampaigns = useLocalCampaigns(walletAddress, localRefreshKey);
 
   const senderCampaigns = useMemo(() => {
-    const dbSenderCampaigns = (senderCampaignsQuery.data?.campaigns ?? []) as SenderCampaign[];
+    const dbSenderCampaigns = ((senderCampaignsQuery.data?.campaigns ?? []) as SenderCampaign[]).filter(
+      (campaign) => campaign.creator === walletAddress,
+    );
 
     const seen = new Set(dbSenderCampaigns.map((campaign) => campaign.treeAddress));
     const localOnly = localCampaigns.senderCampaigns.filter(
@@ -315,8 +317,8 @@ export default function CampaignsPage() {
       if (existing) {
         map.set(campaign.treeAddress, {
           ...row,
-          role: "both",
-          roleLabel: "Sender + Recipient",
+          role: existing.creator === walletAddress ? "both" : "recipient",
+          roleLabel: existing.creator === walletAddress ? "Sender + Recipient" : "Recipient",
         });
       } else {
         map.set(campaign.treeAddress, row);
@@ -324,7 +326,7 @@ export default function CampaignsPage() {
     }
 
     return [...map.values()].sort((a, b) => b.createdAt - a.createdAt);
-  }, [recipientCampaigns, senderCampaigns]);
+  }, [recipientCampaigns, senderCampaigns, walletAddress]);
 
   const filteredRows = rows.filter((row) => {
     if (activeTab === "recipient" && row.role === "sender") return false;

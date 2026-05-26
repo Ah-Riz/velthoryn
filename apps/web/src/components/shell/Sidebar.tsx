@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useEffect, useState } from "react";
 
 const NAV_ITEMS = [
   {
@@ -43,6 +44,11 @@ const NAV_ITEMS = [
 
 export function Sidebar() {
   const pathname = usePathname();
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   return (
     <aside className="fixed left-0 top-0 z-30 flex h-screen w-[240px] flex-col border-r border-white/[0.06] bg-[#0a0c10]">
@@ -61,9 +67,10 @@ export function Sidebar() {
       <nav className="flex-1 overflow-y-auto px-3 py-4">
         <ul className="space-y-1">
           {NAV_ITEMS.map((item) => {
-            const isActive =
+            const isActive = mounted && (
               pathname === item.href ||
-              (item.href !== "/dashboard" && pathname.startsWith(item.href));
+              (item.href !== "/dashboard" && pathname.startsWith(item.href))
+            );
 
             return (
               <li key={item.href}>

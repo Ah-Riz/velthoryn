@@ -48,6 +48,45 @@ describe("parseBulkCsv", () => {
     expect(result.issues).toEqual([]);
     expect(result.rows[0].amountRaw).toBe("10250000");
   });
+
+  it("rejects duplicate beneficiaries for cliff and linear rows", () => {
+    const csv = [
+      "beneficiary,amount,releaseType,startTime,cliffTime,endTime,milestoneIdx",
+      "11111111111111111111111111111111,1000,Cliff,1735689600,1735776000,1735776000,0",
+      "11111111111111111111111111111111,2500,Linear,1735689600,1735776000,1738368000,0",
+    ].join("\n");
+
+    const result = parseBulkCsv(csv, null);
+
+    expect(result.rows).toEqual([]);
+    expect(result.issues.some((item) => item.message.includes("each wallet can only appear once"))).toBe(true);
+  });
+
+  it("allows duplicate beneficiaries for milestone rows when milestone indexes differ", () => {
+    const csv = [
+      "beneficiary,amount,releaseType,startTime,cliffTime,endTime,milestoneIdx",
+      "11111111111111111111111111111111,1000,Milestone,1735689600,1735776000,1735776000,0",
+      "11111111111111111111111111111111,2500,Milestone,1735689600,1735862400,1735862400,1",
+    ].join("\n");
+
+    const result = parseBulkCsv(csv, null);
+
+    expect(result.issues).toEqual([]);
+    expect(result.rows).toHaveLength(2);
+  });
+
+  it("rejects duplicate milestone rows for the same beneficiary and milestone index", () => {
+    const csv = [
+      "beneficiary,amount,releaseType,startTime,cliffTime,endTime,milestoneIdx",
+      "11111111111111111111111111111111,1000,Milestone,1735689600,1735776000,1735776000,0",
+      "11111111111111111111111111111111,2500,Milestone,1735689600,1735862400,1735862400,0",
+    ].join("\n");
+
+    const result = parseBulkCsv(csv, null);
+
+    expect(result.rows).toEqual([]);
+    expect(result.issues.some((item) => item.message.includes("each milestone needs a different index"))).toBe(true);
+  });
 });
 
 describe("prepareBulkCampaign", () => {

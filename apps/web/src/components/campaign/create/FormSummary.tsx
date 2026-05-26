@@ -36,7 +36,7 @@ export function FormSummary({
   const showMultiplier = mode === "single" && streamCount > 1 && numAmount > 0;
 
   const numBalance = tokenBalance !== null ? Number(tokenBalance) : null;
-  const insufficientBalance = mode !== "bulk" && numBalance !== null && totalDeposit > 0 && totalDeposit > numBalance;
+  const insufficientBalance = numBalance !== null && totalDeposit > 0 && totalDeposit > numBalance;
 
   return (
     <aside className={`${CARD} sticky top-6 h-fit space-y-5 p-5`}>

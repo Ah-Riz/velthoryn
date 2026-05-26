@@ -80,6 +80,7 @@ export default function MilestoneCreatePage() {
     : walletTokens.find((t) => t.mintAddress === mintAddress && !t.isNativeSol) ?? walletTokens.find((t) => t.mintAddress === mintAddress);
   const tokenBalance = walletToken?.uiAmount ?? null;
   const totalAmount = milestones.reduce((sum, m) => sum + (Number(m.amount) || 0), 0);
+  const manualCreatesCampaign = milestones.length > 1;
 
   // Bulk handlers
   function handleCsvParse() {
@@ -271,7 +272,7 @@ export default function MilestoneCreatePage() {
                 onClick={() => { setMode("bulk"); setTxState({ type: "idle" }); }}
                 className={`flex-1 rounded-lg px-3 py-2.5 text-[12px] font-medium transition ${mode === "bulk" ? "bg-white/[0.1] text-white" : "text-[#8b92a5] hover:text-white"}`}
               >
-                Use CSV
+                CSV Campaign
               </button>
             </div>
 
@@ -281,21 +282,33 @@ export default function MilestoneCreatePage() {
               <TokenPickerButton mintAddress={mintAddress} onSelect={handleTokenSelect} autoWrap={useAutoWrap} error={undefined} />
             </div>
 
-            {/* Recipient */}
-            <Field
-              label="Recipient"
-              input={
-                <input
-                  type="text"
-                  placeholder="Solana wallet address..."
-                  value={recipient}
-                  onChange={(e) => setRecipient(e.target.value)}
-                  className={`${INPUT} font-mono ${formErrors.recipient ? INPUT_ERR : ""}`}
-                />
-              }
-              error={formErrors.recipient}
-              hint="All milestones in this campaign go to this recipient"
-            />
+            {mode === "single" ? (
+              <Field
+                label={manualCreatesCampaign ? "Beneficiary for This Campaign" : "Recipient"}
+                input={
+                  <input
+                    type="text"
+                    placeholder="Solana wallet address..."
+                    value={recipient}
+                    onChange={(e) => setRecipient(e.target.value)}
+                    className={`${INPUT} font-mono ${formErrors.recipient ? INPUT_ERR : ""}`}
+                  />
+                }
+                error={formErrors.recipient}
+                hint={
+                  manualCreatesCampaign
+                    ? "All milestone leaves in this campaign go to this one beneficiary."
+                    : "Wallet that can claim this milestone stream."
+                }
+              />
+            ) : (
+              <div className="rounded-xl border border-white/[0.08] bg-white/[0.02] px-4 py-3">
+                <p className="text-[12px] font-medium text-white">Recipients come from the CSV file</p>
+                <p className="mt-1 text-[12px] text-[#8b92a5]">
+                  Paste one or more beneficiary rows below. You do not need to enter a separate recipient here.
+                </p>
+              </div>
+            )}
 
             {/* Cancellation */}
             <ToggleCard checked={cancellable} onChange={setCancellable} title="Allow cancellation?" body="Creator can cancel and reclaim unvested tokens." />
@@ -309,7 +322,9 @@ export default function MilestoneCreatePage() {
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2">
                       <span className="flex h-6 w-6 items-center justify-center rounded-full bg-violet-500/20 text-[11px] font-bold text-violet-400">{i}</span>
-                      <p className="text-[13px] font-medium text-white">Milestone #{i}</p>
+                      <p className="text-[13px] font-medium text-white">
+                        {manualCreatesCampaign ? `Campaign Milestone #${i}` : `Milestone #${i}`}
+                      </p>
                     </div>
                     <div className="flex gap-1.5">
                       <button type="button" onClick={() => duplicateMilestone(i)} className="rounded-md border border-white/[0.08] px-2 py-1 text-[10px] text-[#8b92a5] hover:text-white">
@@ -361,7 +376,7 @@ export default function MilestoneCreatePage() {
                         className={INPUT}
                       />
                     }
-                    hint="Recipient can claim after this time AND creator triggers release. Defaults to now if empty."
+                    hint="Claim opens only after this time and after the creator releases the milestone. Defaults to now if empty."
                   />
                 </div>
               ))}
@@ -430,11 +445,11 @@ export default function MilestoneCreatePage() {
           tokenSymbol={tokenSymbol}
           tokenBalance={tokenBalance}
           streamCount={mode === "single" ? milestones.length : 1}
-          mode={mode === "bulk" || (mode === "single" && milestones.length > 1) ? "bulk" : "single"}
+          mode={mode === "bulk" || manualCreatesCampaign ? "bulk" : "single"}
           submitLabel={
             mode === "bulk"
               ? "Create & Fund Campaign"
-              : milestones.length > 1
+              : manualCreatesCampaign
                 ? `Create Campaign (${milestones.length} Milestones)`
                 : "Create Milestone Stream"
           }

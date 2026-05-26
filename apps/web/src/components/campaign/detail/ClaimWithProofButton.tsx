@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useWallet } from "@solana/wallet-adapter-react";
 import { PublicKey, SystemProgram, Transaction, TransactionInstruction } from "@solana/web3.js";
 import { type Program } from "@coral-xyz/anchor";
 import {
@@ -174,6 +175,17 @@ function isWalletCancellation(err: unknown): boolean {
   return /User rejected|Connection rejected|Transaction cancelled|rejected by user|denied/i.test(raw);
 }
 
+function toWalletApprovalMessage(message: string): string {
+  return message === "Transaction cancelled in wallet."
+    ? "Wallet approval did not complete."
+    : message;
+}
+
+function isWalletInternalSendError(err: unknown): boolean {
+  const raw = err instanceof Error ? err.message : String(err);
+  return /WalletSendTransactionError|Internal error/i.test(raw);
+}
+
 export function ClaimWithProofButton({
   program,
   publicKey,
@@ -189,6 +201,7 @@ export function ClaimWithProofButton({
   onSuccess,
   toast,
 }: Props) {
+  const { sendTransaction, signTransaction } = useWallet();
   const queryClient = useQueryClient();
   const [loading, setLoading] = useState(false);
   const [selectedIdx, setSelectedIdx] = useState(0);
@@ -451,7 +464,53 @@ export function ClaimWithProofButton({
         return;
       }
 
-      const sig = await provider.sendAndConfirm(claimTx, []);
+      claimTx.feePayer = publicKey;
+      const latestBlockhash = await connection.getLatestBlockhash("confirmed");
+      claimTx.recentBlockhash = latestBlockhash.blockhash;
+
+      let sig: string;
+      if (signTransaction) {
+        console.log("[ClaimWithProofButton] using signTransaction + sendRawTransaction path");
+        const signedTx = await signTransaction(claimTx);
+        const rawTx = signedTx.serialize();
+        sig = await connection.sendRawTransaction(rawTx, {
+          skipPreflight: false,
+          preflightCommitment: "confirmed",
+        });
+      } else {
+        try {
+          sig = sendTransaction
+            ? await sendTransaction(claimTx, connection, {
+                skipPreflight: false,
+                preflightCommitment: "confirmed",
+              })
+            : await provider.sendAndConfirm(claimTx, []);
+        } catch (sendErr: unknown) {
+          if (isWalletInternalSendError(sendErr) && signTransaction) {
+            console.warn(
+              "[ClaimWithProofButton] sendTransaction internal error, retrying with signTransaction + sendRawTransaction",
+              sendErr,
+            );
+            const signedTx = await signTransaction(claimTx);
+            const rawTx = signedTx.serialize();
+            sig = await connection.sendRawTransaction(rawTx, {
+              skipPreflight: false,
+              preflightCommitment: "confirmed",
+            });
+          } else {
+            throw sendErr;
+          }
+        }
+      }
+
+      await connection.confirmTransaction(
+        {
+          signature: sig,
+          blockhash: latestBlockhash.blockhash,
+          lastValidBlockHeight: latestBlockhash.lastValidBlockHeight,
+        },
+        "confirmed",
+      );
 
       const wrappedSol = isWrappedSol(mint);
       toast(
@@ -489,7 +548,7 @@ export function ClaimWithProofButton({
       onSuccess();
     } catch (err: unknown) {
       if (isWalletCancellation(err)) {
-        toast("Transaction cancelled in wallet.", "info");
+        toast("Wallet approval did not complete.", "info");
         return;
       }
       const { logs, programErr, message } = extractSimulationDetails(err);
@@ -504,7 +563,7 @@ export function ClaimWithProofButton({
       console.error("[ClaimWithProofButton] leaf data:", JSON.stringify(selected.leaf));
       console.error("[ClaimWithProofButton] proof length:", selected.proof.length);
       const fullStr = [message, logs.join("\n")].filter(Boolean).join("\n");
-      const formatted = formatVestingError({ message: fullStr || message });
+      const formatted = toWalletApprovalMessage(formatVestingError({ message: fullStr || message }));
       if (formatted !== "Transaction failed. Please try again.") {
         toast(stringifyForToast(formatted), "error");
         return;
