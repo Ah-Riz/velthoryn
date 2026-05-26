@@ -5,7 +5,6 @@ import {
   makeLeaf,
   makeTwoLeafCampaignBody,
   EMPTY_SIBLING,
-  OTHER_BENEFICIARY,
 } from "../helpers/requests";
 
 describe("merkle verify", () => {

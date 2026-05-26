@@ -287,13 +287,8 @@ export default function CampaignPage({ params }: { params: Promise<{ id: string 
     if (localSchedule) {
       return undefined;
     }
-    if (isSingleLeaf) {
-      if (localSchedule?.beneficiary && localSchedule.beneficiary !== beneficiaryKey) {
-        return undefined;
-      }
-    }
     return beneficiaryKey;
-  }, [beneficiaryKey, isSingleLeaf, localSchedule]);
+  }, [beneficiaryKey, localSchedule]);
   const proofQuery = useProofLookup(
     treeAddress,
     proofBeneficiary,
@@ -664,7 +659,7 @@ export default function CampaignPage({ params }: { params: Promise<{ id: string 
     ? vestedAmount(totalSupply, releaseType, cliffTsBigint, endTsBigint, cancelledAtBigint, nowTs, singleMilestoneReleased)
     : 0n;
   const claimable = vested > totalClaimed ? vested - totalClaimed : 0n;
-  const recipientLeaves = proofAllQuery.data ?? [];
+  const recipientLeaves = useMemo(() => proofAllQuery.data ?? [], [proofAllQuery.data]);
   const isRecipientView = isMultiRecipient && recipientLeaves.length > 0;
   const isRecipientMetricsLoading =
     isMultiRecipient &&
@@ -761,7 +756,7 @@ export default function CampaignPage({ params }: { params: Promise<{ id: string 
     : nowTs >= cliffTsBigint
       ? "Ready To Claim"
       : "Awaiting Unlock";
-  const milestoneEntries = useMemo(() => {
+  const milestoneEntries = (() => {
     if (!isMilestone) return [];
     if (isMultiRecipient && recipientLeaves.length > 0) {
       return recipientLeaves
@@ -785,13 +780,13 @@ export default function CampaignPage({ params }: { params: Promise<{ id: string 
       amount: totalSupply,
       cliffTime: cliffTsBigint,
     }];
-  }, [isMilestone, isMultiRecipient, recipientLeaves, milestoneIdx, totalSupply, cliffTsBigint, treeState?.leafCount]);
+  })();
 
-  const milestoneReleasedCount = useMemo(() => {
+  const milestoneReleasedCount = (() => {
     if (!isMilestone || milestoneEntries.length === 0) return 0;
     const flags = treeState?.milestoneReleasedFlags ?? new Uint8Array(32);
     return milestoneEntries.filter((m) => isMilestoneTriggered(flags, m.index)).length;
-  }, [isMilestone, milestoneEntries, treeState?.milestoneReleasedFlags]);
+  })();
 
   const withdrawDisabledReason = beneficiaryMismatch && isSingleLeaf
     ? `Only beneficiary ${truncateAddress(expectedBeneficiary)} can claim`

@@ -479,27 +479,22 @@ export function ClaimWithProofButton({
         });
       } else {
         try {
-          sig = sendTransaction
-            ? await sendTransaction(claimTx, connection, {
-                skipPreflight: false,
-                preflightCommitment: "confirmed",
-              })
-            : await provider.sendAndConfirm(claimTx, []);
-        } catch (sendErr: unknown) {
-          if (isWalletInternalSendError(sendErr) && signTransaction) {
-            console.warn(
-              "[ClaimWithProofButton] sendTransaction internal error, retrying with signTransaction + sendRawTransaction",
-              sendErr,
-            );
-            const signedTx = await signTransaction(claimTx);
-            const rawTx = signedTx.serialize();
-            sig = await connection.sendRawTransaction(rawTx, {
+          if (sendTransaction) {
+            sig = await sendTransaction(claimTx, connection, {
               skipPreflight: false,
               preflightCommitment: "confirmed",
             });
           } else {
-            throw sendErr;
+            sig = await provider.sendAndConfirm(claimTx, []);
           }
+        } catch (sendErr: unknown) {
+          if (isWalletInternalSendError(sendErr)) {
+            console.warn(
+              "[ClaimWithProofButton] sendTransaction internal error without signTransaction fallback",
+              sendErr,
+            );
+          }
+          throw sendErr;
         }
       }
 
