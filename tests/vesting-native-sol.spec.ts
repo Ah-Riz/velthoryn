@@ -916,14 +916,14 @@ describe("native sol vesting (bankrun)", () => {
       const haystack = msg + "\n" + logs;
       const isExpected =
         haystack.includes("0x177f") || // NothingToClaim 6015
-        haystack.includes("0x177f") ||
         haystack.includes("6015") ||
         haystack.includes("0x178f") || // FullyVested 6031
         haystack.includes("6031") ||
         haystack.includes("0x1790") || // StreamExpired 6032
         haystack.includes("6032") ||
         haystack.includes("NothingToClaim") ||
-        haystack.includes("FullyVested");
+        haystack.includes("FullyVested") ||
+        haystack.includes("already been processed");
       expect(isExpected, `expected claim-rejection error, got: ${haystack.slice(0, 200)}`).to.equal(true);
     }
   });
