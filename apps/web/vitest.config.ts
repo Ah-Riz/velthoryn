@@ -13,6 +13,8 @@ export default defineConfig({
   resolve: {
     alias: {
       "@": resolve(__dirname, "src"),
+      "@velthoryn/client": resolve(__dirname, "../../clients/ts/src/index.ts"),
+      "bn.js": resolve(__dirname, "../../node_modules/.pnpm/bn.js@5.2.3/node_modules/bn.js/lib/bn.js"),
     },
   },
 });

@@ -14,6 +14,14 @@ vi.mock("@/lib/indexer/claim-events", async (importOriginal) => {
   };
 });
 
+vi.mock("@/lib/indexer/event-indexer", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/lib/indexer/event-indexer")>();
+  return {
+    ...actual,
+    indexAllEvents: vi.fn(),
+  };
+});
+
 // ---------------------------------------------------------------------------
 // Route handler imports (after mocks)
 // ---------------------------------------------------------------------------
@@ -42,6 +50,7 @@ import {
   parseClaimedEvent,
   CLAIMED_DISCRIMINATOR,
 } from "@/lib/indexer/claim-events";
+import { indexAllEvents } from "@/lib/indexer/event-indexer";
 
 import { resetDb } from "../helpers/db";
 import {
@@ -985,9 +994,10 @@ describe("POST /api/admin/sync", () => {
   it("returns { ok, processed, lastSlot } with valid key", async () => {
     process.env.ADMIN_API_KEY = "super-secret-key";
 
-    vi.mocked(syncClaimEvents).mockResolvedValue({
+    vi.mocked(indexAllEvents).mockResolvedValue({
       processed: 42,
       lastSlot: 12345,
+      byType: { claimed: 42, cancelled: 0, paused: 0, root_updated: 0, withdrawn: 0, milestone_released: 0, stream_cancelled: 0 },
     });
 
     const req = new NextRequest(makeUrl("/api/admin/sync"), {
@@ -1002,15 +1012,16 @@ describe("POST /api/admin/sync", () => {
     expect(json.ok).toBe(true);
     expect(json.processed).toBe(42);
     expect(json.lastSlot).toBe(12345);
-    expect(syncClaimEvents).toHaveBeenCalledWith(10000);
+    expect(indexAllEvents).toHaveBeenCalledWith(10000);
   });
 
-  it("calls syncClaimEvents without fromSlot if body has none", async () => {
+  it("calls indexAllEvents without fromSlot if body has none", async () => {
     process.env.ADMIN_API_KEY = "super-secret-key";
 
-    vi.mocked(syncClaimEvents).mockResolvedValue({
+    vi.mocked(indexAllEvents).mockResolvedValue({
       processed: 0,
       lastSlot: 0,
+      byType: { claimed: 0, cancelled: 0, paused: 0, root_updated: 0, withdrawn: 0, milestone_released: 0, stream_cancelled: 0 },
     });
 
     const req = new NextRequest(makeUrl("/api/admin/sync"), {
@@ -1020,13 +1031,13 @@ describe("POST /api/admin/sync", () => {
     const res = await postAdminSync(req);
 
     expect(res.status).toBe(200);
-    expect(syncClaimEvents).toHaveBeenCalledWith(undefined);
+    expect(indexAllEvents).toHaveBeenCalledWith(undefined);
   });
 
-  it("returns 500 when syncClaimEvents throws", async () => {
+  it("returns 500 when indexAllEvents throws", async () => {
     process.env.ADMIN_API_KEY = "super-secret-key";
 
-    vi.mocked(syncClaimEvents).mockRejectedValue(new Error("RPC connection failed"));
+    vi.mocked(indexAllEvents).mockRejectedValue(new Error("RPC connection failed"));
 
     const req = new NextRequest(makeUrl("/api/admin/sync"), {
       method: "POST",

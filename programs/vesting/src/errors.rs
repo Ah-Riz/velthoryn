@@ -89,4 +89,7 @@ pub enum VestingError {
 
     #[msg("Native SOL transfer would drop PDA below rent-exempt minimum")]
     NativeSolRentViolation,
+
+    #[msg("Token-2022 mints are not supported; use classic SPL Token")]
+    UnsupportedMint,
 }

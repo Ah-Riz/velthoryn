@@ -4,6 +4,18 @@ import { ZodError } from "zod";
 import { getRequestId } from "@/lib/api/request-id";
 import { jsonResponse } from "@/lib/api/json-response";
 import { logRequest } from "@/lib/api/logger";
+import { API_VERSION } from "@/lib/api/version";
+
+// Lazily import Sentry so the module remains usable when DSN is not configured
+async function captureToSentry(error: unknown): Promise<void> {
+  if (!process.env.NEXT_PUBLIC_SENTRY_DSN) return;
+  try {
+    const { captureException } = await import("@sentry/nextjs");
+    captureException(error);
+  } catch {
+    // Sentry unavailable — continue silently
+  }
+}
 
 export type ErrorCode =
   | "VALIDATION_ERROR"
@@ -13,7 +25,15 @@ export type ErrorCode =
   | "RATE_LIMITED"
   | "PAYLOAD_TOO_LARGE"
   | "CONFLICT"
-  | "INTERNAL_ERROR";
+  | "INTERNAL_ERROR"
+  // Clawback-specific error codes
+  | "NOT_CANCELLABLE"
+  | "ALREADY_CANCELLED"
+  | "FULLY_VESTED"
+  | "GRACE_PERIOD_ACTIVE"
+  | "NOT_CANCELLED"
+  | "NOT_SINGLE_STREAM"
+  | "MILESTONE_ALREADY_RELEASED";
 
 export class AppError extends Error {
   constructor(
@@ -88,7 +108,7 @@ export function errorResponse(
     body.details = error.details;
   }
 
-  const headers: Record<string, string> = {};
+  const headers: Record<string, string> = { "X-API-Version": API_VERSION };
   if (error instanceof RateLimitError) {
     headers["Retry-After"] = String(error.retryAfter);
   }
@@ -101,7 +121,7 @@ export function errorResponse(
 
 export type RouteHandler = (
   request: NextRequest,
-  context?: { params?: Promise<Record<string, string>> },
+  context: { params: Promise<any> },
 ) => Promise<NextResponse>;
 
 export function errorHandler(handler: RouteHandler): RouteHandler {
@@ -120,6 +140,11 @@ export function errorHandler(handler: RouteHandler): RouteHandler {
       });
       const headers = new Headers(response.headers);
       headers.set("x-request-id", requestId);
+      // X-API-Version is set here for all successful responses; error responses
+      // get it in errorResponse() below.
+      if (!headers.has("X-API-Version")) {
+        headers.set("X-API-Version", API_VERSION);
+      }
       return new NextResponse(response.body, {
         status: response.status,
         statusText: response.statusText,
@@ -167,6 +192,9 @@ export function errorHandler(handler: RouteHandler): RouteHandler {
         message: error instanceof Error ? error.message : "Unknown error",
         stack: error instanceof Error ? error.stack : undefined,
       });
+
+      // Report unhandled errors to Sentry when DSN is configured
+      void captureToSentry(error);
 
       return errorResponse(new InternalError(), requestId);
     }

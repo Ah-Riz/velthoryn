@@ -29,11 +29,8 @@ class MemoryRedis implements RedisLike {
     return entry.value as T;
   }
 
-  async set(
-    key: string,
-    value: string,
-    options?: { ex?: number },
-  ): Promise<"OK"> {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  async set(key: string, value: any, options?: any): Promise<any> {
     const expiresAt =
       options?.ex !== undefined ? Date.now() + options.ex * 1000 : 0;
     this.store.set(key, { value, expiresAt });

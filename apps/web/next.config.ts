@@ -1,4 +1,5 @@
 import type { NextConfig } from "next";
+import { withSentryConfig } from "@sentry/nextjs";
 
 const nextConfig: NextConfig = {
   experimental: {
@@ -37,4 +38,13 @@ const nextConfig: NextConfig = {
   },
 };
 
-export default nextConfig;
+// Wrap with Sentry only when DSN is configured (local dev/CI without DSN stays clean)
+export default process.env.NEXT_PUBLIC_SENTRY_DSN
+  ? withSentryConfig(nextConfig, {
+      // Suppress noisy Sentry build output unless debugging
+      silent: true,
+      // Source maps help Sentry de-obfuscate stack traces; strip them from the
+      // production bundle so they are not shipped to end users.
+      sourcemaps: { disable: false },
+    })
+  : nextConfig;

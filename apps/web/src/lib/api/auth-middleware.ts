@@ -1,7 +1,6 @@
 import { PublicKey } from "@solana/web3.js";
 import nacl from "tweetnacl";
 import type { NextRequest } from "next/server";
-import { NextResponse } from "next/server";
 import { getRedis } from "@/lib/api/redis";
 import { AuthError } from "@/lib/api/errors";
 
@@ -101,21 +100,8 @@ export async function verifyWalletAuth(
 
 export async function requireAuth(
   request: NextRequest,
-): Promise<AuthContext | NextResponse> {
-  try {
-    return await verifyWalletAuth(request);
-  } catch (error) {
-    if (error instanceof AuthError) {
-      return NextResponse.json(
-        { error: "Unauthorized", code: "UNAUTHORIZED" },
-        {
-          status: 401,
-          headers: { "WWW-Authenticate": "Solana" },
-        },
-      );
-    }
-    throw error;
-  }
+): Promise<AuthContext> {
+  return verifyWalletAuth(request);
 }
 
 export async function storeNonce(
@@ -130,4 +116,17 @@ export async function storeNonce(
 export function generateNonce(): string {
   const bytes = nacl.randomBytes(32);
   return Buffer.from(bytes).toString("base64url");
+}
+
+/**
+ * Extracts the authenticated wallet address from a request that has already
+ * passed `withRoute({ auth: true })`. Does NOT re-verify the signature — it
+ * relies on the fact that the route wrapper has already done so.
+ */
+export function getAuthenticatedWallet(request: { headers: { get: (k: string) => string | null } }): string {
+  const parsed = parseAuthorizationHeader(request.headers.get("authorization"));
+  if (!parsed) throw new AuthError("Unauthorized");
+  const message = parseAuthMessage(parsed.messageBytes);
+  if (!message) throw new AuthError("Unauthorized");
+  return message.wallet;
 }

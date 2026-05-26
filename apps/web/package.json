@@ -10,10 +10,13 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "db:push": "drizzle-kit push",
+    "db:generate": "drizzle-kit generate",
+    "db:migrate": "drizzle-kit migrate",
     "test:e2e": "playwright test"
   },
   "dependencies": {
     "@coral-xyz/anchor": "^0.32.1",
+    "@sentry/nextjs": "^10.53.1",
     "@solana/spl-token": "^0.4.13",
     "@solana/wallet-adapter-base": "^0.9.23",
     "@solana/wallet-adapter-react": "^0.15.35",
@@ -22,6 +25,7 @@
     "@tanstack/react-query": "^5.67.0",
     "@upstash/ratelimit": "^2.0.8",
     "@upstash/redis": "^1.38.0",
+    "@velthoryn/client": "workspace:*",
     "bs58": "^6.0.0",
     "drizzle-orm": "^0.39.3",
     "keccak256": "^1.0.6",

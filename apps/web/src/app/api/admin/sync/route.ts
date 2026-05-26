@@ -1,6 +1,6 @@
 import { NextRequest } from "next/server";
 import { jsonResponse } from "@/lib/api/json-response";
-import { syncClaimEvents } from "@/lib/indexer/claim-events";
+import { indexAllEvents } from "@/lib/indexer/event-indexer";
 import { withRoute } from "@/lib/api/route-wrapper";
 
 async function postAdminSyncHandler(request: NextRequest) {
@@ -14,8 +14,8 @@ async function postAdminSyncHandler(request: NextRequest) {
     // empty body is fine
   }
 
-  const { processed, lastSlot } = await syncClaimEvents(fromSlot);
-  return jsonResponse({ ok: true, processed, lastSlot });
+  const { processed, lastSlot, byType } = await indexAllEvents(fromSlot);
+  return jsonResponse({ ok: true, processed, lastSlot, byType });
 }
 
 export const POST = withRoute(

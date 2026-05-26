@@ -143,6 +143,144 @@ export const claimEvents = pgTable(
 );
 
 // ---------------------------------------------------------------------------
+// cancel_events -- CampaignCancelled on-chain events
+// ---------------------------------------------------------------------------
+
+export const cancelEvents = pgTable(
+  "cancel_events",
+  {
+    id: serial("id").primaryKey(),
+    campaignId: integer("campaign_id")
+      .notNull()
+      .references(() => campaigns.id, { onDelete: "cascade" }),
+    cancelledAt: bigint("cancelled_at", { mode: "bigint" }).notNull(),
+    claimedAtCancel: bigint("claimed_at_cancel", { mode: "bigint" }).notNull(),
+    signature: text("signature").notNull().unique(),
+    slot: bigint("slot", { mode: "bigint" }).notNull(),
+    blockTime: bigint("block_time", { mode: "bigint" }).notNull(),
+  },
+  (table) => [
+    index("idx_cancel_events_campaign").on(table.campaignId),
+    index("idx_cancel_events_block_time").on(table.blockTime),
+  ],
+);
+
+// ---------------------------------------------------------------------------
+// pause_events -- CampaignPaused / CampaignUnpaused on-chain events
+// ---------------------------------------------------------------------------
+
+export const pauseEvents = pgTable(
+  "pause_events",
+  {
+    id: serial("id").primaryKey(),
+    campaignId: integer("campaign_id")
+      .notNull()
+      .references(() => campaigns.id, { onDelete: "cascade" }),
+    paused: boolean("paused").notNull(),
+    signature: text("signature").notNull().unique(),
+    slot: bigint("slot", { mode: "bigint" }).notNull(),
+    blockTime: bigint("block_time", { mode: "bigint" }).notNull(),
+  },
+  (table) => [
+    index("idx_pause_events_campaign").on(table.campaignId),
+    index("idx_pause_events_block_time").on(table.blockTime),
+  ],
+);
+
+// ---------------------------------------------------------------------------
+// root_update_events -- RootUpdated on-chain events
+// ---------------------------------------------------------------------------
+
+export const rootUpdateEvents = pgTable(
+  "root_update_events",
+  {
+    id: serial("id").primaryKey(),
+    campaignId: integer("campaign_id")
+      .notNull()
+      .references(() => campaigns.id, { onDelete: "cascade" }),
+    oldRoot: text("old_root").notNull(),
+    newRoot: text("new_root").notNull(),
+    newLeafCount: integer("new_leaf_count").notNull(),
+    signature: text("signature").notNull().unique(),
+    slot: bigint("slot", { mode: "bigint" }).notNull(),
+    blockTime: bigint("block_time", { mode: "bigint" }).notNull(),
+  },
+  (table) => [
+    index("idx_root_update_events_campaign").on(table.campaignId),
+    index("idx_root_update_events_block_time").on(table.blockTime),
+  ],
+);
+
+// ---------------------------------------------------------------------------
+// withdraw_events -- UnvestedWithdrawn on-chain events
+// ---------------------------------------------------------------------------
+
+export const withdrawEvents = pgTable(
+  "withdraw_events",
+  {
+    id: serial("id").primaryKey(),
+    campaignId: integer("campaign_id")
+      .notNull()
+      .references(() => campaigns.id, { onDelete: "cascade" }),
+    amount: bigint("amount", { mode: "bigint" }).notNull(),
+    signature: text("signature").notNull().unique(),
+    slot: bigint("slot", { mode: "bigint" }).notNull(),
+    blockTime: bigint("block_time", { mode: "bigint" }).notNull(),
+  },
+  (table) => [
+    index("idx_withdraw_events_campaign").on(table.campaignId),
+    index("idx_withdraw_events_block_time").on(table.blockTime),
+  ],
+);
+
+// ---------------------------------------------------------------------------
+// milestone_events -- MilestoneReleased on-chain events
+// ---------------------------------------------------------------------------
+
+export const milestoneEvents = pgTable(
+  "milestone_events",
+  {
+    id: serial("id").primaryKey(),
+    campaignId: integer("campaign_id")
+      .notNull()
+      .references(() => campaigns.id, { onDelete: "cascade" }),
+    milestoneIdx: smallint("milestone_idx").notNull(),
+    releasedBy: text("released_by").notNull(),
+    signature: text("signature").notNull().unique(),
+    slot: bigint("slot", { mode: "bigint" }).notNull(),
+    blockTime: bigint("block_time", { mode: "bigint" }).notNull(),
+  },
+  (table) => [
+    index("idx_milestone_events_campaign").on(table.campaignId),
+    index("idx_milestone_events_block_time").on(table.blockTime),
+  ],
+);
+
+// ---------------------------------------------------------------------------
+// stream_cancel_events -- StreamCancelled on-chain events
+// ---------------------------------------------------------------------------
+
+export const streamCancelEvents = pgTable(
+  "stream_cancel_events",
+  {
+    id: serial("id").primaryKey(),
+    campaignId: integer("campaign_id")
+      .notNull()
+      .references(() => campaigns.id, { onDelete: "cascade" }),
+    cancelledAt: bigint("cancelled_at", { mode: "bigint" }).notNull(),
+    amountToBeneficiary: bigint("amount_to_beneficiary", { mode: "bigint" }).notNull(),
+    amountToCreator: bigint("amount_to_creator", { mode: "bigint" }).notNull(),
+    signature: text("signature").notNull().unique(),
+    slot: bigint("slot", { mode: "bigint" }).notNull(),
+    blockTime: bigint("block_time", { mode: "bigint" }).notNull(),
+  },
+  (table) => [
+    index("idx_stream_cancel_events_campaign").on(table.campaignId),
+    index("idx_stream_cancel_events_block_time").on(table.blockTime),
+  ],
+);
+
+// ---------------------------------------------------------------------------
 // waitlist -- email waitlist
 // ---------------------------------------------------------------------------
 
@@ -174,3 +312,15 @@ export type Leaf = typeof leaves.$inferSelect;
 export type NewLeaf = typeof leaves.$inferInsert;
 export type ClaimEvent = typeof claimEvents.$inferSelect;
 export type NewClaimEvent = typeof claimEvents.$inferInsert;
+export type CancelEvent = typeof cancelEvents.$inferSelect;
+export type NewCancelEvent = typeof cancelEvents.$inferInsert;
+export type PauseEvent = typeof pauseEvents.$inferSelect;
+export type NewPauseEvent = typeof pauseEvents.$inferInsert;
+export type RootUpdateEvent = typeof rootUpdateEvents.$inferSelect;
+export type NewRootUpdateEvent = typeof rootUpdateEvents.$inferInsert;
+export type WithdrawEvent = typeof withdrawEvents.$inferSelect;
+export type NewWithdrawEvent = typeof withdrawEvents.$inferInsert;
+export type MilestoneEvent = typeof milestoneEvents.$inferSelect;
+export type NewMilestoneEvent = typeof milestoneEvents.$inferInsert;
+export type StreamCancelEvent = typeof streamCancelEvents.$inferSelect;
+export type NewStreamCancelEvent = typeof streamCancelEvents.$inferInsert;

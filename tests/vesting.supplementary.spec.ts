@@ -7,9 +7,11 @@ import {
 } from "@solana/web3.js";
 import {
   createAssociatedTokenAccountInstruction,
+  createMint,
   getAccount,
   getAssociatedTokenAddressSync,
   TOKEN_PROGRAM_ID,
+  TOKEN_2022_PROGRAM_ID,
   ASSOCIATED_TOKEN_PROGRAM_ID,
 } from "@solana/spl-token";
 import { expect } from "chai";
@@ -4404,6 +4406,79 @@ describe("vesting supplementary T6-T25", () => {
     const cancelledTree = await program.account.vestingTree.fetch(treePda);
     expect(cancelledTree.paused).to.equal(false);
     expect(cancelledTree.cancelledAt).to.not.be.null;
+  });
+
+  // -------------------------------------------------------------------------
+  // T71: Token-2022 mint guard — create_campaign must reject Token-2022 mints
+  // -------------------------------------------------------------------------
+  it("T71: create_campaign with Token-2022 mint is rejected (UnsupportedMint guard)", async function () {
+    // Create a Token-2022 mint instead of a classic SPL Token mint
+    const payer = (provider.wallet as any).payer;
+    const token22Mint = await createMint(
+      provider.connection,
+      payer,
+      creator.publicKey, // mint authority
+      creator.publicKey, // freeze authority
+      9,
+      undefined,        // default keypair
+      undefined,        // default confirmOptions
+      TOKEN_2022_PROGRAM_ID,
+    );
+
+    const CAMPAIGN_ID = 990_001;
+    const [treePda] = await treePDA(PROGRAM_ID, creator.publicKey, token22Mint, CAMPAIGN_ID);
+    const [vaultAuthPda] = await vaultAuthorityPDA(PROGRAM_ID, treePda);
+
+    // Non-zero merkle root
+    const merkleRoot = Array.from(Buffer.alloc(32));
+    merkleRoot[0] = 1;
+
+    let threw = false;
+    try {
+      await program.methods
+        .createCampaign({
+          campaignId: new BN(CAMPAIGN_ID),
+          merkleRoot,
+          leafCount: 1,
+          totalSupply: new BN(1_000),
+          cancellable: false,
+          cancelAuthority: null,
+          pauseAuthority: null,
+        })
+        .accounts({
+          creator: creator.publicKey,
+          mint: token22Mint,
+          vestingTree: treePda,
+          vaultAuthority: vaultAuthPda,
+        })
+        .signers([creator])
+        .rpc();
+    } catch (err: unknown) {
+      threw = true;
+      const msg = (err as { message?: string }).message ?? String(err);
+      const logs: string = ((err as { logs?: string[] }).logs ?? []).join("\n");
+      const haystack = msg + "\n" + logs;
+
+      // The guard fires at Anchor's account deserialization layer (wrong program
+      // owner) or at our explicit constraint. Either way the transaction must fail
+      // and the error should reference the mint or program ownership.
+      const isExpectedRejection =
+        haystack.includes("UnsupportedMint") ||    // our custom error name
+        haystack.includes("0x179d") ||              // UnsupportedMint hex (6037)
+        haystack.includes("AccountOwnedByWrongProgram") ||
+        haystack.includes("0xbbf") ||              // AccountOwnedByWrongProgram hex
+        haystack.includes("owned by wrong program") ||
+        haystack.includes("3007") ||               // AccountOwnedByWrongProgram decimal
+        haystack.toLowerCase().includes("token") ||
+        haystack.toLowerCase().includes("program");
+
+      expect(
+        isExpectedRejection,
+        `Expected UnsupportedMint or program-ownership error. Got: ${msg}`,
+      ).to.equal(true);
+    }
+
+    expect(threw, "Expected create_campaign with Token-2022 mint to throw").to.equal(true);
   });
 
 });

@@ -16,6 +16,7 @@ import {
   retryAfterSeconds,
 } from "@/lib/api/rate-limit";
 import { RateLimitError } from "@/lib/api/errors";
+import { API_VERSION } from "@/lib/api/version";
 
 export interface RouteOptions {
   auth?: boolean;
@@ -60,10 +61,7 @@ async function applyGuards(
   }
 
   if (options.auth) {
-    const authResult = await requireAuth(request);
-    if (authResult instanceof NextResponse) {
-      return authResult;
-    }
+    await requireAuth(request);
   }
 
   return null;
@@ -79,12 +77,17 @@ export function withRoute(
     return handler(request, context);
   };
 
+  // For routes without dynamic segments, Next.js still passes a context object.
+  // The handler from withRoute expects the RouteHandler signature but some routes
+  // don't use context — we wrap to satisfy Next.js type checking.
+
   return errorHandler(guarded);
 }
 
 export function attachRequestId(response: NextResponse, request: NextRequest): NextResponse {
   const headers = new Headers(response.headers);
   headers.set("x-request-id", getRequestId(request));
+  headers.set("X-API-Version", API_VERSION);
   return new NextResponse(response.body, {
     status: response.status,
     statusText: response.statusText,

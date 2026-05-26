@@ -3,7 +3,16 @@ import { NextRequest } from "next/server";
 import { eq } from "drizzle-orm";
 import { POST as postCampaigns } from "@/app/api/campaigns/route";
 import { db } from "@/lib/db";
-import { campaigns, claimEvents } from "@/lib/db/schema";
+import {
+  campaigns,
+  claimEvents,
+  cancelEvents,
+  pauseEvents,
+  milestoneEvents,
+  rootUpdateEvents,
+  withdrawEvents,
+  streamCancelEvents,
+} from "@/lib/db/schema";
 import {
   computeSingleLeafRoot,
   makeCampaignBody,
@@ -48,7 +57,7 @@ export async function createCampaignViaPost(
     body: JSON.stringify(body),
     headers: { authorization },
   });
-  const res = await postCampaigns(req);
+  const res = await postCampaigns(req, { params: Promise.resolve({}) });
   const json = (await res.json()) as { campaignId?: number; error?: string };
 
   if (!json.campaignId) {
@@ -112,4 +121,142 @@ export async function setCampaignStatus(
     update.totalSupply = BigInt(totalSupply);
   }
   await db.update(campaigns).set(update).where(eq(campaigns.treeAddress, treeAddress));
+}
+
+export async function seedMilestoneEvent(
+  campaignId: number,
+  overrides: Partial<{
+    milestoneIdx: number;
+    releasedBy: string;
+    signature: string;
+    slot: number;
+    blockTime: number;
+  }> = {},
+): Promise<void> {
+  const sig =
+    overrides.signature ??
+    `milestone_sig_${campaignId}_${Date.now()}_${Math.random().toString(36).slice(2)}`;
+  await db.insert(milestoneEvents).values({
+    campaignId,
+    milestoneIdx: overrides.milestoneIdx ?? 0,
+    releasedBy: overrides.releasedBy ?? "11111111111111111111111111111112",
+    signature: sig,
+    slot: BigInt(overrides.slot ?? 1000),
+    blockTime: BigInt(overrides.blockTime ?? 1700000000),
+  });
+}
+
+export async function seedCancelEvent(
+  campaignId: number,
+  overrides: Partial<{
+    cancelledAt: number;
+    claimedAtCancel: number;
+    signature: string;
+    slot: number;
+    blockTime: number;
+  }> = {},
+): Promise<void> {
+  const sig =
+    overrides.signature ??
+    `cancel_sig_${campaignId}_${Date.now()}_${Math.random().toString(36).slice(2)}`;
+  await db.insert(cancelEvents).values({
+    campaignId,
+    cancelledAt: BigInt(overrides.cancelledAt ?? 1700050000),
+    claimedAtCancel: BigInt(overrides.claimedAtCancel ?? 500000),
+    signature: sig,
+    slot: BigInt(overrides.slot ?? 1000),
+    blockTime: BigInt(overrides.blockTime ?? 1700050000),
+  });
+}
+
+export async function seedPauseEvent(
+  campaignId: number,
+  overrides: Partial<{
+    paused: boolean;
+    signature: string;
+    slot: number;
+    blockTime: number;
+  }> = {},
+): Promise<void> {
+  const sig =
+    overrides.signature ??
+    `pause_sig_${campaignId}_${Date.now()}_${Math.random().toString(36).slice(2)}`;
+  await db.insert(pauseEvents).values({
+    campaignId,
+    paused: overrides.paused ?? true,
+    signature: sig,
+    slot: BigInt(overrides.slot ?? 1000),
+    blockTime: BigInt(overrides.blockTime ?? 1700010000),
+  });
+}
+
+export async function seedWithdrawEvent(
+  campaignId: number,
+  overrides: Partial<{
+    amount: number;
+    signature: string;
+    slot: number;
+    blockTime: number;
+  }> = {},
+): Promise<void> {
+  const sig =
+    overrides.signature ??
+    `withdraw_sig_${campaignId}_${Date.now()}_${Math.random().toString(36).slice(2)}`;
+  await db.insert(withdrawEvents).values({
+    campaignId,
+    amount: BigInt(overrides.amount ?? 200000),
+    signature: sig,
+    slot: BigInt(overrides.slot ?? 1000),
+    blockTime: BigInt(overrides.blockTime ?? 1700060000),
+  });
+}
+
+export async function seedRootUpdateEvent(
+  campaignId: number,
+  overrides: Partial<{
+    oldRoot: string;
+    newRoot: string;
+    newLeafCount: number;
+    signature: string;
+    slot: number;
+    blockTime: number;
+  }> = {},
+): Promise<void> {
+  const sig =
+    overrides.signature ??
+    `root_sig_${campaignId}_${Date.now()}_${Math.random().toString(36).slice(2)}`;
+  await db.insert(rootUpdateEvents).values({
+    campaignId,
+    oldRoot: overrides.oldRoot ?? "aa".repeat(32),
+    newRoot: overrides.newRoot ?? "bb".repeat(32),
+    newLeafCount: overrides.newLeafCount ?? 2,
+    signature: sig,
+    slot: BigInt(overrides.slot ?? 1000),
+    blockTime: BigInt(overrides.blockTime ?? 1700020000),
+  });
+}
+
+export async function seedStreamCancelEvent(
+  campaignId: number,
+  overrides: Partial<{
+    cancelledAt: number;
+    amountToBeneficiary: number;
+    amountToCreator: number;
+    signature: string;
+    slot: number;
+    blockTime: number;
+  }> = {},
+): Promise<void> {
+  const sig =
+    overrides.signature ??
+    `stream_cancel_sig_${campaignId}_${Date.now()}_${Math.random().toString(36).slice(2)}`;
+  await db.insert(streamCancelEvents).values({
+    campaignId,
+    cancelledAt: BigInt(overrides.cancelledAt ?? 1700070000),
+    amountToBeneficiary: BigInt(overrides.amountToBeneficiary ?? 300000),
+    amountToCreator: BigInt(overrides.amountToCreator ?? 700000),
+    signature: sig,
+    slot: BigInt(overrides.slot ?? 1000),
+    blockTime: BigInt(overrides.blockTime ?? 1700070000),
+  });
 }

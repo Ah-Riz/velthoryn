@@ -1,6 +1,6 @@
 import { db } from "@/lib/db";
 import { waitlist } from "@/lib/db/schema";
-import { NextRequest } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { asc } from "drizzle-orm";
 import { withRoute } from "@/lib/api/route-wrapper";
 import { ValidationError, ConflictError } from "@/lib/api/errors";
@@ -19,7 +19,7 @@ async function getWaitlistHandler(req: NextRequest) {
         ),
       )
       .join("\n");
-    return new Response(csv, {
+    return new NextResponse(csv, {
       headers: {
         "Content-Type": "text/csv",
         "Content-Disposition": "attachment; filename=waitlist.csv",

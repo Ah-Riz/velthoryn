@@ -5,6 +5,7 @@ import { db } from "@/lib/db";
 import { campaigns, rootVersions, claimEvents } from "@/lib/db/schema";
 import { NotFoundError } from "@/lib/api/errors";
 import { withRoute } from "@/lib/api/route-wrapper";
+import { GRACE_PERIOD_SECS } from "@/lib/api/tx-builder";
 
 async function getCampaignByAddressHandler(
   _request: NextRequest,
@@ -51,6 +52,24 @@ async function getCampaignByAddressHandler(
         ? Number((totalClaimed * 10000n) / totalSupply) / 100
         : 0;
 
+  let gracePeriod: {
+    end: string;
+    remaining: string;
+    isExpired: boolean;
+  } | null = null;
+
+  if (campaign.cancelledAt !== null) {
+    const cancelledAt = BigInt(campaign.cancelledAt);
+    const gracePeriodEnd = cancelledAt + GRACE_PERIOD_SECS;
+    const now = BigInt(Math.floor(Date.now() / 1000));
+    const remaining = gracePeriodEnd > now ? gracePeriodEnd - now : 0n;
+    gracePeriod = {
+      end: gracePeriodEnd.toString(),
+      remaining: remaining.toString(),
+      isExpired: now >= gracePeriodEnd,
+    };
+  }
+
   return jsonResponse({
     treeAddress: campaign.treeAddress,
     creator: campaign.creator,
@@ -65,6 +84,7 @@ async function getCampaignByAddressHandler(
     cancelledAt: campaign.cancelledAt,
     createdAt: campaign.createdAt,
     metadata: campaign.metadata,
+    gracePeriod,
     analytics: {
       uniqueClaimers: analytics.uniqueClaimers,
       claimCount: analytics.claimCount,

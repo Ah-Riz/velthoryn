@@ -82,7 +82,7 @@ export async function getLastSyncedSlot(): Promise<number> {
   return Number.isFinite(parsed) ? parsed : 0;
 }
 
-async function persistSyncCheckpoint(
+export async function persistSyncCheckpoint(
   tx: Parameters<Parameters<typeof db.transaction>[0]>[0],
   slot: number,
 ): Promise<void> {
