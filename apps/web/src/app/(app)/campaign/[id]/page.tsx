@@ -659,7 +659,7 @@ export default function CampaignPage({ params }: { params: Promise<{ id: string 
     ? vestedAmount(totalSupply, releaseType, cliffTsBigint, endTsBigint, cancelledAtBigint, nowTs, singleMilestoneReleased)
     : 0n;
   const claimable = vested > totalClaimed ? vested - totalClaimed : 0n;
-  const recipientLeaves = useMemo(() => proofAllQuery.data ?? [], [proofAllQuery.data]);
+  const recipientLeaves = proofAllQuery.data ?? [];
   const isRecipientView = isMultiRecipient && recipientLeaves.length > 0;
   const isRecipientMetricsLoading =
     isMultiRecipient &&
@@ -756,37 +756,37 @@ export default function CampaignPage({ params }: { params: Promise<{ id: string 
     : nowTs >= cliffTsBigint
       ? "Ready To Claim"
       : "Awaiting Unlock";
-  const milestoneEntries = (() => {
-    if (!isMilestone) return [];
+  let milestoneEntries: { index: number; amount: bigint; cliffTime: bigint }[] = [];
+  if (isMilestone) {
     if (isMultiRecipient && recipientLeaves.length > 0) {
-      return recipientLeaves
+      milestoneEntries = recipientLeaves
         .filter((l) => l.leaf.releaseType === 2)
         .map((l) => ({
           index: l.leaf.milestoneIdx,
           amount: BigInt(String(l.leaf.amount)),
           cliffTime: BigInt(l.leaf.cliffTime),
         }));
-    }
-    if (isMultiRecipient && (treeState?.leafCount ?? 0) > 1) {
+    } else if (isMultiRecipient && (treeState?.leafCount ?? 0) > 1) {
       const count = Math.min(treeState?.leafCount ?? 0, 256);
-      return Array.from({ length: count }, (_, i) => ({
+      milestoneEntries = Array.from({ length: count }, (_, i) => ({
         index: i,
         amount: 0n,
         cliffTime: cliffTsBigint,
       }));
+    } else {
+      milestoneEntries = [{
+        index: Number(milestoneIdx),
+        amount: totalSupply,
+        cliffTime: cliffTsBigint,
+      }];
     }
-    return [{
-      index: Number(milestoneIdx),
-      amount: totalSupply,
-      cliffTime: cliffTsBigint,
-    }];
-  })();
+  }
 
-  const milestoneReleasedCount = (() => {
-    if (!isMilestone || milestoneEntries.length === 0) return 0;
+  let milestoneReleasedCount = 0;
+  if (isMilestone && milestoneEntries.length > 0) {
     const flags = treeState?.milestoneReleasedFlags ?? new Uint8Array(32);
-    return milestoneEntries.filter((m) => isMilestoneTriggered(flags, m.index)).length;
-  })();
+    milestoneReleasedCount = milestoneEntries.filter((m) => isMilestoneTriggered(flags, m.index)).length;
+  }
 
   const withdrawDisabledReason = beneficiaryMismatch && isSingleLeaf
     ? `Only beneficiary ${truncateAddress(expectedBeneficiary)} can claim`

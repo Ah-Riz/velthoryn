@@ -2,7 +2,7 @@ name: ci
 
 on:
   push:
-    branches-ignore: [main, test, dev_geral]
+    branches-ignore: [main, test]
   pull_request:
     branches: [main, test]
 

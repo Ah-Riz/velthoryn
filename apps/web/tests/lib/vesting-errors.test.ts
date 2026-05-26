@@ -40,7 +40,7 @@ describe("formatVestingError", () => {
 
   it("handles wallet rejection", () => {
     expect(formatVestingError(new Error("User rejected the request"))).toContain(
-      "cancelled",
+      "Wallet approval did not complete",
     );
   });
 
