@@ -168,47 +168,179 @@ However, recipients may still need a small amount of **Devnet SOL** for:
 
 ## How To Create a Vesting
 
-## Create a Single Stream
+Choose the vesting type first, then follow the matching flow below.
 
-Use this when you have one recipient.
+### Cliff — Manual
 
-Steps:
+Use this when:
 
-1. Open the create page
-2. Choose a vesting type:
-   - Cliff
-   - Linear
-   - Milestone
-3. Select the token
-4. Enter the recipient wallet address
-5. Enter the token amount
-6. Set the schedule
-7. Review the summary
-8. Click **Create**
-
-If funding is required in the same flow, the app will guide you through it.
-
----
-
-## Create a Campaign for Multiple Recipients
-
-Use this when you have more than one recipient.
+- you have one recipient
+- all tokens should unlock at one specific time
 
 Steps:
 
-1. Open the create page
-2. Choose the vesting type
-3. Switch to **CSV Campaign** if needed
+1. Open **Create**
+2. Choose **Cliff**
+3. Stay in **Manual** mode
 4. Select the token
-5. Upload or paste the CSV
+5. Enter the recipient wallet address
+6. Enter the token amount
+7. Set the unlock time
+8. Review the summary
+9. Click **Create**
+
+Suggested screenshots:
+
+- Create page
+- Cliff form
+- Token selection
+- Summary before create
+
+### Cliff — CSV Campaign
+
+Use this when:
+
+- you want to create a cliff campaign for multiple recipients
+
+Steps:
+
+1. Open **Create**
+2. Choose **Cliff**
+3. Switch to **CSV Campaign**
+4. Select the token
+5. Paste or upload the CSV
 6. Click **Parse & Validate**
 7. Review the recipient preview
 8. Click **Create & Fund Campaign**
 
-Tips:
+Important notes:
 
-- for **cliff** and **linear**, each wallet should appear only once
-- for **milestone**, the same wallet can appear more than once, but each milestone must use a different milestone index
+- each wallet can only appear once in a cliff campaign
+- each row should use the correct unlock time
+
+Suggested screenshots:
+
+- CSV upload area
+- Parsed recipient preview
+- Create & Fund button
+
+### Linear — Manual
+
+Use this when:
+
+- you have one recipient
+- tokens should unlock gradually over time
+
+Steps:
+
+1. Open **Create**
+2. Choose **Linear**
+3. Stay in **Manual** mode
+4. Select the token
+5. Enter the recipient wallet address
+6. Enter the token amount
+7. Set the start time
+8. Set the cliff time if needed
+9. Set the end time
+10. Review the summary
+11. Click **Create**
+
+Suggested screenshots:
+
+- Linear form
+- Start / cliff / end time fields
+- Summary before create
+
+### Linear — CSV Campaign
+
+Use this when:
+
+- you want multiple recipients in one linear campaign
+
+Steps:
+
+1. Open **Create**
+2. Choose **Linear**
+3. Switch to **CSV Campaign**
+4. Select the token
+5. Paste or upload the CSV
+6. Click **Parse & Validate**
+7. Review the recipient preview
+8. Click **Create & Fund Campaign**
+
+Important notes:
+
+- each wallet can only appear once in a linear campaign
+- make sure start, cliff, and end times are correct before funding
+
+Suggested screenshots:
+
+- Linear CSV section
+- Validation result
+- Preview table
+
+### Milestone — Manual
+
+Use this when:
+
+- you want one recipient
+- tokens should unlock milestone by milestone
+
+Steps:
+
+1. Open **Create**
+2. Choose **Milestone**
+3. Stay in **Manual** mode
+4. Select the token
+5. Enter the beneficiary wallet address
+6. Add one or more milestone entries
+7. Set the amount for each milestone
+8. Set the unlock time for each milestone
+9. Review the summary
+10. Click **Create**
+
+Important notes:
+
+- one milestone = one milestone stream
+- multiple milestone entries may create a milestone campaign, depending on the flow
+- recipients still need the sender to release milestones before claiming
+
+Suggested screenshots:
+
+- Milestone manual form
+- Add Milestone button
+- Multiple milestone entries
+
+### Milestone — CSV Campaign
+
+Use this when:
+
+- you want to create a milestone campaign from CSV
+- you want one or many beneficiaries with milestone-based release
+
+Steps:
+
+1. Open **Create**
+2. Choose **Milestone**
+3. Switch to **CSV Campaign**
+4. Select the token
+5. Paste or upload the CSV
+6. Click **Parse & Validate**
+7. Review the preview table
+8. Confirm the milestone indexes
+9. Click **Create & Fund Campaign**
+
+Important notes:
+
+- the same wallet may appear more than once in milestone CSV
+- each repeated wallet must use a different milestone index
+- if the same wallet uses the same milestone index twice, validation will fail
+
+Suggested screenshots:
+
+- Milestone CSV section
+- Parsed preview with milestone index column
+- Validation error example
 
 ---
 
@@ -381,13 +513,16 @@ To avoid mistakes:
 
 If you want to turn this into a polished Word document for users, add screenshots for:
 
-1. create page
-2. token selection
-3. CSV upload and validation
-4. vesting detail page
-5. claim button states
-6. milestone release action
-7. pause / cancel actions
+1. Cliff — Manual
+2. Cliff — CSV Campaign
+3. Linear — Manual
+4. Linear — CSV Campaign
+5. Milestone — Manual
+6. Milestone — CSV Campaign
+7. vesting detail page
+8. claim button states
+9. milestone release action
+10. pause / cancel actions
 
 ---
 
