@@ -12,6 +12,7 @@ pub struct CreateCampaignArgs {
     pub merkle_root: [u8; 32],
     pub leaf_count: u32,
     pub total_supply: u64,
+    pub min_cliff_time: i64,
     pub cancellable: bool,
     pub cancel_authority: Option<Pubkey>,
     pub pause_authority: Option<Pubkey>,
@@ -65,6 +66,7 @@ pub fn handler(ctx: Context<CreateCampaign>, args: CreateCampaignArgs) -> Result
     require!(args.merkle_root != [0u8; 32], VestingError::EmptyRoot);
     require!(args.leaf_count > 0, VestingError::EmptyCampaign);
     require!(args.total_supply > 0, VestingError::ZeroAmount);
+    require!(args.min_cliff_time != 0, VestingError::InvalidSchedule);
     if args.cancellable {
         require!(
             args.cancel_authority.is_some(),
@@ -89,6 +91,8 @@ pub fn handler(ctx: Context<CreateCampaign>, args: CreateCampaignArgs) -> Result
     tree.pause_authority = args.pause_authority;
     tree.created_at = Clock::get()?.unix_timestamp;
     tree.milestone_released_flags = [0u8; 32];
+    tree.min_cliff_time = args.min_cliff_time;
+    tree.instant_refunded = false;
     tree.bump = ctx.bumps.vesting_tree;
 
     emit!(CampaignCreated {
@@ -138,6 +142,7 @@ pub fn handler_native(
     require!(args.merkle_root != [0u8; 32], VestingError::EmptyRoot);
     require!(args.leaf_count > 0, VestingError::EmptyCampaign);
     require!(args.total_supply > 0, VestingError::ZeroAmount);
+    require!(args.min_cliff_time != 0, VestingError::InvalidSchedule);
     if args.cancellable {
         require!(
             args.cancel_authority.is_some(),
@@ -162,6 +167,8 @@ pub fn handler_native(
     tree.pause_authority = args.pause_authority;
     tree.created_at = Clock::get()?.unix_timestamp;
     tree.milestone_released_flags = [0u8; 32];
+    tree.min_cliff_time = args.min_cliff_time;
+    tree.instant_refunded = false;
     tree.bump = ctx.bumps.vesting_tree;
 
     emit!(CampaignCreated {

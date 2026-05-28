@@ -66,6 +66,10 @@ pub fn handler(ctx: Context<Claim>, leaf: VestingLeaf, proof: Vec<[u8; 32]>) -> 
     // Validation order per SECURITY.md section 2.3
     // Defense in depth: cancelled campaigns may claim during grace even if paused was not cleared.
     require!(
+        !tree.instant_refunded,
+        VestingError::InstantRefundedCampaign
+    );
+    require!(
         !tree.paused || tree.cancelled_at.is_some(),
         VestingError::CampaignPaused
     );

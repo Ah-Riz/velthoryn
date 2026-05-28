@@ -2,10 +2,11 @@ import { NextRequest } from "next/server";
 import { jsonResponse } from "@/lib/api/json-response";
 import { eq, sql } from "drizzle-orm";
 import { db } from "@/lib/db";
-import { campaigns, rootVersions, claimEvents } from "@/lib/db/schema";
+import { campaigns, rootVersions, claimEvents, milestoneEvents } from "@/lib/db/schema";
 import { NotFoundError } from "@/lib/api/errors";
 import { withRoute } from "@/lib/api/route-wrapper";
 import { GRACE_PERIOD_SECS } from "@/lib/api/tx-builder";
+import { computeInstantRefundEligible } from "@/lib/api/instant-refund";
 
 async function getCampaignByAddressHandler(
   _request: NextRequest,
@@ -70,6 +71,25 @@ async function getCampaignByAddressHandler(
     };
   }
 
+  const [milestoneStats] = await db
+    .select({
+      count: sql<number>`count(*)::int`,
+    })
+    .from(milestoneEvents)
+    .where(eq(milestoneEvents.campaignId, campaign.id));
+
+  const nowSecs = BigInt(Math.floor(Date.now() / 1000));
+  const minCliffTime = campaign.minCliffTime === null ? null : BigInt(campaign.minCliffTime);
+  const instantRefundEligible = computeInstantRefundEligible({
+    leafCount: campaign.leafCount,
+    cancellable: campaign.cancellable,
+    cancelledAt: campaign.cancelledAt === null ? null : BigInt(campaign.cancelledAt),
+    instantRefunded: campaign.instantRefunded,
+    minCliffTime,
+    milestoneReleasedCount: milestoneStats.count ?? 0,
+    nowSecs,
+  });
+
   return jsonResponse({
     treeAddress: campaign.treeAddress,
     creator: campaign.creator,
@@ -82,6 +102,9 @@ async function getCampaignByAddressHandler(
     cancellable: campaign.cancellable,
     paused: campaign.paused,
     cancelledAt: campaign.cancelledAt,
+    minCliffTime: campaign.minCliffTime,
+    instantRefunded: campaign.instantRefunded,
+    instantRefundEligible,
     createdAt: campaign.createdAt,
     metadata: campaign.metadata,
     gracePeriod,

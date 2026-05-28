@@ -26,9 +26,19 @@ export interface PreparedCampaign {
   rootHex: string;
   leafCount: number;
   totalSupply: BN;
+  /** Minimum cliff_time across all leaves (required for on-chain create_campaign / update_root). */
+  minCliffTime: BN;
   leaves: VestingLeaf[];
   proofs: number[][][];
   proofsRaw: Buffer[][];
+}
+
+/** Minimum cliff_time across leaves — matches on-chain min_cliff_time semantics. */
+export function computeMinCliffTime(leaves: VestingLeaf[]): BN {
+  if (leaves.length === 0) {
+    throw new Error("Cannot compute min cliff time for zero leaves");
+  }
+  return leaves.reduce((min, leaf) => (min.lt(leaf.cliffTime) ? min : leaf.cliffTime), leaves[0]!.cliffTime);
 }
 
 // ---------------------------------------------------------------------------
@@ -72,6 +82,7 @@ export function prepareCampaign(recipients: CampaignRecipient[]): PreparedCampai
     rootHex: tree.rootHex,
     leafCount: leaves.length,
     totalSupply,
+    minCliffTime: computeMinCliffTime(leaves),
     leaves,
     proofs,
     proofsRaw,

@@ -2,7 +2,7 @@
 
 **One place to remember:** what BE–SC Merkle delivered, how the bootcamp acceptance list maps to the code, and verification commands.
 
-**Last updated:** 2026-05-25
+**Last updated:** 2026-05-28
 **Branch / PR:** `dev_lana` → `test` — [PR #30](https://github.com/Ah-Riz/velthoryn/pull/30)  
 **Deployed API:** [velthoryn.vercel.app](https://velthoryn.vercel.app) (redeploy after BE hardening merge)
 
@@ -15,7 +15,7 @@
 | 1 | Merkle parity — TS SDK vs `apps/web` builder | **13/13** (`scripts/test-merkle-parity.ts`) |
 | 2 | DB schema — 4 tables + indexes on Supabase | **Done** |
 | 3 | E2E — prepare → POST → GET proof → verify (3 release types) | **5/5** (`scripts/test-be-merkle-pipeline.ts`) |
-| 4 | Local build + **98/98** SC tests (86 SPL + 12 native SOL) | **Pass** (`pnpm test:localnet`; keypair must match `G6iaig…`) |
+| 4 | Local build + **118** SC tests (incl. 11 instant-refund + native SOL) | **Pass** (`pnpm test:localnet`; deploy upgrades `G6iaig…`) |
 | 4b | Devnet SC (`pnpm test:devnet`) | **93 pass, 9 pending** (T64–T68 bankrun-only) — upgrade slot **464782646** |
 | 5 | Vercel deploy — 8 API routes | **Live** |
 | 6 | Post-deploy E2E (`--url`, `--timeout`) | **Pass** (re-run after Vercel redeploy) |
@@ -38,10 +38,27 @@
 ```bash
 pnpm tsx scripts/test-merkle-parity.ts
 pnpm tsx scripts/test-be-merkle-pipeline.ts --url https://velthoryn.vercel.app --timeout 120000
-pnpm test:localnet   # 86/86 SC
+pnpm test:localnet   # 118 SC (2 pending)
+DATABASE_URL=postgresql://ci:ci@127.0.0.1:5432/ci pnpm --filter @velthoryn/web test
 ```
 
-More detail: [weekly-report-mancer/week5/Lana.md](../weekly-report-mancer/week5/Lana.md), [TESTING.md](./TESTING.md)
+More detail: [weekly-report-mancer/week6/Lana.md](../weekly-report-mancer/week6/Lana.md), [TESTING.md](./TESTING.md)
+
+---
+
+## Part 1b — Instant refund for unstarted multi-leaf campaigns (May 2026)
+
+| Layer | Deliverable | Status |
+|-------|-------------|--------|
+| SC | `instant_refund_campaign`, `min_cliff_time`, `instant_refunded`, dedicated errors | **Done** |
+| SC tests | `tests/instant-refund-campaign.spec.ts` (11) | **Pass** |
+| DB | `campaigns.min_cliff_time`, `campaigns.instant_refunded`, `instant_refund_events` | **Migrations 0006–0007** |
+| Indexer | `state-sync` layout + `InstantRefunded` event ingestion | **Done** |
+| API | `GET` detail: `instantRefundEligible`; `POST .../instant-refund` tx builder + eligibility guard | **Done** |
+| Client | `prepareCampaign()` returns `minCliffTime`; `computeMinCliffTime()` exported | **Done** |
+| FE cancel UI | Wire `instantRefundEligible` in cancel dialog | **Out of scope** (Geral) |
+
+Spec: `.claude/specs/instant-refund-unstarted-campaigns/` (T1–T16 verified).
 
 ---
 

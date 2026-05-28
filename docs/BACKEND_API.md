@@ -70,6 +70,8 @@ u64/i64 values use PostgreSQL `bigint` (native 64-bit). JSONB for proof storage 
 | `cancel_authority` | TEXT | Cancel authority pubkey (base58) or NULL |
 | `pause_authority` | TEXT | Pause authority pubkey (base58) or NULL |
 | `cancelled_at` | BIGINT | Unix timestamp or NULL |
+| `min_cliff_time` | BIGINT | Minimum leaf `cliff_time` (for instant-refund eligibility); synced from chain |
+| `instant_refunded` | BOOLEAN NOT NULL DEFAULT false | True when creator used `instant_refund_campaign` |
 | `paused` | BOOLEAN NOT NULL DEFAULT false | |
 | `created_at` | BIGINT NOT NULL | Unix timestamp |
 | `metadata` | JSONB | {name, description, logoUri} |
@@ -217,10 +219,35 @@ For `create_campaign`: leafCount=N, leaves array has N entries with full proofs.
 {
   treeAddress, creator, mint, campaignId, merkleRoot, leafCount, totalSupply,
   totalClaimed, cancellable, paused, cancelledAt, createdAt, metadata,
+  minCliffTime: string | null;       // Unix seconds (bigint as string)
+  instantRefunded: boolean;
+  instantRefundEligible: boolean;  // BE-computed; on-chain tx may still fail
+  gracePeriod: { end, remaining, isExpired } | null;
   analytics: { uniqueClaimers, claimCount, percentClaimed, rootVersionCount },
   rootVersions: Array<{ version, merkleRoot, leafCount, createdAt, ipfsCid }>
 }
 ```
+
+#### `POST /api/campaigns/:treeAddress/instant-refund`
+
+Creator-only instant refund for **unstarted multi-leaf** campaigns (`leaf_count > 1`, `now < min_cliff_time`, no milestones released). Returns an unsigned transaction for wallet signing.
+
+```ts
+// Request body
+{ creator: string; creatorAta?: string | null }  // creatorAta required for SPL mints
+
+// Response 200 — PreparedTransaction
+{
+  transaction: string;   // base58 serialized unsigned tx
+  signers: string[];     // ["creator"]
+  instruction: "instant_refund_campaign";
+  accounts: Record<string, string>;
+}
+
+// Response 400 — NOT_ELIGIBLE_FOR_INSTANT_REFUND when computeInstantRefundEligible is false
+```
+
+Auth: wallet signature (`Authorization` header). Signer must match campaign `creator`.
 
 ### Write Path — Root Rotation
 
@@ -268,7 +295,8 @@ Routes added by F1 (Bulk Send), F2 (Dashboard Transparency), F3 (Clawback), and 
 
 | Route | Method | Purpose | Auth |
 |-------|--------|---------|------|
-| `/api/campaigns/prepare` | POST | Build Merkle tree server-side (F1) | `x-admin-key` |
+| `/api/campaigns/prepare` | POST | Build Merkle tree server-side (F1); returns `minCliffTime` for `create_campaign` | `x-admin-key` |
+| `/api/campaigns/[treeAddress]/instant-refund` | POST | Instant refund tx for unstarted multi-leaf campaigns | Wallet auth |
 | `/api/campaigns/import` | POST | CSV import of beneficiaries (F1) | `x-admin-key` |
 | `/api/campaigns/[treeAddress]/timeline` | GET | Event timeline — cancel, pause, withdraw, milestone, root-update, stream-cancel (F2) | Public |
 | `/api/beneficiary/[address]/vesting-progress` | GET | Vesting progress for beneficiary across campaigns (F2) | Public |
@@ -289,8 +317,8 @@ All routes return `X-API-Version: 1` header. Protected routes require `x-admin-k
 ### Campaign Creation (create_campaign / create_stream)
 
 ```
-1. Frontend calls prepareCampaign(recipients) from @velthoryn/client
-2. Frontend sends create_campaign OR create_stream tx to Solana
+1. Frontend calls `prepareCampaign(recipients)` from `@velthoryn/client` (or `POST /api/campaigns/prepare`) — response includes `merkleRoot`, `leafCount`, `totalSupply`, `minCliffTime`, and per-leaf proofs
+2. Frontend sends `create_campaign` (pass `minCliffTime` from prepare) OR `create_stream` tx to Solana
 3. On success, frontend POSTs /api/campaigns with full data
 4. API validates, inserts into campaigns + root_versions + leaves tables
 5. Optionally pins to IPFS via Pinata (background)
@@ -375,10 +403,13 @@ Schema uses `pgTable` from `drizzle-orm/pg-core` instead of `sqliteTable`.
 
 `prepareCampaign()` from `clients/ts/src/prepare.ts` returns `PreparedCampaign`:
 - `rootHex` → `merkleRoot` in API request
+- `minCliffTime` → pass to on-chain `create_campaign` / `update_root` args (minimum leaf `cliffTime`)
 - `leaves[i]` → `leaves[i]` with `PublicKey.toBase58()` and `BN.toString()`
 - `proofs[i]` → `leaves[i].proof` (already `number[][]`)
 
-No SDK changes needed. API accepts serialized form of what `prepareCampaign()` produces.
+`computeMinCliffTime(leaves)` is exported for callers that build leaves outside `prepareCampaign()`.
+
+`POST /api/campaigns/prepare` includes `minCliffTime` (string) in the JSON response alongside `merkleRoot` and `leafCount`.
 
 ---
 

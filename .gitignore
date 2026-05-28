@@ -26,6 +26,10 @@ coverage/
 package-lock.json
 yarn.lock
 
+# Local Postgres (dev tests)
+apps/web/.pgdata/
+apps/web/.pgsock/
+
 # Env
 .env
 .env.*

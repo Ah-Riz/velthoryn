@@ -64,6 +64,10 @@ pub mod vesting {
         instructions::cancel_campaign::handler(ctx)
     }
 
+    pub fn instant_refund_campaign(ctx: Context<InstantRefundCampaign>) -> Result<()> {
+        instructions::instant_refund_campaign::handler(ctx)
+    }
+
     pub fn cancel_stream(ctx: Context<CancelStream>, args: WithdrawArgs) -> Result<()> {
         instructions::cancel_stream::handler(ctx, args)
     }
@@ -79,8 +83,9 @@ pub mod vesting {
         ctx: Context<UpdateRoot>,
         new_root: [u8; 32],
         new_leaf_count: u32,
+        new_min_cliff_time: i64,
     ) -> Result<()> {
-        instructions::update_root::handler(ctx, new_root, new_leaf_count)
+        instructions::update_root::handler(ctx, new_root, new_leaf_count, new_min_cliff_time)
     }
 
     pub fn withdraw(ctx: Context<Withdraw>, args: WithdrawArgs) -> Result<()> {

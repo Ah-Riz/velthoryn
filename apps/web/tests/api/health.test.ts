@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import { describe, it, expect, vi, beforeEach } from "vitest";
 import { NextRequest } from "next/server";
 import { GET as getHealth } from "@/app/api/health/route";
 import { makeUrl } from "../helpers/requests";
@@ -31,10 +31,6 @@ describe("GET /api/health", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     process.env.NEXT_PUBLIC_RPC_ENDPOINT = "https://api.devnet.solana.com";
-  });
-
-  afterEach(() => {
-    vi.restoreAllMocks();
   });
 
   it("returns 200 when DB and RPC are healthy", async () => {

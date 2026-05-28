@@ -1306,6 +1306,110 @@
       "returns": "u64"
     },
     {
+      "name": "instant_refund_campaign",
+      "discriminator": [
+        204,
+        100,
+        177,
+        11,
+        207,
+        3,
+        9,
+        85
+      ],
+      "accounts": [
+        {
+          "name": "creator",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "vesting_tree",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  116,
+                  114,
+                  101,
+                  101
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "vesting_tree.creator",
+                "account": "VestingTree"
+              },
+              {
+                "kind": "account",
+                "path": "vesting_tree.mint",
+                "account": "VestingTree"
+              },
+              {
+                "kind": "account",
+                "path": "vesting_tree.campaign_id",
+                "account": "VestingTree"
+              }
+            ]
+          }
+        },
+        {
+          "name": "vault_authority",
+          "optional": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  118,
+                  97,
+                  117,
+                  108,
+                  116,
+                  95,
+                  97,
+                  117,
+                  116,
+                  104,
+                  111,
+                  114,
+                  105,
+                  116,
+                  121
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "vesting_tree"
+              }
+            ]
+          }
+        },
+        {
+          "name": "vault",
+          "writable": true,
+          "optional": true
+        },
+        {
+          "name": "creator_ata",
+          "writable": true,
+          "optional": true
+        },
+        {
+          "name": "token_program",
+          "optional": true,
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": []
+    },
+    {
       "name": "pause_campaign",
       "discriminator": [
         62,
@@ -1532,6 +1636,10 @@
         {
           "name": "new_leaf_count",
           "type": "u32"
+        },
+        {
+          "name": "new_min_cliff_time",
+          "type": "i64"
         }
       ]
     },
@@ -1998,6 +2106,19 @@
       ]
     },
     {
+      "name": "InstantRefunded",
+      "discriminator": [
+        220,
+        50,
+        18,
+        207,
+        183,
+        232,
+        218,
+        25
+      ]
+    },
+    {
       "name": "MilestoneReleased",
       "discriminator": [
         49,
@@ -2228,18 +2349,33 @@
     },
     {
       "code": 6035,
+      "name": "InstantRefundedCampaign",
+      "msg": "Campaign was instant-refunded; no further claims or releases allowed"
+    },
+    {
+      "code": 6036,
+      "name": "CampaignAlreadyStarted",
+      "msg": "Campaign has already started; instant refund is not allowed"
+    },
+    {
+      "code": 6037,
       "name": "NativeSolVaultNotEmpty",
       "msg": "Native SOL vault still holds lamports after final drain"
     },
     {
-      "code": 6036,
+      "code": 6038,
       "name": "NativeSolRentViolation",
       "msg": "Native SOL transfer would drop PDA below rent-exempt minimum"
     },
     {
-      "code": 6037,
+      "code": 6039,
       "name": "UnsupportedMint",
       "msg": "Token-2022 mints are not supported; use classic SPL Token"
+    },
+    {
+      "code": 6040,
+      "name": "NotMultiLeafCampaign",
+      "msg": "Instant refund is only allowed on multi-leaf campaigns"
     }
   ],
   "types": [
@@ -2470,6 +2606,10 @@
             "type": "u64"
           },
           {
+            "name": "min_cliff_time",
+            "type": "i64"
+          },
+          {
             "name": "cancellable",
             "type": "bool"
           },
@@ -2540,6 +2680,30 @@
             "type": {
               "option": "pubkey"
             }
+          }
+        ]
+      }
+    },
+    {
+      "name": "InstantRefunded",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "tree",
+            "type": "pubkey"
+          },
+          {
+            "name": "cancelled_at",
+            "type": "i64"
+          },
+          {
+            "name": "refunded_to",
+            "type": "pubkey"
+          },
+          {
+            "name": "amount",
+            "type": "u64"
           }
         ]
       }
@@ -2765,6 +2929,22 @@
                 32
               ]
             }
+          },
+          {
+            "name": "min_cliff_time",
+            "docs": [
+              "Minimum cliff time across all leaves in the current Merkle root.",
+              "",
+              "Indexer/parsers must be updated when `VestingTree` layout changes."
+            ],
+            "type": "i64"
+          },
+          {
+            "name": "instant_refunded",
+            "docs": [
+              "True only when a multi-leaf campaign was cancelled via instant refund."
+            ],
+            "type": "bool"
           },
           {
             "name": "bump",

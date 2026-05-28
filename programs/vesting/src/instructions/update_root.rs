@@ -25,9 +25,11 @@ pub fn handler(
     ctx: Context<UpdateRoot>,
     new_root: [u8; 32],
     new_leaf_count: u32,
+    new_min_cliff_time: i64,
 ) -> Result<()> {
     require!(new_root != [0u8; 32], VestingError::EmptyRoot);
     require!(new_leaf_count > 0, VestingError::EmptyCampaign);
+    require!(new_min_cliff_time != 0, VestingError::InvalidSchedule);
     require!(
         new_root != ctx.accounts.vesting_tree.merkle_root,
         VestingError::SameRoot
@@ -38,6 +40,7 @@ pub fn handler(
 
     tree.merkle_root = new_root;
     tree.leaf_count = new_leaf_count;
+    tree.min_cliff_time = new_min_cliff_time;
 
     emit!(RootUpdated {
         tree: tree.key(),

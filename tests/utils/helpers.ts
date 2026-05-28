@@ -64,15 +64,23 @@ export function expectAnchorError(err: unknown, code: number) {
     FullyVested: 6031,
     StreamExpired: 6032,
     MilestoneNotReleased: 6033,
+    MilestoneAlreadyReleased: 6034,
+    InstantRefundedCampaign: 6035,
+    CampaignAlreadyStarted: 6036,
+    NotMultiLeafCampaign: 6040,
     NothingToClaim: 6015,
     AlreadyCancelled: 6020,
   }).find(([, v]) => v === code)?.[0];
+
+  // Some providers redact program logs; fall back to structured Anchor error.
+  const anchorNum = (err as any)?.error?.errorCode?.number;
 
   const matched =
     haystack.includes(hex) ||
     haystack.includes(String(code)) ||
     haystack.includes(decimal) ||
-    (anchorName !== undefined && haystack.includes(anchorName));
+    (anchorName !== undefined && haystack.includes(anchorName)) ||
+    anchorNum === code;
   expect(matched, `expected Anchor error ${hex} (${code})`).to.equal(true);
 }
 
@@ -99,6 +107,10 @@ export async function createAndFundCampaign(
   await fundCreatorAta(provider, mint, creator.publicKey, totalSupply);
 
   const tree = new VestingMerkleTree(leaves);
+  const minCliffTime = leaves.reduce((min, l) => {
+    const v = (l.cliffTime as any) as BN;
+    return min.lt(v) ? min : v;
+  }, leaves[0]!.cliffTime);
   const [treePda] = await treePDA(
     PROGRAM_ID,
     creator.publicKey,
@@ -114,6 +126,7 @@ export async function createAndFundCampaign(
       merkleRoot: Array.from(tree.root),
       leafCount: leaves.length,
       totalSupply: new BN(totalSupply),
+      minCliffTime,
       cancellable,
       cancelAuthority: cancelAuthority.publicKey,
       pauseAuthority: pauseAuthority.publicKey,

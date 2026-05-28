@@ -157,6 +157,16 @@ export const withdrawUnvestedRequestSchema = z.object({
 });
 
 // ---------------------------------------------------------------------------
+// instantRefundCampaignRequestSchema -- validates POST .../instant-refund
+// ---------------------------------------------------------------------------
+
+export const instantRefundCampaignRequestSchema = z.object({
+  creator: base58String,
+  // SPL path requires ATA; native SOL does not. Route will enforce based on campaign.mint.
+  creatorAta: base58String.nullable().default(null),
+});
+
+// ---------------------------------------------------------------------------
 // withdrawArgsSchema -- validates WithdrawArgs for cancel_stream
 // ---------------------------------------------------------------------------
 
@@ -213,5 +223,6 @@ export type BulkRecipient = z.infer<typeof bulkRecipientSchema>;
 export type PrepareCampaignRequest = z.infer<typeof prepareCampaignRequestSchema>;
 export type CancelCampaignRequest = z.infer<typeof cancelCampaignRequestSchema>;
 export type WithdrawUnvestedRequest = z.infer<typeof withdrawUnvestedRequestSchema>;
+export type InstantRefundCampaignRequest = z.infer<typeof instantRefundCampaignRequestSchema>;
 export type CancelStreamRequest = z.infer<typeof cancelStreamRequestSchema>;
 export type MilestoneReleaseRequest = z.infer<typeof milestoneReleaseRequestSchema>;

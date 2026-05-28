@@ -81,6 +81,7 @@ async function postPrepareHandler(request: NextRequest) {
     merkleRoot: prepared.rootHex,
     leafCount: prepared.leafCount,
     totalSupply: prepared.totalSupply.toString(),
+    minCliffTime: prepared.minCliffTime.toString(),
     leaves,
   });
 }

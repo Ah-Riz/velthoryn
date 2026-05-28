@@ -1,6 +1,6 @@
 # Error code map — tutorial checklist vs Velthoryn
 
-Velthoryn uses `VestingError` in [`programs/vesting/src/errors.rs`](../programs/vesting/src/errors.rs). Anchor custom errors start at **6000** (`0x1770`). **36 variants** total.
+Velthoryn uses `VestingError` in [`programs/vesting/src/errors.rs`](../programs/vesting/src/errors.rs). Anchor custom errors start at **6000** (`0x1770`). **41 variants** total.
 
 This table maps common **bootcamp / tutorial** names to the on-chain variants and tests that exercise them.
 
@@ -21,8 +21,12 @@ This table maps common **bootcamp / tutorial** names to the on-chain variants an
 | Campaign paused | `CampaignPaused` | 6009 | `0x1779` | `withdraw` while `paused` | T45 |
 | Multi-recipient on `withdraw` | `NotSingleStream` | 6028 | `0x178c` | `leaf_count != 1` | T40 |
 | Oversized Merkle proof | `ProofTooLong` | 6029 | `0x178d` | `proof.len() > 32` or `proof.len() > ceil(log2(leaf_count))` | EXPLOIT 4 |
-| Native SOL vault not empty after drain | `NativeSolVaultNotEmpty` | 6036 | `0x1794` | PDA still holds lamports after final claim/cancel | Native SOL tests |
-| Native SOL rent violation | `NativeSolRentViolation` | 6037 | `0x1795` | Transfer would drop PDA below rent-exempt minimum | Native SOL tests |
+| Instant refund on single-leaf campaign | `NotMultiLeafCampaign` | 6040 | `0x1798` | `instant_refund_campaign` when `leaf_count == 1` | instant-refund SC tests |
+| Campaign already started (instant refund) | `CampaignAlreadyStarted` | 6036 | `0x1794` | `now >= min_cliff_time` on `instant_refund_campaign` | instant-refund SC tests |
+| Claims after instant refund | `InstantRefundedCampaign` | 6035 | `0x1793` | `claim` / `set_milestone_released` after instant refund | instant-refund SC tests |
+| Native SOL vault not empty after drain | `NativeSolVaultNotEmpty` | 6037 | `0x1795` | PDA still holds lamports after final claim/cancel | Native SOL tests |
+| Native SOL rent violation | `NativeSolRentViolation` | 6038 | `0x1796` | Transfer would drop PDA below rent-exempt minimum | Native SOL tests |
+| Token-2022 mint | `UnsupportedMint` | 6039 | `0x1797` | Non–classic SPL mint on create/fund | — |
 
 ## Full error list
 

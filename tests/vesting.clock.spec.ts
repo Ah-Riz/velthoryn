@@ -187,6 +187,7 @@ describe("vesting clock-dependent tests (bankrun)", () => {
     };
 
     const tree = new VestingMerkleTree([leaf]);
+    const minCliffTime = leaf.cliffTime;
     const { mint } = await createTestMintTx(provider, creator.publicKey);
     await fundCreatorAtaTx(provider, mint, creator.publicKey, AMOUNT);
 
@@ -200,6 +201,7 @@ describe("vesting clock-dependent tests (bankrun)", () => {
         merkleRoot: Array.from(tree.root),
         leafCount: 1,
         totalSupply: new BN(AMOUNT),
+        minCliffTime,
         cancellable: true,
         cancelAuthority: cancelAuthority.publicKey,
         pauseAuthority: pauseAuthority.publicKey,
@@ -270,6 +272,7 @@ describe("vesting clock-dependent tests (bankrun)", () => {
     };
 
     const tree = new VestingMerkleTree([leaf]);
+    const minCliffTime = leaf.cliffTime;
     const { mint } = await createTestMintTx(provider, creator.publicKey);
     await fundCreatorAtaTx(provider, mint, creator.publicKey, AMOUNT);
 
@@ -283,6 +286,7 @@ describe("vesting clock-dependent tests (bankrun)", () => {
         merkleRoot: Array.from(tree.root),
         leafCount: 1,
         totalSupply: new BN(AMOUNT),
+        minCliffTime,
         cancellable: true,
         cancelAuthority: cancelAuthority.publicKey,
         pauseAuthority: pauseAuthority.publicKey,
@@ -373,6 +377,7 @@ describe("vesting clock-dependent tests (bankrun)", () => {
     };
 
     const tree = new VestingMerkleTree([leaf]);
+    const minCliffTime = leaf.cliffTime;
     const { mint } = await createTestMintTx(provider, creator.publicKey);
     await fundCreatorAtaTx(provider, mint, creator.publicKey, AMOUNT);
 
@@ -386,6 +391,7 @@ describe("vesting clock-dependent tests (bankrun)", () => {
         merkleRoot: Array.from(tree.root),
         leafCount: 1,
         totalSupply: new BN(AMOUNT),
+        minCliffTime,
         cancellable: true,
         cancelAuthority: cancelAuthority.publicKey,
         pauseAuthority: pauseAuthority.publicKey,
@@ -886,6 +892,7 @@ describe("vesting clock-dependent tests (bankrun)", () => {
     };
 
     const tree = new VestingMerkleTree([leaf]);
+    const minCliffTime = leaf.cliffTime;
     const { mint } = await createTestMintTx(provider, creator.publicKey);
     await fundCreatorAtaTx(provider, mint, creator.publicKey, AMOUNT);
 
@@ -901,6 +908,7 @@ describe("vesting clock-dependent tests (bankrun)", () => {
         merkleRoot: Array.from(tree.root),
         leafCount: 1,
         totalSupply: new BN(AMOUNT),
+        minCliffTime,
         cancellable: true,
         cancelAuthority: cancelAuthority.publicKey,
         pauseAuthority: pauseAuthority.publicKey,
@@ -1157,6 +1165,7 @@ describe("vesting clock-dependent tests (bankrun)", () => {
     };
 
     const tree = new VestingMerkleTree([leaf]);
+    const minCliffTime = leaf.cliffTime;
     const { mint } = await createTestMintTx(provider, creator.publicKey);
     await fundCreatorAtaTx(provider, mint, creator.publicKey, AMOUNT);
 
@@ -1172,6 +1181,7 @@ describe("vesting clock-dependent tests (bankrun)", () => {
         merkleRoot: Array.from(tree.root),
         leafCount: 1,
         totalSupply: new BN(AMOUNT),
+        minCliffTime,
         cancellable: true,
         cancelAuthority: cancelAuthority.publicKey,
         pauseAuthority: pauseAuthority.publicKey,
@@ -1396,6 +1406,7 @@ describe("vesting clock-dependent tests (bankrun)", () => {
     };
 
     const tree = new VestingMerkleTree([leaf]);
+    const minCliffTime = leaf.cliffTime;
     const { mint } = await createTestMintTx(provider, creator.publicKey);
     await fundCreatorAtaTx(provider, mint, creator.publicKey, AMOUNT);
 
@@ -1416,6 +1427,7 @@ describe("vesting clock-dependent tests (bankrun)", () => {
         merkleRoot: Array.from(tree.root),
         leafCount: 1,
         totalSupply: new BN(AMOUNT),
+        minCliffTime,
         cancellable: true,
         cancelAuthority: cancelAuthority.publicKey,
         pauseAuthority: pauseAuthority.publicKey,

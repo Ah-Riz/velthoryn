@@ -75,3 +75,11 @@ pub struct StreamCancelled {
     pub amount_to_beneficiary: u64,
     pub amount_to_creator:    u64,
 }
+
+#[event]
+pub struct InstantRefunded {
+    pub tree:         Pubkey,
+    pub cancelled_at: i64,
+    pub refunded_to:  Pubkey,
+    pub amount:       u64,
+}

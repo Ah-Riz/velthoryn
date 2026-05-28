@@ -4,6 +4,7 @@ import {
   DISCRIMINATORS,
   parseCampaignCancelled,
   parseCampaignPaused,
+  parseInstantRefunded,
   parseRootUpdated,
   parseUnvestedWithdrawn,
   parseMilestoneReleased,
@@ -86,6 +87,21 @@ function buildStreamCancelledBuffer(
   buf.writeBigInt64LE(cancelledAt, 40);
   buf.writeBigUInt64LE(amountToBeneficiary, 48);
   buf.writeBigUInt64LE(amountToCreator, 56);
+  return buf;
+}
+
+function buildInstantRefundedBuffer(
+  tree: Buffer,
+  cancelledAt: bigint,
+  refundedTo: Buffer,
+  amount: bigint,
+): Buffer {
+  const buf = Buffer.alloc(88);
+  DISCRIMINATORS.INSTANT_REFUNDED.copy(buf, 0);
+  tree.copy(buf, 8);
+  buf.writeBigInt64LE(cancelledAt, 40);
+  refundedTo.copy(buf, 48);
+  buf.writeBigUInt64LE(amount, 80);
   return buf;
 }
 
@@ -245,6 +261,32 @@ describe("parseStreamCancelled", () => {
 
   it("returns null for wrong discriminator", () => {
     expect(parseStreamCancelled(Buffer.alloc(64))).toBeNull();
+  });
+});
+
+describe("parseInstantRefunded", () => {
+  it("parses cancelledAt, refundedTo, and amount correctly", () => {
+    const tree = randomPubkeyBytes();
+    const refundedTo = randomPubkeyBytes();
+    const cancelledAt = 1700005001n;
+    const amount = 123456789n;
+
+    const buf = buildInstantRefundedBuffer(tree, cancelledAt, refundedTo, amount);
+    const result = parseInstantRefunded(buf);
+
+    expect(result).not.toBeNull();
+    expect(result!.type).toBe("instant_refunded");
+    expect(result!.cancelledAt).toBe(cancelledAt);
+    expect(result!.amount).toBe(amount);
+    expect(result!.refundedTo).toMatch(/^[1-9A-HJ-NP-Za-km-z]{32,44}$/);
+  });
+
+  it("returns null for buffer too short", () => {
+    expect(parseInstantRefunded(Buffer.alloc(87))).toBeNull();
+  });
+
+  it("returns null for wrong discriminator", () => {
+    expect(parseInstantRefunded(Buffer.alloc(88))).toBeNull();
   });
 });
 

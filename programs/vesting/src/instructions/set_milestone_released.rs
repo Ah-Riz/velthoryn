@@ -23,6 +23,10 @@ pub struct SetMilestoneReleased<'info> {
 pub fn handler(ctx: Context<SetMilestoneReleased>, milestone_idx: u8) -> Result<()> {
     let tree = &mut ctx.accounts.vesting_tree;
     require!(
+        !tree.instant_refunded,
+        VestingError::InstantRefundedCampaign
+    );
+    require!(
         !milestone_flag_is_set(&tree.milestone_released_flags, milestone_idx),
         VestingError::MilestoneAlreadyReleased
     );

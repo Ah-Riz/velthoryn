@@ -13,6 +13,7 @@ export { VestingMerkleTree, MAX_TREE_DEPTH, verifyProof, proofAsArrays } from ".
 
 export {
   prepareCampaign,
+  computeMinCliffTime,
 } from "./prepare";
 
 export type { CampaignRecipient, PreparedCampaign } from "./prepare";

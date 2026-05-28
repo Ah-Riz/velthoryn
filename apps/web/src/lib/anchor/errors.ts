@@ -39,6 +39,12 @@ export const VESTING_ERROR_CODES = {
   StreamExpired: 6032,
   MilestoneNotReleased: 6033,
   MilestoneAlreadyReleased: 6034,
+  InstantRefundedCampaign: 6035,
+  CampaignAlreadyStarted: 6036,
+  NativeSolVaultNotEmpty: 6037,
+  NativeSolRentViolation: 6038,
+  UnsupportedMint: 6039,
+  NotMultiLeafCampaign: 6040,
 } as const;
 
 type ErrorKey = keyof typeof VESTING_ERROR_CODES;
@@ -82,6 +88,16 @@ const USER_MESSAGES: Record<ErrorKey, string> = {
     "This milestone has not been released yet. The creator must release it before you can claim.",
   MilestoneAlreadyReleased:
     "This milestone has already been released by the creator.",
+  InstantRefundedCampaign:
+    "Campaign was instant-refunded; no further claims or releases allowed.",
+  CampaignAlreadyStarted:
+    "Campaign has already started; instant refund is not allowed.",
+  NativeSolVaultNotEmpty:
+    "Native SOL vault still holds lamports after final drain.",
+  NativeSolRentViolation:
+    "Native SOL transfer would drop PDA below rent-exempt minimum.",
+  UnsupportedMint: "Token-2022 mints are not supported; use classic SPL Token.",
+  NotMultiLeafCampaign: "Instant refund is only allowed on multi-leaf campaigns.",
 };
 
 function codeToHex(code: number): string {

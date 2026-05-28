@@ -24,6 +24,12 @@ pub struct VestingTree {
     pub created_at:       i64,
     /// Creator-controlled release flags for milestone leaves (bit = milestone_idx).
     pub milestone_released_flags: [u8; 32],
+    /// Minimum cliff time across all leaves in the current Merkle root.
+    ///
+    /// Indexer/parsers must be updated when `VestingTree` layout changes.
+    pub min_cliff_time:   i64,
+    /// True only when a multi-leaf campaign was cancelled via instant refund.
+    pub instant_refunded: bool,
     pub bump:             u8,
 }
 

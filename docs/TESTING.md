@@ -2,16 +2,19 @@
 
 ## Test Suite Overview
 
-**856 tests total** — all passing (on-chain security suite includes 11 exploit tests + 12 native SOL tests).
+**~680+ tests total** — green on local CI reproduction (May 2026).
 
-- On-chain (Anchor): 99 tests across 7 files (86 SPL + 12 native SOL + 1 Token-2022 guard)
-- Web (Vitest): ~557 tests across 30+ files (API routes use real Postgres in CI)
+- On-chain (Anchor): **118 passing**, 2 pending across 10+ files (`pnpm test:localnet`)
+- Web (Vitest): **553 passing**, 13 skipped (devnet integration; Postgres required)
 - Trident fuzz: smoke test in CI (`trident-tests/fuzz_vesting`)
 
 | Test File | Tests | Purpose |
 |-----------|-------|---------|
-| `tests/vesting.spec.ts` | 2 | Smoke tests (program ID, IDL structure — 17 instructions) |
-| `tests/vesting.supplementary.spec.ts` | 62 | Integration tests covering all instructions (incl. T41 milestone flags, T63–T68 cancel/milestone, T71 Token-2022 guard) |
+| `tests/vesting.spec.ts` | 2 | Smoke tests (program ID, IDL structure — 18 instructions) |
+| `tests/instant-refund-campaign.spec.ts` | 11 | Instant refund eligibility, SPL + native SOL, post-refund claim/release guards |
+| `tests/update-root-min-cliff.spec.ts` | 1 | `update_root` persists `min_cliff_time` |
+| `tests/vesting-tree-layout.spec.ts` | — | `VestingTree` Borsh layout / legacy parsing |
+| `tests/vesting.supplementary.spec.ts` | 62+ | Integration tests covering all instructions (incl. T41 milestone flags, T63–T71 cancel/milestone) |
 | `tests/vesting.clock.spec.ts` | 12 | Clock-dependent tests via `solana-bankrun` (incl. T64 `cancel_stream`) |
 | `tests/vesting-native-sol.spec.ts` | 12 | Native SOL vesting lifecycle tests (create, withdraw, claim, cancel, fund, withdraw_unvested + error guards) |
 | `tests/security.spec.ts` | 11 | Security exploit tests (EXPLOIT 1–11) |
@@ -25,7 +28,8 @@ Use a **persistent** `solana-test-validator`. `anchor test` alone can flake on S
 
 ```bash
 pnpm test:localnet
-# Starts validator if needed, upgrades program (anchor deploy), then 86/86 SPL tests passing (~3m)
+# Starts validator if needed, upgrades program to G6iaig…, then 118 passing (~4m)
+# Use CARGO_TARGET_DIR=$PWD/target anchor build before first run if BPF artifact is stale
 ```
 
 CI: [`ci.yml`](../.github/workflows/ci.yml) runs `anchor build`, IDL drift check, native SOL tests (bankrun), then `pnpm test:localnet` with `TEST_SKIP_BUILD=1`. [`web-ci.yml`](../.github/workflows/web-ci.yml) runs merkle parity, E2E pipeline, and Vitest with Postgres 15.

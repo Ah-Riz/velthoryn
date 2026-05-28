@@ -11,7 +11,7 @@ describe("vesting program scaffold", () => {
     expect(program.programId.toBase58()).to.equal(PROGRAM_ID);
   });
 
-  it("exposes all 17 architecture instructions in the IDL", () => {
+  it("exposes all 18 architecture instructions in the IDL", () => {
     const expected = [
       "cancelCampaign",
       "cancelStream",
@@ -24,6 +24,7 @@ describe("vesting program scaffold", () => {
       "fundCampaign",
       "fundCampaignNative",
       "getVestedAmount",
+      "instantRefundCampaign",
       "pauseCampaign",
       "setMilestoneReleased",
       "unpauseCampaign",

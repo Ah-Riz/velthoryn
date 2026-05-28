@@ -2,7 +2,7 @@
 
 Audience: Geral and anyone building against the on-chain program from TypeScript.
 
-> **Status:** All **17** instruction handlers (14 SPL + 3 native SOL variants) are fully implemented. The program is deployed on devnet (latest upgrade slot **463874212**). **98** integration tests pass (86 SPL + 12 native SOL). Merkle leaf hashing is byte-verified against the TS encoder. Native SOL vesting allows campaigns in raw SOL without wrapping — see [`docs/NATIVE_SOL_VESTING.md`](NATIVE_SOL_VESTING.md).
+> **Status:** All **18** instruction handlers (14 SPL + 3 native SOL + `instant_refund_campaign`) are fully implemented. The program is deployed on devnet (latest upgrade slot **464782646**). **118** localnet integration tests pass (2 pending). Merkle leaf hashing is byte-verified against the TS encoder. Native SOL vesting allows campaigns in raw SOL without wrapping — see [`docs/NATIVE_SOL_VESTING.md`](NATIVE_SOL_VESTING.md). Instant refund for unstarted multi-leaf campaigns: see [`docs/BACKEND_API.md`](BACKEND_API.md).
 
 ## What you need
 
@@ -49,7 +49,9 @@ function getProgram(provider: anchor.AnchorProvider) {
 }
 ```
 
-The IDL exposes camelCase instruction names: `createCampaign`, `createStream`, `fundCampaign`, `claim`, `withdraw`, `cancelCampaign`, `cancelStream`, `setMilestoneReleased`, `updateRoot`, `withdrawUnvested`, `pauseCampaign`, `unpauseCampaign`, `closeClaimRecord`, `getVestedAmount`.
+The IDL exposes camelCase instruction names: `createCampaign`, `createStream`, `fundCampaign`, `claim`, `withdraw`, `cancelCampaign`, `cancelStream`, `instantRefundCampaign`, `setMilestoneReleased`, `updateRoot`, `withdrawUnvested`, `pauseCampaign`, `unpauseCampaign`, `closeClaimRecord`, `getVestedAmount`.
+
+`createCampaign` and `updateRoot` require `minCliffTime` / `newMinCliffTime` — use `prepareCampaign()` from `@velthoryn/client` (returns `minCliffTime`) or `POST /api/campaigns/prepare`.
 
 ## PDA derivations
 

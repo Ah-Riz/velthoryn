@@ -107,9 +107,12 @@ export async function setCampaignStatus(
     totalClaimed: string | number;
     totalSupply: string | number;
     leafCount: number;
+    minCliffTime: string | number | null;
+    instantRefunded: boolean;
+    cancellable: boolean;
   }>,
 ): Promise<void> {
-  const { cancelledAt, totalClaimed, totalSupply, ...rest } = patch;
+  const { cancelledAt, totalClaimed, totalSupply, minCliffTime, ...rest } = patch;
   const update: Partial<typeof campaigns.$inferInsert> = { ...rest };
   if (cancelledAt !== undefined) {
     update.cancelledAt = cancelledAt === null ? null : BigInt(cancelledAt);
@@ -119,6 +122,9 @@ export async function setCampaignStatus(
   }
   if (totalSupply !== undefined) {
     update.totalSupply = BigInt(totalSupply);
+  }
+  if (minCliffTime !== undefined) {
+    update.minCliffTime = minCliffTime === null ? null : BigInt(minCliffTime);
   }
   await db.update(campaigns).set(update).where(eq(campaigns.treeAddress, treeAddress));
 }

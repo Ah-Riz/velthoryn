@@ -11,6 +11,7 @@ import {
   withdrawEvents,
   milestoneEvents,
   streamCancelEvents,
+  instantRefundEvents,
 } from "@/lib/db/schema";
 import { PROGRAM_ID } from "@/lib/anchor/client";
 import {
@@ -34,6 +35,7 @@ function makeDiscriminator(eventName: string): Buffer {
 export const DISCRIMINATORS = {
   CLAIMED: CLAIMED_DISCRIMINATOR,
   CAMPAIGN_CANCELLED: makeDiscriminator("CampaignCancelled"),
+  INSTANT_REFUNDED: makeDiscriminator("InstantRefunded"),
   CAMPAIGN_PAUSED: makeDiscriminator("CampaignPaused"),
   CAMPAIGN_UNPAUSED: makeDiscriminator("CampaignUnpaused"),
   ROOT_UPDATED: makeDiscriminator("RootUpdated"),
@@ -60,6 +62,14 @@ export interface ParsedCampaignPaused {
   type: "paused";
   tree: string;
   paused: boolean;
+}
+
+export interface ParsedInstantRefunded {
+  type: "instant_refunded";
+  tree: string;
+  cancelledAt: bigint;
+  refundedTo: string;
+  amount: bigint;
 }
 
 export interface ParsedRootUpdated {
@@ -119,6 +129,19 @@ export function parseCampaignPaused(data: Buffer): ParsedCampaignPaused | null {
   return { type: "paused", tree, paused: isPaused };
 }
 
+export function parseInstantRefunded(data: Buffer): ParsedInstantRefunded | null {
+  // discriminator(8) + tree(32) + cancelled_at(8) + refunded_to(32) + amount(8) = 88 bytes
+  if (data.length < 88) return null;
+  if (!data.subarray(0, 8).equals(DISCRIMINATORS.INSTANT_REFUNDED)) return null;
+
+  const tree = new PublicKey(data.subarray(8, 40)).toBase58();
+  const cancelledAt = data.readBigInt64LE(40);
+  const refundedTo = new PublicKey(data.subarray(48, 80)).toBase58();
+  const amount = data.readBigUInt64LE(80);
+
+  return { type: "instant_refunded", tree, cancelledAt, refundedTo, amount };
+}
+
 export function parseRootUpdated(data: Buffer): ParsedRootUpdated | null {
   // discriminator(8) + tree(32) + old_root(32) + new_root(32) + new_leaf_count(4) = 108 bytes
   if (data.length < 108) return null;
@@ -175,6 +198,7 @@ export function parseStreamCancelled(data: Buffer): ParsedStreamCancelled | null
 interface EventCounts {
   claimed: number;
   cancelled: number;
+  instant_refunded: number;
   paused: number;
   root_updated: number;
   withdrawn: number;
@@ -182,22 +206,22 @@ interface EventCounts {
   stream_cancelled: number;
 }
 
-async function processTransaction(params: {
-  connection: Connection;
+export async function indexEventBuffers(params: {
+  eventBuffers: Buffer[];
   signature: string;
   slot: number;
-  campaignCache: Map<string, number>;
-  counts: EventCounts;
+  blockTime: bigint;
+  campaignCache?: Map<string, number>;
+  counts?: EventCounts;
 }): Promise<void> {
-  const { connection, signature, slot, campaignCache, counts } = params;
-
-  const tx = await connection.getTransaction(signature, {
-    maxSupportedTransactionVersion: 0,
-  });
-  if (!tx?.meta?.logMessages) return;
-
-  const blockTime = BigInt(tx.blockTime ?? Math.floor(Date.now() / 1000));
-  const eventBuffers = extractAnchorEventData(tx.meta.logMessages);
+  const {
+    eventBuffers,
+    signature,
+    slot,
+    blockTime,
+    campaignCache = new Map<string, number>(),
+    counts,
+  } = params;
 
   for (const buf of eventBuffers) {
     if (buf.length < 8) continue;
@@ -236,7 +260,7 @@ async function processTransaction(params: {
 
         await persistSyncCheckpoint(txDb, slot);
       });
-      counts.claimed++;
+      counts && counts.claimed++;
       continue;
     }
 
@@ -268,7 +292,40 @@ async function processTransaction(params: {
 
         await persistSyncCheckpoint(txDb, slot);
       });
-      counts.cancelled++;
+      counts && counts.cancelled++;
+      continue;
+    }
+
+    // --- InstantRefunded ---
+    if (buf.subarray(0, 8).equals(DISCRIMINATORS.INSTANT_REFUNDED)) {
+      const event = parseInstantRefunded(buf);
+      if (!event) continue;
+
+      const campaignId = await resolveCampaignId(event.tree, campaignCache);
+      if (campaignId === null) continue;
+
+      await db.transaction(async (txDb) => {
+        await txDb
+          .insert(instantRefundEvents)
+          .values({
+            campaignId,
+            cancelledAt: event.cancelledAt,
+            refundedTo: event.refundedTo,
+            amount: event.amount,
+            signature,
+            slot: BigInt(slot),
+            blockTime,
+          })
+          .onConflictDoNothing();
+
+        await txDb
+          .update(campaigns)
+          .set({ cancelledAt: event.cancelledAt, instantRefunded: true })
+          .where(eq(campaigns.id, campaignId));
+
+        await persistSyncCheckpoint(txDb, slot);
+      });
+      counts && counts.instant_refunded++;
       continue;
     }
 
@@ -302,7 +359,7 @@ async function processTransaction(params: {
 
         await persistSyncCheckpoint(txDb, slot);
       });
-      counts.paused++;
+      counts && counts.paused++;
       continue;
     }
 
@@ -335,7 +392,7 @@ async function processTransaction(params: {
 
         await persistSyncCheckpoint(txDb, slot);
       });
-      counts.root_updated++;
+      counts && counts.root_updated++;
       continue;
     }
 
@@ -361,7 +418,7 @@ async function processTransaction(params: {
 
         await persistSyncCheckpoint(txDb, slot);
       });
-      counts.withdrawn++;
+      counts && counts.withdrawn++;
       continue;
     }
 
@@ -388,7 +445,7 @@ async function processTransaction(params: {
 
         await persistSyncCheckpoint(txDb, slot);
       });
-      counts.milestone_released++;
+      counts && counts.milestone_released++;
       continue;
     }
 
@@ -416,11 +473,30 @@ async function processTransaction(params: {
 
         await persistSyncCheckpoint(txDb, slot);
       });
-      counts.stream_cancelled++;
+      counts && counts.stream_cancelled++;
       continue;
     }
     // Unknown discriminators are silently skipped
   }
+}
+
+async function processTransaction(params: {
+  connection: Connection;
+  signature: string;
+  slot: number;
+  campaignCache: Map<string, number>;
+  counts: EventCounts;
+}): Promise<void> {
+  const { connection, signature, slot, campaignCache, counts } = params;
+
+  const tx = await connection.getTransaction(signature, {
+    maxSupportedTransactionVersion: 0,
+  });
+  if (!tx?.meta?.logMessages) return;
+
+  const blockTime = BigInt(tx.blockTime ?? Math.floor(Date.now() / 1000));
+  const eventBuffers = extractAnchorEventData(tx.meta.logMessages);
+  await indexEventBuffers({ eventBuffers, signature, slot, blockTime, campaignCache, counts });
 }
 
 async function resolveCampaignId(
@@ -461,6 +537,7 @@ export async function indexAllEvents(fromSlot?: number): Promise<IndexAllEventsR
   const counts: EventCounts = {
     claimed: 0,
     cancelled: 0,
+    instant_refunded: 0,
     paused: 0,
     root_updated: 0,
     withdrawn: 0,
@@ -508,6 +585,7 @@ export async function indexAllEvents(fromSlot?: number): Promise<IndexAllEventsR
   const processed =
     counts.claimed +
     counts.cancelled +
+    counts.instant_refunded +
     counts.paused +
     counts.root_updated +
     counts.withdrawn +

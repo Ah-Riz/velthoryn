@@ -31,8 +31,10 @@ export const campaigns = pgTable(
     cancellable: boolean("cancellable").notNull().default(false),
     cancelAuthority: text("cancel_authority"),
     pauseAuthority: text("pause_authority"),
+    minCliffTime: bigint("min_cliff_time", { mode: "bigint" }),
     cancelledAt: bigint("cancelled_at", { mode: "bigint" }),
     paused: boolean("paused").notNull().default(false),
+    instantRefunded: boolean("instant_refunded").notNull().default(false),
     createdAt: bigint("created_at", { mode: "bigint" }).notNull(),
     metadata: jsonb("metadata").$type<{
       name?: string;
@@ -281,6 +283,30 @@ export const streamCancelEvents = pgTable(
 );
 
 // ---------------------------------------------------------------------------
+// instant_refund_events -- InstantRefunded on-chain events
+// ---------------------------------------------------------------------------
+
+export const instantRefundEvents = pgTable(
+  "instant_refund_events",
+  {
+    id: serial("id").primaryKey(),
+    campaignId: integer("campaign_id")
+      .notNull()
+      .references(() => campaigns.id, { onDelete: "cascade" }),
+    cancelledAt: bigint("cancelled_at", { mode: "bigint" }).notNull(),
+    refundedTo: text("refunded_to").notNull(),
+    amount: bigint("amount", { mode: "bigint" }).notNull(),
+    signature: text("signature").notNull().unique(),
+    slot: bigint("slot", { mode: "bigint" }).notNull(),
+    blockTime: bigint("block_time", { mode: "bigint" }).notNull(),
+  },
+  (table) => [
+    index("idx_instant_refund_events_campaign").on(table.campaignId),
+    index("idx_instant_refund_events_block_time").on(table.blockTime),
+  ],
+);
+
+// ---------------------------------------------------------------------------
 // waitlist -- email waitlist
 // ---------------------------------------------------------------------------
 
@@ -324,3 +350,5 @@ export type MilestoneEvent = typeof milestoneEvents.$inferSelect;
 export type NewMilestoneEvent = typeof milestoneEvents.$inferInsert;
 export type StreamCancelEvent = typeof streamCancelEvents.$inferSelect;
 export type NewStreamCancelEvent = typeof streamCancelEvents.$inferInsert;
+export type InstantRefundEvent = typeof instantRefundEvents.$inferSelect;
+export type NewInstantRefundEvent = typeof instantRefundEvents.$inferInsert;

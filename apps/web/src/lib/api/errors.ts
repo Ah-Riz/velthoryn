@@ -33,7 +33,8 @@ export type ErrorCode =
   | "GRACE_PERIOD_ACTIVE"
   | "NOT_CANCELLED"
   | "NOT_SINGLE_STREAM"
-  | "MILESTONE_ALREADY_RELEASED";
+  | "MILESTONE_ALREADY_RELEASED"
+  | "NOT_ELIGIBLE_FOR_INSTANT_REFUND";
 
 export class AppError extends Error {
   constructor(

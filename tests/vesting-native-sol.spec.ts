@@ -456,6 +456,7 @@ describe("native sol vesting (bankrun)", () => {
     const now = await bankrunNow(context);
     const start = now;
     const end = now + 1000;
+    const cliffTime = start;
 
     const leaves: VestingLeaf[] = [
       {
@@ -491,6 +492,7 @@ describe("native sol vesting (bankrun)", () => {
         merkleRoot: Array.from(merkleTree.root),
         leafCount: 2,
         totalSupply: new BN(TOTAL_SUPPLY),
+        minCliffTime: new BN(cliffTime),
         cancellable: true,
         cancelAuthority: cancelAuthority.publicKey,
         pauseAuthority: pauseAuthority.publicKey,
@@ -562,6 +564,7 @@ describe("native sol vesting (bankrun)", () => {
         merkleRoot: Array.from(merkleTree.root),
         leafCount: 2,
         totalSupply: new BN(TOTAL_SUPPLY),
+        minCliffTime: new BN(start),
         cancellable: true,
         cancelAuthority: cancelAuthority.publicKey,
         pauseAuthority: pauseAuthority.publicKey,
@@ -640,6 +643,7 @@ describe("native sol vesting (bankrun)", () => {
         merkleRoot: Array.from(merkleTree.root),
         leafCount: 2,
         totalSupply: new BN(TOTAL_SUPPLY),
+        minCliffTime: new BN(start),
         cancellable: true,
         cancelAuthority: cancelAuthority.publicKey,
         pauseAuthority: pauseAuthority.publicKey,
@@ -739,6 +743,7 @@ describe("native sol vesting (bankrun)", () => {
         merkleRoot: Array.from(merkleTree.root),
         leafCount: 2,
         totalSupply: new BN(TOTAL_SUPPLY),
+        minCliffTime: new BN(start),
         cancellable: true,
         cancelAuthority: cancelAuthority.publicKey,
         pauseAuthority: pauseAuthority.publicKey,
@@ -853,6 +858,7 @@ describe("native sol vesting (bankrun)", () => {
         merkleRoot: Array.from(merkleTree.root),
         leafCount: 2,
         totalSupply: new BN(TOTAL_SUPPLY),
+        minCliffTime: new BN(start),
         cancellable: true,
         cancelAuthority: cancelAuthority.publicKey,
         pauseAuthority: pauseAuthority.publicKey,
@@ -976,6 +982,7 @@ describe("native sol vesting (bankrun)", () => {
         merkleRoot: Array.from(merkleTree.root),
         leafCount: 2,
         totalSupply: new BN(TOTAL_SUPPLY),
+        minCliffTime: new BN(cliffTime),
         cancellable: true,
         cancelAuthority: cancelAuthority.publicKey,
         pauseAuthority: pauseAuthority.publicKey,
@@ -1160,6 +1167,7 @@ describe("native sol vesting (bankrun)", () => {
         merkleRoot: Array.from(merkleTree.root),
         leafCount: 2,
         totalSupply: new BN(TOTAL_SUPPLY),
+        minCliffTime: new BN(start),
         cancellable: true,
         cancelAuthority: cancelAuthority.publicKey,
         pauseAuthority: pauseAuthority.publicKey,

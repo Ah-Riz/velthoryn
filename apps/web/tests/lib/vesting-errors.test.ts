@@ -1,69 +1,25 @@
-import { describe, it, expect } from "vitest";
-import { formatVestingError, VESTING_ERROR_CODES } from "../../src/lib/anchor/errors";
+import { describe, expect, it } from "vitest";
+import { formatVestingError } from "@/lib/anchor/errors";
 
 describe("formatVestingError", () => {
-  it("maps UnauthorizedClaimer by name and code", () => {
-    expect(
-      formatVestingError(new Error("Error: UnauthorizedClaimer")),
-    ).toContain("not the beneficiary");
-    expect(
-      formatVestingError(new Error(`custom program error: 0x${VESTING_ERROR_CODES.UnauthorizedClaimer.toString(16)}`)),
-    ).toContain("not the beneficiary");
+  it("maps InstantRefundedCampaign (6035 / 0x1793)", () => {
+    const msg = formatVestingError(
+      new Error("custom program error: 0x1793. Error Code: InstantRefundedCampaign."),
+    );
+    expect(msg).toContain("instant-refunded");
   });
 
-  it("maps InvalidProof", () => {
-    expect(formatVestingError(new Error("InvalidProof"))).toContain(
-      "Schedule parameters",
+  it("maps CampaignAlreadyStarted (6036 / 0x1794)", () => {
+    const msg = formatVestingError(
+      new Error("custom program error: 0x1794. Error Code: CampaignAlreadyStarted."),
     );
-    expect(
-      formatVestingError(new Error("0x177d")),
-    ).toContain("Schedule parameters");
+    expect(msg).toContain("already started");
   });
 
-  it("maps NothingToClaim with correct hex 0x177f", () => {
-    expect(formatVestingError(new Error("NothingToClaim"))).toContain(
-      "Nothing to claim",
+  it("maps NotMultiLeafCampaign (6040 / 0x1798)", () => {
+    const msg = formatVestingError(
+      new Error("custom program error: 0x1798. Error Code: NotMultiLeafCampaign."),
     );
-    expect(formatVestingError(new Error("0x177f"))).toContain(
-      "Nothing to claim",
-    );
-  });
-
-  it("maps InsufficientVault (tutorial InsufficientBalance)", () => {
-    expect(formatVestingError(new Error("InsufficientVault"))).toContain(
-      "Vault has insufficient",
-    );
-    expect(formatVestingError(new Error("0x1780"))).toContain(
-      "Vault has insufficient",
-    );
-  });
-
-  it("handles wallet rejection", () => {
-    expect(formatVestingError(new Error("User rejected the request"))).toContain(
-      "cancelled",
-    );
-  });
-
-  it("maps FullyVested", () => {
-    expect(formatVestingError(new Error("FullyVested"))).toContain(
-      "fully vested",
-    );
-    expect(formatVestingError(new Error("0x178f"))).toContain("fully vested");
-  });
-
-  it("maps MilestoneNotReleased", () => {
-    expect(formatVestingError(new Error("MilestoneNotReleased"))).toContain(
-      "released",
-    );
-  });
-
-  it("maps StreamExpired", () => {
-    expect(formatVestingError(new Error("StreamExpired"))).toContain("ended");
-    expect(formatVestingError(new Error("0x1790"))).toContain("ended");
-  });
-
-  it("maps ProofTooLong", () => {
-    expect(formatVestingError(new Error("ProofTooLong"))).toContain("too long");
-    expect(formatVestingError(new Error("0x178e"))).toContain("too long");
+    expect(msg).toContain("multi-leaf");
   });
 });

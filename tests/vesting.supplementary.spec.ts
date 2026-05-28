@@ -692,7 +692,7 @@ describe("vesting supplementary T6-T25", () => {
     // Try to update root with the exact same root bytes
     try {
       await program.methods
-        .updateRoot(Array.from(tree.root), 1)
+        .updateRoot(Array.from(tree.root), 1, new BN(cliff))
         .accounts({
           cancelAuthority: cancelAuthority.publicKey,
           vestingTree: treePda,
@@ -754,7 +754,7 @@ describe("vesting supplementary T6-T25", () => {
 
     try {
       await program.methods
-        .updateRoot(Array.from(newTree.root), 1)
+        .updateRoot(Array.from(newTree.root), 1, new BN(cliff))
         .accounts({
           cancelAuthority: randomKp.publicKey,
           vestingTree: treePda,
@@ -823,7 +823,7 @@ describe("vesting supplementary T6-T25", () => {
     // Try to update root after cancel
     try {
       await program.methods
-        .updateRoot(Array.from(newTree.root), 1)
+        .updateRoot(Array.from(newTree.root), 1, new BN(cliff))
         .accounts({
           cancelAuthority: cancelAuthority.publicKey,
           vestingTree: treePda,
@@ -1437,6 +1437,7 @@ describe("vesting supplementary T6-T25", () => {
           merkleRoot: Array.from(new Uint8Array(32)), // all zeros
           leafCount: 1,
           totalSupply: new BN(AMOUNT),
+          minCliffTime: new BN(1),
           cancellable: true,
           cancelAuthority: cancelAuthority.publicKey,
           pauseAuthority: pauseAuthority.publicKey,
@@ -1489,6 +1490,7 @@ describe("vesting supplementary T6-T25", () => {
           merkleRoot: Array.from(tree.root),
           leafCount: 1,
           totalSupply: new BN(0),
+          minCliffTime: new BN(1),
           cancellable: true,
           cancelAuthority: cancelAuthority.publicKey,
           pauseAuthority: pauseAuthority.publicKey,
@@ -1532,6 +1534,7 @@ describe("vesting supplementary T6-T25", () => {
           merkleRoot: nonZeroRoot,
           leafCount: 0,
           totalSupply: new BN(AMOUNT),
+          minCliffTime: new BN(1),
           cancellable: true,
           cancelAuthority: cancelAuthority.publicKey,
           pauseAuthority: pauseAuthority.publicKey,
@@ -1585,6 +1588,7 @@ describe("vesting supplementary T6-T25", () => {
           merkleRoot: Array.from(tree.root),
           leafCount: 1,
           totalSupply: new BN(AMOUNT),
+          minCliffTime: leaf.cliffTime,
           cancellable: true,
           cancelAuthority: null, // <-- null despite cancellable=true
           pauseAuthority: pauseAuthority.publicKey,
@@ -2490,7 +2494,7 @@ describe("vesting supplementary T6-T25", () => {
 
     // Update root to the new tree's root
     await program.methods
-      .updateRoot(Array.from(newTree.root), 1)
+      .updateRoot(Array.from(newTree.root), 1, new BN(cliff))
       .accounts({
         cancelAuthority: cancelAuthority.publicKey,
         vestingTree: treePda,
@@ -2811,6 +2815,7 @@ describe("vesting supplementary T6-T25", () => {
         merkleRoot: Array.from(tree.root),
         leafCount: 1,
         totalSupply: new BN(AMOUNT),
+        minCliffTime: leaf.cliffTime,
         cancellable: true,
         cancelAuthority: cancelAuthority.publicKey,
         pauseAuthority: null, // <-- no pause authority
@@ -3013,6 +3018,7 @@ describe("vesting supplementary T6-T25", () => {
         merkleRoot: Array.from(tree.root),
         leafCount: 1,
         totalSupply: new BN(TOTAL_SUPPLY),
+        minCliffTime: leaf.cliffTime,
         cancellable: true,
         cancelAuthority: cancelAuthority.publicKey,
         pauseAuthority: pauseAuthority.publicKey,
@@ -4442,6 +4448,7 @@ describe("vesting supplementary T6-T25", () => {
           merkleRoot,
           leafCount: 1,
           totalSupply: new BN(1_000),
+          minCliffTime: new BN(1),
           cancellable: false,
           cancelAuthority: null,
           pauseAuthority: null,

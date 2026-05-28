@@ -262,3 +262,59 @@ export async function buildMilestoneReleaseTx(params: {
     },
   };
 }
+
+export async function buildInstantRefundCampaignTx(params: {
+  vestingTree: PublicKey;
+  creator: PublicKey;
+  mint: PublicKey;
+  creatorAta?: PublicKey | null;
+}): Promise<PreparedTransaction> {
+  const program = getProgram();
+  const isNative = params.mint.equals(PublicKey.default);
+
+  const vaultAuthority = isNative ? undefined : deriveVaultAuthority(params.vestingTree);
+  const vault = isNative
+    ? undefined
+    : getAssociatedTokenAddressSync(params.mint, vaultAuthority!, true);
+
+  if (!isNative && !params.creatorAta) {
+    throw new Error("creatorAta is required for SPL-token instant refund");
+  }
+
+  const instruction = await program.methods
+    .instantRefundCampaign()
+    // Optional accounts are omitted on native SOL path.
+    .accounts({
+      creator: params.creator,
+      vestingTree: params.vestingTree,
+      ...(isNative
+        ? {
+            systemProgram: SystemProgram.programId,
+          }
+        : {
+            vaultAuthority,
+            vault,
+            creatorAta: params.creatorAta!,
+            tokenProgram: TOKEN_PROGRAM_ID,
+            systemProgram: SystemProgram.programId,
+          }),
+    } as any)
+    .instruction();
+
+  const transaction = await buildRawTransaction([instruction], params.creator);
+
+  return {
+    transaction,
+    signers: ["creator"],
+    instruction: "instant_refund_campaign",
+    accounts: {
+      vestingTree: params.vestingTree.toBase58(),
+      ...(isNative
+        ? {}
+        : {
+            vault: vault!.toBase58(),
+            creatorAta: params.creatorAta!.toBase58(),
+          }),
+    },
+  };
+}

@@ -9,10 +9,10 @@ Deployed: devnet (latest upgrade at slot **464782646**, ~492KB allocation). Loca
 
 ```
 programs/vesting/src/
-├── lib.rs                  # #[program] dispatcher — wires the 17 entry points
+├── lib.rs                  # #[program] dispatcher — wires the 18 entry points
 ├── constants.rs            # GRACE_PERIOD_SECS, MAX_MERKLE_PROOF_LEN
-├── errors.rs               # VestingError enum (36 variants including native SOL guards)
-├── events.rs               # 9 event types (CampaignCreated, Claimed, RootUpdated, …)
+├── errors.rs               # VestingError enum (41 variants)
+├── events.rs               # 10 event types (CampaignCreated, Claimed, InstantRefunded, …)
 ├── state/
 │   ├── mod.rs              # re-exports (includes NATIVE_SOL_MINT)
 │   ├── vesting_tree.rs     # VestingTree #[account] — campaign PDA, is_native() helper
@@ -36,14 +36,15 @@ programs/vesting/src/
     ├── withdraw_unvested.rs# LIVE — dual-path: SPL CPI or native SOL lamport drain
     ├── pause_campaign.rs   # LIVE (exposes pause_handler + unpause_handler)
     ├── close_claim_record.rs # LIVE
-    └── get_vested_amount.rs  # LIVE (view function)
+    ├── get_vested_amount.rs  # LIVE (view function)
+    └── instant_refund_campaign.rs # LIVE — creator instant refund (multi-leaf, unstarted)
 ```
 
 ## Instruction surface
 
 | Entry point          | Args                                                     | Role |
 | -------------------- | -------------------------------------------------------- | -------------------- |
-| `create_campaign`    | `CreateCampaignArgs`                                     | Initialize a `VestingTree` PDA + token vault. Validates root, leaf_count, total_supply, cancel_authority. |
+| `create_campaign`    | `CreateCampaignArgs` (incl. `min_cliff_time`)            | Initialize a `VestingTree` PDA + token vault. Validates root, leaf_count, total_supply, cancel_authority. Stores `min_cliff_time` (minimum leaf cliff) for instant-refund eligibility. |
 | `create_campaign_native` | `CreateCampaignArgs`                                 | Same for native SOL — PDA holds lamports directly, no vault ATA. `mint = NATIVE_SOL_MINT`. |
 | `create_stream`      | `CreateStreamArgs`                                       | Atomic single-recipient campaign creation + funding in one transaction. Computes Merkle root on-chain for a single-leaf tree. |
 | `create_stream_native` | `CreateStreamArgs`                                     | Same for native SOL — `system_program::transfer` funds the PDA. |
@@ -54,7 +55,8 @@ programs/vesting/src/
 | `cancel_campaign`    | —                                                        | Cancel-authority sets `cancelled_at = now`. Starts the 7-day grace clock. |
 | `cancel_stream`      | `WithdrawArgs`                                           | Creator-only for `leaf_count == 1`: vested → beneficiary, remainder → creator. Dual-path. Milestone-aware. OverClaim guard on `total_claimed`. |
 | `set_milestone_released` | `milestone_idx: u8`                                | Creator sets bit in `milestone_released_flags`. Idempotency guard: second call rejects with `MilestoneAlreadyReleased`. |
-| `update_root`        | `new_root: [u8; 32], new_leaf_count: u32`                | Cancel-authority rotates the Merkle root (per-recipient clawback). |
+| `update_root`        | `new_root`, `new_leaf_count`, `new_min_cliff_time`       | Cancel-authority rotates the Merkle root (per-recipient clawback). Updates `min_cliff_time` for the new leaf set. |
+| `instant_refund_campaign` | —                                                   | Creator-only: multi-leaf, `now < min_cliff_time`, no milestone flags set. Marks `instant_refunded`, drains vault/PDA to creator. |
 | `withdraw_unvested`  | —                                                        | After grace, creator sweeps unvested balance. SPL: token CPI. Native SOL: drain PDA lamports to creator. |
 | `pause_campaign`     | —                                                        | Pause-authority blocks claims. |
 | `unpause_campaign`   | — (shares Accounts with pause_campaign)                  | Resume a paused campaign. |
@@ -85,6 +87,9 @@ Args are defined alongside their instruction (`CreateCampaignArgs` lives in `ins
 | `paused`           | `bool`           | Toggled by pause/unpause. |
 | `pause_authority`  | `Option<Pubkey>` | If `None`, pause/unpause is rejected. |
 | `created_at`       | `i64`            | Unix seconds. |
+| `min_cliff_time`   | `i64`            | Minimum `cliff_time` across current leaves; gates `instant_refund_campaign`. |
+| `milestone_released_flags` | `[u8; 32]` | Bitmap of released milestones (gates instant refund + milestone claims). |
+| `instant_refunded` | `bool`           | True after `instant_refund_campaign`; blocks `claim` and `set_milestone_released`. |
 | `bump`             | `u8`             | PDA bump cache. |
 
 PDA seeds: `["tree", creator, mint, campaign_id.to_le_bytes()]`.
@@ -135,7 +140,7 @@ Total: **70 bytes** Borsh LE. **Field order is the wire order** — the TS encod
 
 ## Errors
 
-`VestingError` (34 variants) covers every checked condition. Read `programs/vesting/src/errors.rs` for the full list.
+`VestingError` (**41** variants) covers every checked condition. Read `programs/vesting/src/errors.rs` for the full list.
 
 **Tutorial / checklist mapping:** see [`docs/ERROR_MAP.md`](ERROR_MAP.md) (e.g. `InsufficientBalance` → `InsufficientVault`, `UnauthorizedWithdraw` → `UnauthorizedClaimer`).
 
@@ -151,10 +156,12 @@ Notable variants:
 - `GracePeriodActive`, `NotCancelled` — gate `withdraw_unvested`.
 - `NotSingleStream` — gates `withdraw` to single-recipient streams only.
 - `CannotClose` — `close_claim_record` guard: requires `total_entitled > 0 && claimed_amount >= total_entitled` or post-grace.
+- `InstantRefundedCampaign` (6035), `CampaignAlreadyStarted` (6036), `NotMultiLeafCampaign` (6040) — instant-refund path.
+- `NativeSolVaultNotEmpty` (6037), `NativeSolRentViolation` (6038), `UnsupportedMint` (6039) — native SOL + mint guards.
 
 ## Events
 
-Indexers watch these (`events.rs`): `CampaignCreated`, `CampaignFunded`, `Claimed`, `CampaignCancelled`, `RootUpdated`, `UnvestedWithdrawn`, `CampaignPaused`, `CampaignUnpaused`, `ClaimRecordClosed`. Each carries the tree pubkey + the relevant deltas.
+Indexers watch these (`events.rs`): `CampaignCreated`, `CampaignFunded`, `Claimed`, `CampaignCancelled`, `RootUpdated`, `UnvestedWithdrawn`, `CampaignPaused`, `CampaignUnpaused`, `ClaimRecordClosed`, `InstantRefunded`. Each carries the tree pubkey + the relevant deltas.
 
 ## Math
 
@@ -180,13 +187,14 @@ The TS client library (`clients/ts/`) provides leaf encoding and Merkle tree con
 - `MAX_TREE_DEPTH` — constant (20), maximum recommended tree depth
 - `verifyProof()` — standalone proof verification for off-chain pre-verification
 - `proofAsArrays()` — converts Buffer[] proofs to number[][] for Anchor IDL compatibility
-- `prepareCampaign()` — recommended way to prepare campaign data (builds tree, returns root + proof set)
+- `prepareCampaign()` — builds tree, returns root + proofs + `minCliffTime` (minimum leaf cliff for on-chain `create_campaign`)
+- `computeMinCliffTime()` — minimum cliff across leaves
 - `CampaignRecipient`, `PreparedCampaign` — types for campaign preparation
 - Golden vector gate verifies cross-language hash match
 
-Integration tests in `tests/` cover T6-T68 (supplementary/error paths), golden vector gate, and 11 security exploit tests (EXPLOIT 1–11) — 86 tests total.
+Integration tests in `tests/` cover T6-T71 (supplementary/error paths), `instant-refund-campaign.spec.ts` (11 tests), golden vector gate, and 11 security exploit tests (EXPLOIT 1–11).
 
-**Test results (local validator):** 86/86 passing, 1 pending (T68 — clock warp). Clock-dependent tests use `solana-bankrun` for deterministic time control.
+**Test results (local validator):** **118 passing**, 2 pending (`pnpm test:localnet`). Clock-dependent tests use `solana-bankrun` for deterministic time control.
 - Trident fuzz smoke: `trident-tests/fuzz_vesting` runs in CI after `anchor test`
 
 Run with `pnpm test:localnet` (recommended) or start a persistent validator manually:

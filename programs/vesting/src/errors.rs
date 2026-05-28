@@ -84,6 +84,12 @@ pub enum VestingError {
     #[msg("Milestone has already been released")]
     MilestoneAlreadyReleased,
 
+    #[msg("Campaign was instant-refunded; no further claims or releases allowed")]
+    InstantRefundedCampaign,
+
+    #[msg("Campaign has already started; instant refund is not allowed")]
+    CampaignAlreadyStarted,
+
     #[msg("Native SOL vault still holds lamports after final drain")]
     NativeSolVaultNotEmpty,
 
@@ -92,4 +98,7 @@ pub enum VestingError {
 
     #[msg("Token-2022 mints are not supported; use classic SPL Token")]
     UnsupportedMint,
+
+    #[msg("Instant refund is only allowed on multi-leaf campaigns")]
+    NotMultiLeafCampaign,
 }

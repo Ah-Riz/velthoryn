@@ -36,6 +36,20 @@
       "when": 1778500002000,
       "tag": "0005_timeline_indexes",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1778500003000,
+      "tag": "0006_instant_refund_campaign_fields",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1778500004000,
+      "tag": "0007_instant_refund_events",
+      "breakpoints": true
     }
   ]
 }
