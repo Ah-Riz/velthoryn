@@ -97,7 +97,6 @@ async function postRootVersionHandler(
 
 export const POST = withRoute(
   {
-    auth: true,
     rateLimit: { requests: 10, window: 60 },
     bodyLimit: "root-versions",
   },

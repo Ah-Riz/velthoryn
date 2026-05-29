@@ -47,6 +47,7 @@ export type PreparedBulkCampaign = {
   leafCount: number;
   merkleRoot: string;
   totalSupply: string;
+  minCliffTime: string;
   releaseMix: {
     cliff: number;
     linear: number;
@@ -396,12 +397,14 @@ export function prepareBulkCampaign(rows: BulkCsvRow[]): PreparedBulkCampaign {
   const tree = buildTree(leavesForTree);
 
   let totalSupply = 0n;
+  let minCliffTime = leavesForTree[0].cliffTs;
   let cliffCount = 0;
   let linearCount = 0;
   let milestoneCount = 0;
 
   const leaves = leavesForTree.map((leaf, index) => {
     totalSupply += leaf.amount;
+    if (leaf.cliffTs < minCliffTime) minCliffTime = leaf.cliffTs;
     if (leaf.releaseType === 0) cliffCount += 1;
     if (leaf.releaseType === 1) linearCount += 1;
     if (leaf.releaseType === 2) milestoneCount += 1;
@@ -423,6 +426,7 @@ export function prepareBulkCampaign(rows: BulkCsvRow[]): PreparedBulkCampaign {
     leafCount: leaves.length,
     merkleRoot: tree.rootHex,
     totalSupply: totalSupply.toString(),
+    minCliffTime: minCliffTime.toString(),
     releaseMix: {
       cliff: cliffCount,
       linear: linearCount,

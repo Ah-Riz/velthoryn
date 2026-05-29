@@ -43,6 +43,7 @@ import { POPULAR_TOKENS } from "@/lib/constants/popular-tokens";
 import {
   canCancelCampaign,
   canCancelStream,
+  canInstantRefund,
   canPauseCampaign,
   canReleaseMilestone,
   canRotateRoot,
@@ -70,6 +71,8 @@ type TreeState = {
   createdAt: BN;
   leafCount: number;
   milestoneReleasedFlags: Uint8Array;
+  minCliffTime: BN;
+  instantRefunded: boolean;
   bump: number;
 };
 
@@ -110,6 +113,8 @@ function buildIndexedFallbackTreeState(detail: {
   cancellable: boolean;
   paused: boolean;
   cancelledAt: number | null;
+  minCliffTime?: number | null;
+  instantRefunded?: boolean;
   createdAt: number;
   leafCount: number;
 }): TreeState | null {
@@ -132,6 +137,8 @@ function buildIndexedFallbackTreeState(detail: {
       createdAt: new BN(detail.createdAt),
       leafCount: detail.leafCount,
       milestoneReleasedFlags: new Uint8Array(32),
+      minCliffTime: detail.minCliffTime != null ? new BN(detail.minCliffTime) : new BN(0),
+      instantRefunded: detail.instantRefunded ?? false,
       bump: 0,
     };
   } catch {
@@ -224,7 +231,7 @@ function truncateAddress(addr: string, chars = 6): string {
 
 export default function CampaignPage({ params }: { params: Promise<{ id: string }> }) {
   const { id: treeAddress } = use(params);
-  const { publicKey } = useWallet();
+  const { publicKey, sendTransaction } = useWallet();
   const { connection } = useConnection();
   const program = useVestingProgram();
   const { fundCampaign } = useCreateCampaign();
@@ -264,6 +271,7 @@ export default function CampaignPage({ params }: { params: Promise<{ id: string 
 
   const [cancelOpen, setCancelOpen] = useState(false);
   const [cancelLoading, setCancelLoading] = useState(false);
+  const [instantRefundLoading, setInstantRefundLoading] = useState(false);
   const [manualBeneficiary, setManualBeneficiary] = useState("");
   const [nowUnix, setNowUnix] = useState(() => Math.floor(Date.now() / 1000));
   const treeMint = treeState?.mint;
@@ -373,6 +381,8 @@ export default function CampaignPage({ params }: { params: Promise<{ id: string 
           createdAt: account.createdAt,
           leafCount: account.leafCount,
           milestoneReleasedFlags: new Uint8Array(account.milestoneReleasedFlags ?? new Array(32).fill(0)),
+          minCliffTime: account.minCliffTime ?? new BN(0),
+          instantRefunded: account.instantRefunded ?? false,
           bump: account.bump,
         });
         setError(null);
@@ -804,6 +814,22 @@ export default function CampaignPage({ params }: { params: Promise<{ id: string 
     creator: treeState?.creator,
     cancelledAt: cancelledAtBigint,
   });
+  const minCliffTimeBigint = treeState?.minCliffTime
+    ? BigInt(treeState.minCliffTime.toString())
+    : null;
+  const canShowInstantRefund = canInstantRefund({
+    viewer: publicKey,
+    creator: treeState?.creator,
+    cancellable: treeState?.cancellable ?? false,
+    cancelledAt: cancelledAtBigint,
+    instantRefunded: treeState?.instantRefunded ?? false,
+    leafCount: treeState?.leafCount ?? 0,
+    minCliffTime: minCliffTimeBigint,
+    nowTs: nowTs,
+    totalSupply,
+    totalClaimed,
+    milestoneReleasedFlags: treeState?.milestoneReleasedFlags ?? new Uint8Array(32),
+  });
   const canShowRootRotation = canRotateRoot({
     viewer: publicKey,
     cancelAuthority: treeState?.cancelAuthority,
@@ -966,21 +992,25 @@ export default function CampaignPage({ params }: { params: Promise<{ id: string 
 
   /* ---- Status helpers ---- */
 
-  const statusLabel = treeState?.paused
-    ? "Paused"
-    : treeState?.cancelledAt
-      ? "Cancelled"
-      : totalSupply > 0n && totalClaimed >= totalSupply
-        ? "Claimed"
-        : "Active";
+  const statusLabel = treeState?.instantRefunded
+    ? "Refunded"
+    : treeState?.paused
+      ? "Paused"
+      : treeState?.cancelledAt
+        ? "Cancelled"
+        : totalSupply > 0n && totalClaimed >= totalSupply
+          ? "Claimed"
+          : "Active";
 
-  const statusBadgeClass = treeState?.paused
+  const statusBadgeClass = treeState?.instantRefunded
     ? "border-amber-500/20 bg-amber-500/10 text-amber-400"
-    : treeState?.cancelledAt
-      ? "border-red-500/20 bg-red-500/10 text-red-400"
-      : totalSupply > 0n && totalClaimed >= totalSupply
-        ? "border-sky-500/20 bg-sky-500/10 text-sky-400"
-        : "border-emerald-500/20 bg-emerald-500/10 text-emerald-400";
+    : treeState?.paused
+      ? "border-amber-500/20 bg-amber-500/10 text-amber-400"
+      : treeState?.cancelledAt
+        ? "border-red-500/20 bg-red-500/10 text-red-400"
+        : totalSupply > 0n && totalClaimed >= totalSupply
+          ? "border-sky-500/20 bg-sky-500/10 text-sky-400"
+          : "border-emerald-500/20 bg-emerald-500/10 text-emerald-400";
 
   async function handleFundExistingCampaign() {
     if (!treeState || fundingRemaining <= 0n) return;
@@ -1011,13 +1041,16 @@ export default function CampaignPage({ params }: { params: Promise<{ id: string 
     try {
       const treePubkey = new PublicKey(treeAddress);
 
-      const sig = await program.methods
+      const cancelIx = await program.methods
         .cancelCampaign()
         .accounts({
           cancelAuthority: publicKey,
           vestingTree: treePubkey,
         })
-        .rpc();
+        .instruction();
+      const cancelTx = new Transaction().add(cancelIx);
+      const sig = await sendTransaction(cancelTx, connection);
+      await connection.confirmTransaction(sig, "confirmed");
 
       setTxStatus({ type: "success", sig });
       setCancelOpen(false);
@@ -1095,16 +1128,13 @@ export default function CampaignPage({ params }: { params: Promise<{ id: string 
           data: cancelData,
         });
         const tx = new Transaction().add(cancelIx);
-        const provider = program.provider as {
-          sendAndConfirm: (tx: Transaction, signers?: unknown[]) => Promise<string>;
-        };
-        await provider.sendAndConfirm(tx, []);
+        await sendTransaction(tx, connection);
       } else {
         const { getAssociatedTokenAddressSync, TOKEN_PROGRAM_ID } = await import("@solana/spl-token");
         const beneficiaryAta = getAssociatedTokenAddressSync(treeState.mint, beneficiary);
         const creatorAta = getAssociatedTokenAddressSync(treeState.mint, publicKey);
 
-        await program.methods
+        const cancelStreamIx = await program.methods
           .cancelStream(args)
           .accounts({
             creator: publicKey,
@@ -1118,7 +1148,9 @@ export default function CampaignPage({ params }: { params: Promise<{ id: string 
             creatorAta,
             tokenProgram: TOKEN_PROGRAM_ID,
           })
-          .rpc();
+          .instruction();
+        const cancelStreamTx = new Transaction().add(cancelStreamIx);
+        await sendTransaction(cancelStreamTx, connection);
       }
 
       toast("Stream cancelled and settled.", "success");
@@ -1190,6 +1222,103 @@ export default function CampaignPage({ params }: { params: Promise<{ id: string 
       toast(msg, "error");
     } finally {
       setCancelLoading(false);
+    }
+  }
+
+  /* ---- Instant Refund handler (multi-leaf, not started) ---- */
+
+  async function handleInstantRefund() {
+    if (!program || !publicKey || !treeState) return;
+    setInstantRefundLoading(true);
+    try {
+      const treePubkey = new PublicKey(treeAddress);
+      const native = isNativeSol(treeState.mint);
+
+      if (native) {
+        const refundIx = await program.methods
+          .instantRefundCampaign()
+          .accounts({
+            creator: publicKey,
+            vestingTree: treePubkey,
+            vaultAuthority: null,
+            vault: null,
+            creatorAta: null,
+            tokenProgram: null,
+            systemProgram: SystemProgram.programId,
+          })
+          .instruction();
+        const refundTx = new Transaction().add(refundIx);
+        await sendTransaction(refundTx, connection);
+      } else {
+        const { getAssociatedTokenAddressSync, TOKEN_PROGRAM_ID } = await import("@solana/spl-token");
+        const [vaultAuthority] = PublicKey.findProgramAddressSync(
+          [Buffer.from("vault_authority"), treePubkey.toBuffer()],
+          program.programId,
+        );
+        const vault = getAssociatedTokenAddressSync(treeState.mint, vaultAuthority, true);
+        const creatorAta = getAssociatedTokenAddressSync(treeState.mint, publicKey);
+
+        const refundIx = await program.methods
+          .instantRefundCampaign()
+          .accounts({
+            creator: publicKey,
+            vestingTree: treePubkey,
+            vaultAuthority,
+            vault,
+            creatorAta,
+            tokenProgram: TOKEN_PROGRAM_ID,
+            systemProgram: SystemProgram.programId,
+          })
+          .instruction();
+        const refundTx = new Transaction().add(refundIx);
+        await sendTransaction(refundTx, connection);
+      }
+
+      toast("Campaign instantly refunded. All funds returned.", "success");
+      setCancelOpen(false);
+
+      const cancelTs = Math.floor(Date.now() / 1000);
+      setTreeState((prev) => {
+        if (!prev) return prev;
+        const next = {
+          ...prev,
+          cancelledAt: new BN(cancelTs),
+          paused: false,
+          instantRefunded: true,
+        };
+        treeStateRef.current = next;
+        return next;
+      });
+      queryClient.setQueriesData(
+        { queryKey: ["campaigns"] },
+        (old: unknown) => {
+          const data = old as { campaigns?: { treeAddress: string; cancelledAt: number | null }[] } | undefined;
+          if (!data?.campaigns) return old;
+          return { ...data, campaigns: data.campaigns.map((c) => c.treeAddress === treeAddress ? { ...c, cancelledAt: cancelTs } : c) };
+        },
+      );
+      void queryClient.invalidateQueries({ queryKey: ["beneficiaryCampaigns"] });
+
+      fetch(`/api/campaigns/${treeAddress}/status`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ cancelledAt: cancelTs, instantRefunded: true }),
+      }).catch(() => {});
+      fetchTree(true);
+      void campaignDetailQuery.refetch();
+    } catch (err: unknown) {
+      if (
+        err instanceof Error &&
+        /User rejected|Connection rejected/i.test(err.message)
+      ) {
+        setInstantRefundLoading(false);
+        return;
+      }
+      const msg = formatVestingError(err);
+      setTxStatus({ type: "error", msg });
+      toast(msg, "error");
+    } finally {
+      setInstantRefundLoading(false);
     }
   }
 
@@ -1274,17 +1403,14 @@ export default function CampaignPage({ params }: { params: Promise<{ id: string 
             });
 
             const tx = new Transaction().add(withdrawIx);
-            const provider = program.provider as {
-              sendAndConfirm: (tx: Transaction, signers?: unknown[]) => Promise<string>;
-            };
-            return provider.sendAndConfirm(tx, []);
+            return sendTransaction(tx, connection);
           })()
         : await (async () => {
             const [vaultAuthority] = derivePda(["vault_authority", treePubkey.toBuffer()]);
             const { getAssociatedTokenAddressSync } = await import("@solana/spl-token");
             const beneficiaryAta = getAssociatedTokenAddressSync(treeState.mint, publicKey);
 
-            return program.methods
+            const withdrawIx = await program.methods
               .withdraw(args)
               .accounts({
                 beneficiary: publicKey,
@@ -1295,7 +1421,9 @@ export default function CampaignPage({ params }: { params: Promise<{ id: string 
                 beneficiaryAta,
                 mint: treeState.mint,
               })
-              .rpc();
+              .instruction();
+            const tx = new Transaction().add(withdrawIx);
+            return sendTransaction(tx, connection);
           })();
 
       const nextClaimed = totalClaimed + claimable;
@@ -1739,6 +1867,15 @@ export default function CampaignPage({ params }: { params: Promise<{ id: string 
             )}
 
             <div className="mt-5 space-y-4">
+              {treeState.instantRefunded && (
+                <div className="rounded-xl border border-amber-500/20 bg-amber-500/5 p-4">
+                  <p className="text-[13px] font-medium text-amber-300">Campaign Instantly Refunded</p>
+                  <p className="mt-2 text-[12px] leading-6 text-amber-100/80">
+                    This campaign was refunded before vesting started. All funds were returned to the creator.
+                  </p>
+                </div>
+              )}
+
               {isFundingIncomplete && (
                 <div className="rounded-xl border border-amber-500/20 bg-amber-500/5 p-4">
                   <p className="text-[13px] font-medium text-amber-300">Funding incomplete</p>
@@ -1873,7 +2010,16 @@ export default function CampaignPage({ params }: { params: Promise<{ id: string 
                 </>
               )}
 
-              {canShowCancel && (
+              {canShowInstantRefund && (
+                <button
+                  onClick={() => setCancelOpen(true)}
+                  className="w-full rounded-xl border border-amber-500/20 px-4 py-3 text-[13px] font-medium text-amber-400 transition hover:border-amber-500/40 hover:bg-amber-500/5"
+                >
+                  Instant Refund
+                </button>
+              )}
+
+              {canShowCancel && !canShowInstantRefund && (
                 <button
                   onClick={() => setCancelOpen(true)}
                   className="w-full rounded-xl border border-red-500/20 px-4 py-3 text-[13px] font-medium text-red-400 transition hover:border-red-500/40 hover:bg-red-500/5"
@@ -1968,9 +2114,11 @@ export default function CampaignPage({ params }: { params: Promise<{ id: string 
         isOpen={cancelOpen}
         onConfirm={handleCancel}
         onConfirmStream={handleCancelStream}
+        onConfirmInstantRefund={handleInstantRefund}
         onClose={() => setCancelOpen(false)}
         isLoading={cancelLoading}
         isStreamLoading={cancelLoading}
+        isInstantRefundLoading={instantRefundLoading}
         isSingleStream={isSingleLeaf && canCancelStream({
           viewer: publicKey,
           creator: treeState?.creator,
@@ -1980,6 +2128,7 @@ export default function CampaignPage({ params }: { params: Promise<{ id: string 
           totalClaimed,
           leafCount: treeState?.leafCount ?? 0,
         })}
+        isInstantRefundEligible={canShowInstantRefund}
         scheduleLoaded={scheduleSource !== "none" && !!cliffTime && !!endTime}
         beneficiaryUnknown={!expectedBeneficiary}
         manualBeneficiary={manualBeneficiary}

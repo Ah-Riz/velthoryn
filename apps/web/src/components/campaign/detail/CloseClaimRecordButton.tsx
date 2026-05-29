@@ -1,8 +1,9 @@
 "use client";
 
 import { useState } from "react";
-import { PublicKey } from "@solana/web3.js";
+import { PublicKey, Transaction } from "@solana/web3.js";
 import { type Program } from "@coral-xyz/anchor";
+import { useWallet, useConnection } from "@solana/wallet-adapter-react";
 import { derivePda } from "@/lib/anchor/client";
 import { formatVestingError } from "@/lib/anchor/errors";
 

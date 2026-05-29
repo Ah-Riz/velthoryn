@@ -321,6 +321,8 @@ export default function CliffCreatePage() {
       toast("Campaign created and funded!", "success");
       refreshPendingFundings();
       setTxState({ type: "bulk-funded", sig: funded.sig, treeAddress: created.treeAddress, prepared: txState.prepared });
+      setCsvText("");
+      setCsvResult(null);
     } catch (error: unknown) {
       if (error instanceof Error && /User rejected|Connection rejected/i.test(error.message)) {
         toast("Funding rejected", "error");

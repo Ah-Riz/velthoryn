@@ -12,8 +12,9 @@ const patchStatusSchema = z
     paused: z.boolean().optional(),
     cancelledAt: z.number().nullable().optional(),
     totalClaimed: z.union([z.string().regex(/^\d+$/), z.number().int().nonnegative()]).optional(),
+    instantRefunded: z.boolean().optional(),
   })
-  .refine((d) => d.paused !== undefined || d.cancelledAt !== undefined || d.totalClaimed !== undefined, {
+  .refine((d) => d.paused !== undefined || d.cancelledAt !== undefined || d.totalClaimed !== undefined || d.instantRefunded !== undefined, {
     message: "No valid fields to update",
   });
 
@@ -52,6 +53,9 @@ async function patchCampaignStatusHandler(
   if (parsed.data.totalClaimed !== undefined) {
     const totalClaimed = BigInt(parsed.data.totalClaimed);
     updates.totalClaimed = sql`GREATEST(${campaigns.totalClaimed}, ${totalClaimed})`;
+  }
+  if (parsed.data.instantRefunded !== undefined) {
+    updates.instantRefunded = parsed.data.instantRefunded;
   }
 
   await db

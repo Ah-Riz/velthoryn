@@ -78,6 +78,31 @@ export function canReleaseMilestone(params: {
   return params.releaseType === 2 || (params.hasMilestoneLeaves ?? false);
 }
 
+export function canInstantRefund(params: {
+  viewer: AddressLike;
+  creator: AddressLike;
+  cancellable: boolean;
+  cancelledAt: bigint | null;
+  instantRefunded: boolean;
+  leafCount: number;
+  minCliffTime: bigint | null;
+  nowTs: bigint;
+  totalSupply: bigint;
+  totalClaimed: bigint;
+  milestoneReleasedFlags: Uint8Array;
+}): boolean {
+  if (!params.cancellable) return false;
+  if (params.cancelledAt !== null) return false;
+  if (params.instantRefunded) return false;
+  if (params.leafCount <= 1) return false;
+  if (params.totalClaimed >= params.totalSupply) return false;
+  if (!sameAddress(params.viewer, params.creator)) return false;
+  if (params.minCliffTime === null) return false;
+  if (params.nowTs >= params.minCliffTime) return false;
+  if (params.milestoneReleasedFlags.some((b) => b !== 0)) return false;
+  return true;
+}
+
 export function canCancelStream(params: {
   viewer: AddressLike;
   creator: AddressLike;

@@ -83,12 +83,13 @@ export function useCreateCampaign() {
         merkleRoot: Array.from(Buffer.from(params.prepared.merkleRoot, "hex")),
         totalSupply: new BN(params.prepared.totalSupply),
         leafCount: new BN(params.prepared.leafCount),
+        minCliffTime: new BN(params.prepared.minCliffTime),
         cancellable: params.cancellable,
         cancelAuthority: params.cancellable ? publicKey : null,
         pauseAuthority: publicKey,
       };
 
-      const sig = nativeSol
+      const ix = nativeSol
         ? await program.methods
             .createCampaignNative(args)
             .accounts({
@@ -97,7 +98,7 @@ export function useCreateCampaign() {
               systemProgram: SystemProgram.programId,
               rent: SYSVAR_RENT_PUBKEY,
             })
-            .rpc()
+            .instruction()
         : await program.methods
             .createCampaign(args)
             .accounts({
@@ -111,7 +112,11 @@ export function useCreateCampaign() {
               systemProgram: SystemProgram.programId,
               rent: SYSVAR_RENT_PUBKEY,
             })
-            .rpc();
+            .instruction();
+
+      const tx = new Transaction().add(ix);
+      const sig = await sendTransaction(tx, connection);
+      await connection.confirmTransaction(sig, "confirmed");
 
       let indexWarning: string | null = null;
       const treeAddress = vestingTree.toBase58();
@@ -166,7 +171,7 @@ export function useCreateCampaign() {
         indexWarning,
       };
     },
-    [program, publicKey],
+    [program, publicKey, connection, sendTransaction],
   );
 
   const fundCampaign = useCallback(
@@ -180,14 +185,17 @@ export function useCreateCampaign() {
       let sig: string;
 
       if (nativeSol) {
-        sig = await program.methods
+        const fundIx = await program.methods
           .fundCampaignNative(new BN(params.totalSupply))
           .accounts({
             creator: publicKey,
             vestingTree,
             systemProgram: SystemProgram.programId,
           })
-          .rpc();
+          .instruction();
+        const fundTx = new Transaction().add(fundIx);
+        sig = await sendTransaction(fundTx, connection);
+        await connection.confirmTransaction(sig, "confirmed");
       } else if (params.autoWrap === true) {
         const sourceAta = getAssociatedTokenAddressSync(mintKey, publicKey);
         const [vaultAuthority] = derivePda(["vault_authority", vestingTree.toBuffer()]);
@@ -216,7 +224,7 @@ export function useCreateCampaign() {
         const sourceAta = getAssociatedTokenAddressSync(mintKey, publicKey);
         const [vaultAuthority] = derivePda(["vault_authority", vestingTree.toBuffer()]);
         const vault = getAssociatedTokenAddressSync(mintKey, vaultAuthority, true);
-        sig = await program.methods
+        const fundIx = await program.methods
           .fundCampaign(new BN(params.totalSupply))
           .accounts({
             creator: publicKey,
@@ -225,7 +233,10 @@ export function useCreateCampaign() {
             sourceAta,
             tokenProgram: TOKEN_PROGRAM_ID,
           })
-          .rpc();
+          .instruction();
+        const fundTx = new Transaction().add(fundIx);
+        sig = await sendTransaction(fundTx, connection);
+        await connection.confirmTransaction(sig, "confirmed");
       }
 
       removePendingCampaignFundingLocal(params.treeAddress);

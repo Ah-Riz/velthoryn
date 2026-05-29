@@ -4,6 +4,7 @@ import { useState } from "react";
 import { PublicKey, SystemProgram, Transaction, TransactionInstruction } from "@solana/web3.js";
 import { type Program } from "@coral-xyz/anchor";
 import { TOKEN_PROGRAM_ID, getAssociatedTokenAddressSync } from "@solana/spl-token";
+import { useWallet, useConnection } from "@solana/wallet-adapter-react";
 import { getGracePeriodState } from "@/lib/vesting/display";
 import { isNativeSol } from "@/lib/sol/auto-wrap";
 
@@ -34,6 +35,8 @@ export function WithdrawUnvestedButton({
   onSuccess,
   toast,
 }: Props) {
+  const { sendTransaction } = useWallet();
+  const { connection } = useConnection();
   const [loading, setLoading] = useState(false);
   const [confirmOpen, setConfirmOpen] = useState(false);
 
@@ -45,30 +48,24 @@ export function WithdrawUnvestedButton({
     setLoading(true);
     try {
       if (isNativeSol(mint)) {
-        const data = program.coder.instruction.encode("withdrawUnvested", {});
-        const placeholder = program.programId;
-        const ix = new TransactionInstruction({
-          programId: program.programId,
-          keys: [
-            { pubkey: publicKey, isSigner: true, isWritable: true },
-            { pubkey: treePubkey, isSigner: false, isWritable: true },
-            { pubkey: placeholder, isSigner: false, isWritable: false },
-            { pubkey: placeholder, isSigner: false, isWritable: false },
-            { pubkey: placeholder, isSigner: false, isWritable: false },
-            { pubkey: placeholder, isSigner: false, isWritable: false },
-            { pubkey: SystemProgram.programId, isSigner: false, isWritable: false },
-          ],
-          data,
-        });
+        const ix = await program.methods
+          .withdrawUnvested()
+          .accounts({
+            creator: publicKey,
+            vestingTree: treePubkey,
+            vaultAuthority: null,
+            vault: null,
+            creatorAta: null,
+            tokenProgram: null,
+            systemProgram: SystemProgram.programId,
+          })
+          .instruction();
         const tx = new Transaction().add(ix);
-        const provider = program.provider as {
-          sendAndConfirm: (tx: Transaction, signers?: unknown[]) => Promise<string>;
-        };
-        await provider.sendAndConfirm(tx, []);
+        await sendTransaction(tx, connection);
       } else {
         const creatorAta = getAssociatedTokenAddressSync(mint, publicKey);
 
-        await program.methods
+        const ix = await program.methods
           .withdrawUnvested()
           .accounts({
             creator: publicKey,
@@ -77,8 +74,11 @@ export function WithdrawUnvestedButton({
             vault,
             creatorAta,
             tokenProgram: TOKEN_PROGRAM_ID,
+            systemProgram: SystemProgram.programId,
           })
-          .rpc();
+          .instruction();
+        const tx = new Transaction().add(ix);
+        await sendTransaction(tx, connection);
       }
 
       toast("Unvested tokens withdrawn.", "success");

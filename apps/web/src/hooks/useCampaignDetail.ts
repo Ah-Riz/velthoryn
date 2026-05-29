@@ -25,6 +25,12 @@ interface CampaignRecipient {
   claimedAmount: string;
 }
 
+interface GracePeriod {
+  end: string;
+  remaining: string;
+  isExpired: boolean;
+}
+
 interface CampaignDetail {
   treeAddress: string;
   creator: string;
@@ -37,9 +43,13 @@ interface CampaignDetail {
   cancellable: boolean;
   paused: boolean;
   cancelledAt: number | null;
+  minCliffTime: number | null;
+  instantRefunded: boolean;
+  instantRefundEligible: boolean;
   createdAt: number;
   metadata: { name?: string; description?: string; logoUri?: string } | null;
   hasMilestoneLeaves?: boolean;
+  gracePeriod: GracePeriod | null;
   analytics: CampaignAnalytics;
   rootVersions: RootVersion[];
   recipients: CampaignRecipient[];

@@ -5,6 +5,7 @@ import { eq } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { campaigns, instantRefundEvents } from "@/lib/db/schema";
 import { ensureEventTables } from "../helpers/ensure-tables";
+import { resetDb } from "../helpers/db";
 import { DISCRIMINATORS, indexEventBuffers } from "@/lib/indexer/event-indexer";
 
 function randPk58(): string {
@@ -33,9 +34,7 @@ describe("event-indexer: InstantRefunded ingestion", () => {
   });
 
   beforeEach(async () => {
-    // Keep tests idempotent across local runs.
-    await db.delete(instantRefundEvents);
-    await db.delete(campaigns);
+    await resetDb();
   });
 
   it("persists instant_refund_events row and updates campaigns.instant_refunded + cancelled_at", async () => {

@@ -469,33 +469,34 @@ export function ClaimWithProofButton({
       claimTx.recentBlockhash = latestBlockhash.blockhash;
 
       let sig: string;
-      if (signTransaction) {
-        console.log("[ClaimWithProofButton] using signTransaction + sendRawTransaction path");
-        const signedTx = await signTransaction(claimTx);
-        const rawTx = signedTx.serialize();
-        sig = await connection.sendRawTransaction(rawTx, {
-          skipPreflight: false,
-          preflightCommitment: "confirmed",
-        });
-      } else {
+      if (sendTransaction) {
+        console.log("[ClaimWithProofButton] using sendTransaction path");
         try {
-          if (sendTransaction) {
-            sig = await sendTransaction(claimTx, connection, {
+          sig = await sendTransaction(claimTx, connection, {
+            skipPreflight: false,
+            preflightCommitment: "confirmed",
+          });
+        } catch (sendErr: unknown) {
+          if (isWalletInternalSendError(sendErr) && signTransaction) {
+            console.warn("[ClaimWithProofButton] sendTransaction failed, falling back to signTransaction", sendErr);
+            const signedTx = await signTransaction(claimTx);
+            sig = await connection.sendRawTransaction(signedTx.serialize(), {
               skipPreflight: false,
               preflightCommitment: "confirmed",
             });
           } else {
-            sig = await provider.sendAndConfirm(claimTx, []);
+            throw sendErr;
           }
-        } catch (sendErr: unknown) {
-          if (isWalletInternalSendError(sendErr)) {
-            console.warn(
-              "[ClaimWithProofButton] sendTransaction internal error without signTransaction fallback",
-              sendErr,
-            );
-          }
-          throw sendErr;
         }
+      } else if (signTransaction) {
+        console.log("[ClaimWithProofButton] using signTransaction + sendRawTransaction path");
+        const signedTx = await signTransaction(claimTx);
+        sig = await connection.sendRawTransaction(signedTx.serialize(), {
+          skipPreflight: false,
+          preflightCommitment: "confirmed",
+        });
+      } else {
+        sig = await provider.sendAndConfirm(claimTx, []);
       }
 
       await connection.confirmTransaction(
@@ -526,7 +527,7 @@ export function ClaimWithProofButton({
       void queryClient.invalidateQueries({
         queryKey: ["beneficiaryCampaigns"],
       });
-      const syncClaim = async (retries = 3) => {
+      const syncClaim = async (retries = 5) => {
         for (let i = 0; i < retries; i++) {
           try {
             const res = await fetch(`/api/claims/sync`, {
@@ -536,23 +537,29 @@ export function ClaimWithProofButton({
             });
             if (res.ok) {
               const data = (await res.json()) as { processed?: number };
-              if ((data.processed ?? 0) === 0) {
-                console.warn("[ClaimWithProofButton] claim sync returned no events", {
-                  signature: sig,
-                  result: data,
-                });
+              if ((data.processed ?? 0) > 0) {
+                await Promise.all([
+                  queryClient.invalidateQueries({ queryKey: ["campaign", treeAddress] }),
+                  queryClient.invalidateQueries({ queryKey: ["campaigns"] }),
+                  queryClient.invalidateQueries({ queryKey: ["beneficiaryCampaigns"] }),
+                  queryClient.invalidateQueries({ queryKey: ["claimHistory", treeAddress] }),
+                ]);
+                return;
               }
-              await Promise.all([
-                queryClient.invalidateQueries({ queryKey: ["campaign", treeAddress] }),
-                queryClient.invalidateQueries({ queryKey: ["campaigns"] }),
-                queryClient.invalidateQueries({ queryKey: ["beneficiaryCampaigns"] }),
-                queryClient.invalidateQueries({ queryKey: ["claimHistory", treeAddress] }),
-              ]);
-              return;
+              console.warn("[ClaimWithProofButton] claim sync returned no events, retrying", {
+                signature: sig,
+                attempt: i + 1,
+              });
             }
           } catch { /* retry */ }
           if (i < retries - 1) await new Promise((r) => setTimeout(r, 2000 * (i + 1)));
         }
+        await Promise.all([
+          queryClient.invalidateQueries({ queryKey: ["campaign", treeAddress] }),
+          queryClient.invalidateQueries({ queryKey: ["campaigns"] }),
+          queryClient.invalidateQueries({ queryKey: ["beneficiaryCampaigns"] }),
+          queryClient.invalidateQueries({ queryKey: ["claimHistory", treeAddress] }),
+        ]);
       };
       syncClaim().catch(() => {});
       onSuccess();

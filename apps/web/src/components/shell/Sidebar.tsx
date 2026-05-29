@@ -53,11 +53,7 @@ export function Sidebar() {
   return (
     <aside className="fixed left-0 top-0 z-30 flex h-screen w-[240px] flex-col border-r border-white/[0.06] bg-[#0a0c10]">
       <div className="flex h-16 items-center gap-2.5 px-5 border-b border-white/[0.06]">
-        <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-violet-600/20">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#a78bfa" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-            <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" />
-          </svg>
-        </div>
+        <img src="/brand/velthoryn-logo-sm.svg" alt="Velthoryn" className="h-8 w-8" />
         <span className="text-[15px] font-semibold tracking-tight text-white">Velthoryn</span>
         <span className="ml-auto rounded-full bg-emerald-500/15 px-2 py-0.5 text-[10px] font-medium text-emerald-400">
           devnet
