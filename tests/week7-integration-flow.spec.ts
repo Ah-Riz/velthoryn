@@ -512,8 +512,8 @@ describe("week7: BE + on-chain integration flows", function () {
           campaignId: new BN(CAMPAIGN_ID),
           merkleRoot: Array.from(prepared.root) as any,
           leafCount: prepared.leafCount,
-          totalSupply: prepared.totalSupply,
-          minCliffTime: new BN(prepared.minCliffTime),
+          totalSupply: new BN(prepared.totalSupply.toString()),
+          minCliffTime: new BN(prepared.minCliffTime.toString()),
           cancellable: true,
           cancelAuthority: cancelAuthority.publicKey,
           pauseAuthority: pauseAuthority.publicKey,
@@ -534,7 +534,7 @@ describe("week7: BE + on-chain integration flows", function () {
       // Fund campaign
       const creatorAta = getAssociatedTokenAddressSync(mint, creator.publicKey);
       await program.methods
-        .fundCampaign({ amount: prepared.totalSupply })
+        .fundCampaign({ amount: new BN(prepared.totalSupply.toString()) })
         .accounts({
           creator: creator.publicKey,
           vestingTree: treePda,
@@ -717,7 +717,7 @@ describe("week7: BE + on-chain integration flows", function () {
           merkleRoot: Array.from(prepared.root) as any,
           leafCount: 1,
           totalSupply: new BN(1_000_000),
-          minCliffTime: new BN(prepared.minCliffTime),
+          minCliffTime: new BN(prepared.minCliffTime.toString()),
           cancellable: true,
           cancelAuthority: cancelAuthority.publicKey,
           pauseAuthority: pauseAuthority.publicKey,
@@ -1027,7 +1027,7 @@ describe("week7: BE + on-chain integration flows", function () {
             merkleRoot: Array.from(prepared.root) as any,
             leafCount: 1,
             totalSupply: new BN(10_000),
-            minCliffTime: new BN(prepared.minCliffTime),
+            minCliffTime: new BN(prepared.minCliffTime.toString()),
             cancellable: true,
             cancelAuthority: cancelAuthority.publicKey,
             pauseAuthority: pauseAuthority.publicKey,
@@ -1144,7 +1144,7 @@ describe("week7: BE + on-chain integration flows", function () {
             merkleRoot: Array.from(prepared.root) as any,
             leafCount: 1,
             totalSupply: new BN(10_000),
-            minCliffTime: new BN(prepared.minCliffTime),
+            minCliffTime: new BN(prepared.minCliffTime.toString()),
             cancellable: true,
             cancelAuthority: cancelAuthority.publicKey,
             pauseAuthority: pauseAuthority.publicKey,
@@ -1290,7 +1290,7 @@ describe("week7: BE + on-chain integration flows", function () {
             merkleRoot: Array.from(prepared.root) as any,
             leafCount: 1,
             totalSupply: new BN(10_000),
-            minCliffTime: new BN(prepared.minCliffTime),
+            minCliffTime: new BN(prepared.minCliffTime.toString()),
             cancellable: true,
             cancelAuthority: cancelAuthority.publicKey,
             pauseAuthority: pauseAuthority.publicKey,
@@ -1436,7 +1436,7 @@ describe("week7: BE + on-chain integration flows", function () {
             merkleRoot: Array.from(prepared.root) as any,
             leafCount: 3,
             totalSupply: new BN(3_000_000),
-            minCliffTime: new BN(prepared.minCliffTime),
+            minCliffTime: new BN(prepared.minCliffTime.toString()),
             cancellable: true,
             cancelAuthority: cancelAuthority.publicKey,
             pauseAuthority: pauseAuthority.publicKey,
