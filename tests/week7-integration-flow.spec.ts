@@ -687,13 +687,15 @@ describe("week7: BE + on-chain integration flows", function () {
 
       const cliffTime = now + 100;
       const endTime = now + 10_000;
+      // Use Linear schedule so we can claim PARTIAL tokens and keep the
+      // campaign active (totalClaimed < totalSupply) for pause/cancel tests.
       const leaf: VestingLeaf = {
         leafIndex: 0,
         beneficiary: beneficiary.publicKey,
         amount: new BN(1_000_000),
-        releaseType: ReleaseType.Cliff,
+        releaseType: ReleaseType.Linear,
         startTime: new BN(now),
-        cliffTime: new BN(cliffTime),
+        cliffTime: new BN(now),      // no cliff for linear
         endTime: new BN(endTime),
         milestoneIdx: 0,
       };
@@ -795,64 +797,6 @@ describe("week7: BE + on-chain integration flows", function () {
       expect(Number(vaultAccount.amount)).to.equal(1_000_000);
     });
 
-    it("claim verified on-chain + BE claims/timeline", async () => {
-      const { context, program } = ctx;
-
-      // Warp past cliff
-      await warpClock(context, now + 200);
-
-      // Claim on-chain
-      await claimViaProof(
-        ctx, beneficiary, prepared.leaves[0]!, prepared.proofsRaw[0]!,
-        treePda, vaultAuthPda, vault, mint,
-      );
-
-      // Verify on-chain state
-      const treeAccount = await program.account.vestingTree.fetch(treePda);
-      expect(Number(treeAccount.totalClaimed)).to.equal(1_000_000);
-
-      const beneficiaryAta = getAssociatedTokenAddressSync(mint, beneficiary.publicKey);
-      const bal = await getAccount(ctx.provider.connection, beneficiaryAta);
-      expect(Number(bal.amount)).to.equal(1_000_000);
-
-      // Seed claim event in DB
-      if (beAvailable) {
-        await seedClaimEvent(internalCampaignId, {
-          beneficiary: beneficiary.publicKey.toBase58(),
-          leafIndex: 0,
-          amount: 1_000_000,
-          totalClaimedByUser: 1_000_000,
-          totalClaimedOverall: 1_000_000,
-          signature: `claim_sig_${Date.now()}`,
-          slot: claimSlot,
-          blockTime: now + 200,
-        });
-        await updateCampaignTotalClaimed(treePda.toBase58(), 1_000_000);
-
-        // Verify BE claims endpoint
-        const claimsRes = await beGet(
-          `/api/campaigns/${treePda.toBase58()}/claims?beneficiary=${beneficiary.publicKey}`,
-        );
-        expect(claimsRes.status).to.equal(200);
-        const claimsData = claimsRes.data as any;
-        expect(claimsData.claims).to.be.an("array");
-        expect(claimsData.claims.length).to.be.at.least(1);
-        expect(Number(claimsData.claims[0].amount)).to.equal(1_000_000);
-
-        // Verify BE timeline endpoint
-        const timelineRes = await beGet(
-          `/api/campaigns/${treePda.toBase58()}/timeline`,
-        );
-        expect(timelineRes.status).to.equal(200);
-        const timelineData = timelineRes.data as any;
-        expect(timelineData.events).to.be.an("array");
-        const claimEvents = timelineData.events.filter(
-          (e: any) => e.type === "claimed",
-        );
-        expect(claimEvents.length).to.be.at.least(1);
-      }
-    });
-
     it("pause/unpause cycle on-chain + BE timeline", async () => {
       const { program } = ctx;
 
@@ -936,7 +880,7 @@ describe("week7: BE + on-chain integration flows", function () {
       if (beAvailable) {
         await seedCancelEvent(internalCampaignId, {
           cancelledAt: now + 500,
-          claimedAtCancel: 1_000_000,
+          claimedAtCancel: 400_000,
           signature: `cancel_sig_${Date.now()}`,
           slot: ++claimSlot,
           blockTime: now + 500,
@@ -949,6 +893,64 @@ describe("week7: BE + on-chain integration flows", function () {
         const detailData = detailRes.data as any;
         expect(detailData.cancelledAt).to.equal(String(now + 500));
         expect(detailData.gracePeriod).to.not.equal(null);
+      }
+    });
+
+    it("claim partial (40%) verified on-chain + BE claims/timeline", async () => {
+      const { context, program } = ctx;
+
+      // Warp to 40% of duration (4000/10000) — linear schedule vests 400_000
+      await warpClock(context, now + 4000);
+
+      // Claim on-chain
+      await claimViaProof(
+        ctx, beneficiary, prepared.leaves[0]!, prepared.proofsRaw[0]!,
+        treePda, vaultAuthPda, vault, mint,
+      );
+
+      // Verify on-chain state — only 40% claimed, campaign still active
+      const treeAccount = await program.account.vestingTree.fetch(treePda);
+      expect(Number(treeAccount.totalClaimed)).to.equal(400_000);
+
+      const beneficiaryAta = getAssociatedTokenAddressSync(mint, beneficiary.publicKey);
+      const bal = await getAccount(ctx.provider.connection, beneficiaryAta);
+      expect(Number(bal.amount)).to.equal(400_000);
+
+      // Seed claim event in DB
+      if (beAvailable) {
+        await seedClaimEvent(internalCampaignId, {
+          beneficiary: beneficiary.publicKey.toBase58(),
+          leafIndex: 0,
+          amount: 400_000,
+          totalClaimedByUser: 400_000,
+          totalClaimedOverall: 400_000,
+          signature: `claim_sig_${Date.now()}`,
+          slot: ++claimSlot,
+          blockTime: now + 4000,
+        });
+        await updateCampaignTotalClaimed(treePda.toBase58(), 400_000);
+
+        // Verify BE claims endpoint
+        const claimsRes = await beGet(
+          `/api/campaigns/${treePda.toBase58()}/claims?beneficiary=${beneficiary.publicKey}`,
+        );
+        expect(claimsRes.status).to.equal(200);
+        const claimsData = claimsRes.data as any;
+        expect(claimsData.claims).to.be.an("array");
+        expect(claimsData.claims.length).to.be.at.least(1);
+        expect(Number(claimsData.claims[0].amount)).to.equal(400_000);
+
+        // Verify BE timeline endpoint
+        const timelineRes = await beGet(
+          `/api/campaigns/${treePda.toBase58()}/timeline`,
+        );
+        expect(timelineRes.status).to.equal(200);
+        const timelineData = timelineRes.data as any;
+        expect(timelineData.events).to.be.an("array");
+        const claimEvents = timelineData.events.filter(
+          (e: any) => e.type === "claimed",
+        );
+        expect(claimEvents.length).to.be.at.least(1);
       }
     });
 
@@ -971,7 +973,7 @@ describe("week7: BE + on-chain integration flows", function () {
       );
       expect(campaignProgress).to.not.equal(undefined);
       expect(campaignProgress.leaf.amount).to.equal("1000000");
-      expect(campaignProgress.progress.claimedSoFar).to.equal("1000000");
+      expect(campaignProgress.progress.claimedSoFar).to.equal("400000");
       expect(campaignProgress.progress.totalEntitled).to.equal("1000000");
     });
   });
