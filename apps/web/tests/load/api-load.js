@@ -45,7 +45,7 @@ const POST_HEADERS = {
   "Content-Type": "application/json",
 };
 
-export default function () {
+export default function loadTest() {
   // -------------------------------------------------------------------------
   // GET endpoints — high-frequency read traffic
   // -------------------------------------------------------------------------

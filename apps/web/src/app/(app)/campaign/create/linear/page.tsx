@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useWallet } from "@solana/wallet-adapter-react";
 import { datetimeLocalToUnix } from "@/lib/stream/datetime";
 import { validatePublicKey, validateAmountWithDecimals, validateSchedule, hasErrors } from "@/lib/validation/stream-form";
@@ -14,7 +14,13 @@ import { BulkCsvSection } from "@/components/campaign/create/BulkCsvSection";
 import { FormSummary } from "@/components/campaign/create/FormSummary";
 import { PageHeader } from "@/components/campaign/create/PageHeader";
 import { TokenPickerButton } from "@/components/campaign/create/TokenPickerButton";
+import { PendingFundingsPanel } from "@/components/campaign/create/PendingFundingsPanel";
 import { POPULAR_TOKENS } from "@/lib/constants/popular-tokens";
+import {
+  listPendingCampaignFundingsLocal,
+  removePendingCampaignFundingLocal,
+  type PendingCampaignFundingPayload,
+} from "@/lib/stream/persist";
 
 type Mode = "single" | "bulk";
 
@@ -33,6 +39,14 @@ type TxState =
   | { type: "success"; results: CreateStreamResult[] }
   | { type: "error"; msg: string }
   | { type: "bulk-ready"; prepared: PreparedBulkCampaign }
+  | {
+      type: "bulk-created-unfunded";
+      createSig: string;
+      treeAddress: string;
+      totalSupply: string;
+      prepared: PreparedBulkCampaign;
+      msg: string;
+    }
   | { type: "bulk-funded"; sig: string; treeAddress: string; prepared: PreparedBulkCampaign };
 
 function newStream(): StreamEntry {
@@ -42,7 +56,11 @@ function newStream(): StreamEntry {
 export default function LinearCreatePage() {
   const { publicKey } = useWallet();
   const { createStream, formatVestingError: formatStreamError } = useCreateStream();
-  const { createAndFundCampaign, formatVestingError: formatCampaignError } = useCreateCampaign();
+  const {
+    createCampaign,
+    fundCampaign,
+    formatVestingError: formatCampaignError,
+  } = useCreateCampaign();
   const { tokens: walletTokens } = useWalletTokens();
   const { toast } = useToast();
 
@@ -63,6 +81,7 @@ export default function LinearCreatePage() {
   const [csvText, setCsvText] = useState("");
   const [csvResult, setCsvResult] = useState<BulkCsvParseResult | null>(null);
   const [bulkCampaignId] = useState(() => String(Math.floor(Date.now() / 1000) % 1000000));
+  const [pendingFundings, setPendingFundings] = useState<PendingCampaignFundingPayload[]>([]);
 
   // Derived
   const tokenInfo = POPULAR_TOKENS.find((t) => t.mint === mintAddress);
@@ -76,12 +95,29 @@ export default function LinearCreatePage() {
   const tokenBalance = walletToken?.uiAmount ?? null;
   const totalAmount = streams.reduce((sum, s) => sum + (Number(s.amount) || 0), 0);
 
+  const refreshPendingFundings = useCallback(() => {
+    if (!publicKey) {
+      setPendingFundings([]);
+      return;
+    }
+    const owner = publicKey.toBase58();
+    setPendingFundings(
+      listPendingCampaignFundingsLocal()
+        .filter((item) => item.creator === owner)
+        .sort((a, b) => b.createdAt - a.createdAt),
+    );
+  }, [publicKey]);
+
+  useEffect(() => {
+    refreshPendingFundings();
+  }, [refreshPendingFundings]);
+
   function handleTokenSelect(mint: string, decimals: number, autoWrap?: boolean) {
     setMintAddress(mint);
     setMintDecimals(decimals);
     setUseAutoWrap(autoWrap ?? false);
     if (mode === "bulk" && csvText.trim()) {
-      const result = parseBulkCsv(csvText, decimals);
+      const result = parseBulkCsv(csvText, decimals, 1);
       setCsvResult(result);
       if (result.issues.length === 0 && result.rows.length > 0) {
         setTxState({ type: "bulk-ready", prepared: prepareBulkCampaign(result.rows) });
@@ -160,14 +196,40 @@ export default function LinearCreatePage() {
       setTxState({ type: "loading", label: `Creating campaign for ${streams.length} recipients...` });
       try {
         const prepared = prepareBulkCampaign(buildManualCampaignRows());
-        const result = await createAndFundCampaign(
-          { mintAddress, campaignId: String(baseCampaignId), prepared, cancellable },
-          { autoWrap: useAutoWrap },
-        );
-        toast("Campaign created and funded!", "success");
-        setTxState({ type: "bulk-funded", sig: result.fundSig, treeAddress: result.treeAddress, prepared });
-        setStreams([newStream()]);
-        setFormErrors({});
+        const created = await createCampaign({
+          mintAddress,
+          campaignId: String(baseCampaignId),
+          prepared,
+          cancellable,
+        });
+        refreshPendingFundings();
+
+        setTxState({ type: "loading", label: "Funding campaign..." });
+        try {
+          const funded = await fundCampaign({
+            mintAddress,
+            treeAddress: created.treeAddress,
+            totalSupply: created.totalSupply,
+            autoWrap: useAutoWrap,
+          });
+          refreshPendingFundings();
+          toast("Campaign created and funded!", "success");
+          setTxState({ type: "bulk-funded", sig: funded.sig, treeAddress: created.treeAddress, prepared });
+          setStreams([newStream()]);
+          setFormErrors({});
+        } catch (error: unknown) {
+          if (error instanceof Error && /User rejected|Connection rejected/i.test(error.message)) {
+            toast("Funding rejected", "error");
+          }
+          setTxState({
+            type: "bulk-created-unfunded",
+            createSig: created.sig,
+            treeAddress: created.treeAddress,
+            totalSupply: created.totalSupply,
+            prepared,
+            msg: "Campaign created on-chain, but funding was not completed. Resume funding below.",
+          });
+        }
       } catch (error: unknown) {
         if (error instanceof Error && /User rejected|Connection rejected/i.test(error.message)) {
           toast("Transaction rejected", "error");
@@ -221,7 +283,7 @@ export default function LinearCreatePage() {
   // Bulk handlers
   function handleCsvParse() {
     if (!csvText.trim()) return;
-    const result = parseBulkCsv(csvText, effectiveMintDecimals);
+    const result = parseBulkCsv(csvText, effectiveMintDecimals, 1);
     setCsvResult(result);
     if (result.issues.length === 0 && result.rows.length > 0) {
       setTxState({ type: "bulk-ready", prepared: prepareBulkCampaign(result.rows) });
@@ -232,24 +294,96 @@ export default function LinearCreatePage() {
 
   async function handleBulkCreate() {
     if (txState.type !== "bulk-ready") return;
-    setTxState({ type: "loading", label: "Creating and funding campaign..." });
+    setTxState({ type: "loading", label: "Creating campaign..." });
+    let created: Awaited<ReturnType<typeof createCampaign>>;
     try {
-      const result = await createAndFundCampaign(
-        { mintAddress, campaignId: bulkCampaignId, prepared: txState.prepared, cancellable },
-        { autoWrap: useAutoWrap },
-      );
+      created = await createCampaign({
+        mintAddress,
+        campaignId: bulkCampaignId,
+        prepared: txState.prepared,
+        cancellable,
+      });
+      refreshPendingFundings();
+    } catch (error: unknown) {
+      setTxState({ type: "error", msg: formatCampaignError(error) });
+      return;
+    }
+
+    setTxState({ type: "loading", label: "Funding campaign..." });
+    try {
+      const funded = await fundCampaign({
+        mintAddress,
+        treeAddress: created.treeAddress,
+        totalSupply: created.totalSupply,
+        autoWrap: useAutoWrap,
+      });
       toast("Campaign created and funded!", "success");
-      setTxState({ type: "bulk-funded", sig: result.fundSig, treeAddress: result.treeAddress, prepared: txState.prepared });
+      refreshPendingFundings();
+      setTxState({ type: "bulk-funded", sig: funded.sig, treeAddress: created.treeAddress, prepared: txState.prepared });
+      setCsvText("");
+      setCsvResult(null);
     } catch (error: unknown) {
       if (error instanceof Error && /User rejected|Connection rejected/i.test(error.message)) {
-        toast("Transaction rejected", "error");
-        setTxState({ type: "bulk-ready", prepared: txState.prepared });
+        toast("Funding rejected", "error");
+        setTxState({
+          type: "bulk-created-unfunded",
+          createSig: created.sig,
+          treeAddress: created.treeAddress,
+          totalSupply: created.totalSupply,
+          prepared: txState.prepared,
+          msg: "Campaign created on-chain, but funding was not completed. You can resume funding without creating a new campaign.",
+        });
         return;
       }
+      setTxState({
+        type: "bulk-created-unfunded",
+        createSig: created.sig,
+        treeAddress: created.treeAddress,
+        totalSupply: created.totalSupply,
+        prepared: txState.prepared,
+        msg: formatCampaignError(error),
+      });
+    }
+  }
+
+  async function handleResumeFunding(params: {
+    treeAddress: string;
+    mint: string;
+    totalSupply: string;
+    prepared?: PreparedBulkCampaign;
+  }) {
+    setTxState({ type: "loading", label: "Funding existing campaign..." });
+    try {
+      const funded = await fundCampaign({
+        mintAddress: params.mint,
+        treeAddress: params.treeAddress,
+        totalSupply: params.totalSupply,
+        autoWrap: useAutoWrap,
+      });
+      removePendingCampaignFundingLocal(params.treeAddress);
+      refreshPendingFundings();
+      toast("Campaign funded!", "success");
+      if (params.prepared) {
+        setTxState({
+          type: "bulk-funded",
+          sig: funded.sig,
+          treeAddress: params.treeAddress,
+          prepared: params.prepared,
+        });
+      } else {
+        setTxState({ type: "idle" });
+      }
+    } catch (error: unknown) {
       setTxState({ type: "error", msg: formatCampaignError(error) });
     }
   }
-  const prepared = txState.type === "bulk-ready" || txState.type === "bulk-funded" ? txState.prepared : null;
+
+  const prepared =
+    txState.type === "bulk-ready" ||
+    txState.type === "bulk-created-unfunded" ||
+    txState.type === "bulk-funded"
+      ? txState.prepared
+      : null;
 
   if (!publicKey) {
     return (
@@ -268,6 +402,16 @@ export default function LinearCreatePage() {
 
       <div className="grid gap-6 lg:grid-cols-[1fr_320px]">
         <div className="space-y-5">
+          <PendingFundingsPanel
+            items={pendingFundings}
+            walletTokens={walletTokens}
+            onResume={(pending) => handleResumeFunding({
+              treeAddress: pending.treeAddress,
+              mint: pending.mint,
+              totalSupply: pending.totalSupply,
+            })}
+          />
+
           {/* General Details Card */}
           <div className={`${CARD} space-y-4 p-5`}>
             <SectionHeader title="General Details" caption="Token and campaign settings" />
@@ -456,6 +600,33 @@ export default function LinearCreatePage() {
               {txState.results.map((r, i) => (
                 <TxResultCard key={r.sig} title={`Stream #${i + 1}`} sig={r.sig} href={r.shareUrl} linkLabel="Open stream" />
               ))}
+            </div>
+          )}
+          {txState.type === "bulk-created-unfunded" && (
+            <div className={`${CARD} p-5`}>
+              <p className="text-[13px] font-medium text-amber-300">Campaign created, funding pending</p>
+              <p className="mt-2 text-[12px] leading-6 text-[#d8c58f]">{txState.msg}</p>
+              <p className="mt-3 break-all font-mono text-[11px] text-[#8b92a5]">Create signature: {txState.createSig}</p>
+              <div className="mt-4 flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  onClick={() => handleResumeFunding({
+                    treeAddress: txState.treeAddress,
+                    mint: mintAddress,
+                    totalSupply: txState.totalSupply,
+                    prepared: txState.prepared,
+                  })}
+                  className="rounded-lg bg-amber-400 px-3 py-2 text-[12px] font-semibold text-black"
+                >
+                  Resume funding
+                </button>
+                <a
+                  href={`/campaign/${txState.treeAddress}`}
+                  className="rounded-lg border border-white/[0.12] px-3 py-2 text-[12px] font-medium text-white"
+                >
+                  View campaign
+                </a>
+              </div>
             </div>
           )}
           {txState.type === "bulk-funded" && <TxResultCard title="Campaign funded!" sig={txState.sig} href={`/campaign/${txState.treeAddress}`} linkLabel="View campaign" />}

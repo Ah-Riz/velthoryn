@@ -1,5 +1,4 @@
 import { describe, it, expect, beforeEach } from "vitest";
-import { Keypair } from "@solana/web3.js";
 import { NextRequest } from "next/server";
 import { POST as postPrepare } from "@/app/api/campaigns/prepare/route";
 import { POST as postImport } from "@/app/api/campaigns/import/route";
@@ -300,7 +299,6 @@ describe("POST /api/campaigns/import", () => {
   it("empty CSV body returns 400", async () => {
     const req = await makeImportRequest("");
     const res = await postImport(req);
-    const json = await res.json();
 
     expect(res.status).toBe(400);
   });

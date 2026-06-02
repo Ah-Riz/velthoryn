@@ -20,6 +20,25 @@ const WalletTokensContext = createContext<WalletTokensCtx>({
   refetch: async () => {},
 });
 
+function e2eMockTokensEnabled() {
+  if (typeof window === "undefined") return false;
+  const isLocalhost =
+    window.location.hostname === "localhost" ||
+    window.location.hostname === "127.0.0.1";
+
+  return isLocalhost && window.localStorage.getItem("velthoryn:e2e-wallet") === "1";
+}
+
+const e2eTokens: WalletTokenOption[] = [
+  {
+    mintAddress: NATIVE_MINT.toBase58(),
+    balanceRaw: String(10 * LAMPORTS_PER_SOL),
+    decimals: 9,
+    uiAmount: "10",
+    isNativeSol: true,
+  },
+];
+
 export function WalletTokensProvider({ children }: { children: React.ReactNode }) {
   const { connection } = useConnection();
   const { publicKey } = useWallet();
@@ -30,6 +49,13 @@ export function WalletTokensProvider({ children }: { children: React.ReactNode }
 
   const refetch = useCallback(async () => {
     if (!publicKey || fetchingRef.current) return;
+
+    if (e2eMockTokensEnabled()) {
+      setTokens(e2eTokens);
+      setLoading(false);
+      setError(null);
+      return;
+    }
 
     fetchingRef.current = true;
     setLoading(true);
@@ -62,6 +88,10 @@ export function WalletTokensProvider({ children }: { children: React.ReactNode }
 
   useEffect(() => {
     if (!publicKey) { setTokens([]); return; }
+    if (e2eMockTokensEnabled()) {
+      setTokens(e2eTokens);
+      return;
+    }
     void refetch();
   }, [publicKey, refetch]);
 

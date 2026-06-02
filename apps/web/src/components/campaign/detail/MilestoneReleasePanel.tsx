@@ -1,8 +1,9 @@
 "use client";
 
 import { useState, useMemo } from "react";
-import { PublicKey } from "@solana/web3.js";
+import { PublicKey, Transaction } from "@solana/web3.js";
 import { type Program } from "@coral-xyz/anchor";
+import { useWallet, useConnection } from "@solana/wallet-adapter-react";
 import { isMilestoneTriggered } from "@/lib/vesting/milestone";
 import { formatVestingError } from "@/lib/anchor/errors";
 
@@ -29,6 +30,8 @@ export function MilestoneReleasePanel({
   onSuccess,
   toast,
 }: Props) {
+  const { sendTransaction } = useWallet();
+  const { connection } = useConnection();
   const [loadingIdx, setLoadingIdx] = useState<number | null>(null);
   const [page, setPage] = useState(0);
   const count = Math.min(leafCount, 256);
@@ -55,10 +58,13 @@ export function MilestoneReleasePanel({
   async function handleRelease(idx: number) {
     setLoadingIdx(idx);
     try {
-      await program.methods
+      const ix = await program.methods
         .setMilestoneReleased(idx)
         .accounts({ creator: publicKey, vestingTree: treePubkey })
-        .rpc();
+        .instruction();
+      const tx = new Transaction().add(ix);
+      const sig = await sendTransaction(tx, connection);
+      await connection.confirmTransaction(sig, "confirmed");
       toast(`Milestone #${idx} released.`, "success");
       onSuccess();
     } catch (err: unknown) {

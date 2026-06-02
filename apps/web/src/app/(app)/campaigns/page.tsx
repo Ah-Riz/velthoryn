@@ -12,6 +12,8 @@ import { EmptyState } from "@/components/campaign/list/EmptyState";
 import {
   getRecipientClaimableAmount,
   getRecipientStreamStatus,
+  getMultiLeafRecipientStreamStatus,
+  getMultiLeafClaimableAmount,
   getSenderStreamStatus,
   type StreamStatus,
 } from "@/lib/vesting/list";
@@ -289,39 +291,67 @@ export default function CampaignsPage() {
       });
     }
 
+    const recipientGroups = new Map<string, RecipientCampaign[]>();
     for (const campaign of recipientCampaigns) {
+      const group = recipientGroups.get(campaign.treeAddress) ?? [];
+      group.push(campaign);
+      recipientGroups.set(campaign.treeAddress, group);
+    }
+
+    for (const [, campaigns] of recipientGroups) {
+      const first = campaigns[0];
+      const isMultiLeaf = campaigns.length > 1;
+
+      const status = isMultiLeaf
+        ? getMultiLeafRecipientStreamStatus(campaigns, nowTs)
+        : getRecipientStreamStatus(first, nowTs);
+      const allocationRaw = isMultiLeaf
+        ? campaigns.reduce((sum, c) => sum + toBigInt(c.myLeaf.amount), 0n)
+        : toBigInt(first.myLeaf.amount);
+      const claimableRaw = isMultiLeaf
+        ? getMultiLeafClaimableAmount(campaigns, nowTs)
+        : getRecipientClaimableAmount(first, nowTs);
+
+      const releaseStateText = isMultiLeaf
+        ? (status === "Claimed" ? "Fully claimed"
+          : status === "Claimable" ? "Claim available"
+          : status === "Paused" ? "Paused"
+          : status === "Cancelled" ? "Cancelled"
+          : `${campaigns.length} milestones`)
+        : getReleaseStateText(first, nowTs);
+
       const row: StreamRow = {
-        treeAddress: campaign.treeAddress,
+        treeAddress: first.treeAddress,
         role: "recipient",
         primaryRole: "recipient",
         roleLabel: "Recipient",
-        creator: campaign.creator,
-        mint: campaign.mint,
-        campaignId: campaign.campaignId,
-        createdAt: campaign.createdAt,
-        status: getRecipientStreamStatus(campaign, nowTs),
+        creator: first.creator,
+        mint: first.mint,
+        campaignId: first.campaignId,
+        createdAt: first.createdAt,
+        status,
         amountLabel: "Your Allocation",
-        amountRaw: toBigInt(campaign.myLeaf.amount),
+        amountRaw: allocationRaw,
         secondaryAmountLabel: "Total Supply",
-        secondaryAmountRaw: toBigInt(campaign.totalSupply),
+        secondaryAmountRaw: toBigInt(first.totalSupply),
         nextLabel: "Release",
-        nextValue: getReleaseStateText(campaign, nowTs),
-        typeLabel: getReleaseTypeLabel(campaign.myLeaf.releaseType),
+        nextValue: releaseStateText,
+        typeLabel: isMultiLeaf ? "Milestone" : getReleaseTypeLabel(first.myLeaf.releaseType),
         counterpartyLabel: "Sender",
-        counterpartyValue: campaign.creator,
-        claimableRaw: getRecipientClaimableAmount(campaign, nowTs),
-        metadata: campaign.metadata,
+        counterpartyValue: first.creator,
+        claimableRaw,
+        metadata: first.metadata,
       };
 
-      const existing = map.get(campaign.treeAddress);
+      const existing = map.get(first.treeAddress);
       if (existing) {
-        map.set(campaign.treeAddress, {
+        map.set(first.treeAddress, {
           ...row,
           role: existing.creator === walletAddress ? "both" : "recipient",
           roleLabel: existing.creator === walletAddress ? "Sender + Recipient" : "Recipient",
         });
       } else {
-        map.set(campaign.treeAddress, row);
+        map.set(first.treeAddress, row);
       }
     }
 

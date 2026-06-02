@@ -4,16 +4,23 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
+    "dev:e2e": "NEXT_PUBLIC_E2E_MOCK_WALLET=true next dev -H 127.0.0.1 -p 3001",
     "prebuild": "pnpm --filter @velthoryn/client build",
     "build": "next build",
     "start": "next start",
     "lint": "eslint .",
     "test": "vitest run",
+    "test:unit": "vitest run --config vitest.unit.config.ts",
+    "test:db": "vitest run --config vitest.config.ts",
     "test:watch": "vitest",
     "db:push": "drizzle-kit push",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",
-    "test:e2e": "playwright test"
+    "test:e2e": "playwright test",
+    "test:e2e:local": "NEXT_PUBLIC_E2E_MOCK_WALLET=true PLAYWRIGHT_BASE_URL=http://127.0.0.1:3001 playwright test",
+    "test:e2e:signing": "playwright test --config playwright.signing.config.ts",
+    "test:e2e:install": "playwright install chromium",
+    "test:e2e:deps": "playwright install-deps chromium"
   },
   "dependencies": {
     "@coral-xyz/anchor": "^0.32.1",
@@ -41,6 +48,7 @@
     "zustand": "^5.0.0"
   },
   "devDependencies": {
+    "@playwright/test": "^1.60.0",
     "@tailwindcss/postcss": "^4.0.0",
     "@testing-library/react": "^16.3.2",
     "@types/node": "^22",

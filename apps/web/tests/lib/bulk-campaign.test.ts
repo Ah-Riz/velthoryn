@@ -87,6 +87,18 @@ describe("parseBulkCsv", () => {
     expect(result.rows).toEqual([]);
     expect(result.issues.some((item) => item.message.includes("each milestone needs a different index"))).toBe(true);
   });
+
+  it("rejects rows that do not match the expected release type", () => {
+    const csv = [
+      "beneficiary,amount,releaseType,startTime,cliffTime,endTime,milestoneIdx",
+      "11111111111111111111111111111111,1000,Milestone,1735689600,1735776000,1735776000,0",
+    ].join("\n");
+
+    const result = parseBulkCsv(csv, null, 0);
+
+    expect(result.rows).toEqual([]);
+    expect(result.issues.some((item) => item.message.includes("only accepts Cliff rows"))).toBe(true);
+  });
 });
 
 describe("prepareBulkCampaign", () => {

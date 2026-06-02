@@ -16,7 +16,6 @@ function getUpstashLimiter(requests: number, windowSeconds: number): Ratelimit {
   let limiter = upstashLimiterCache.get(key);
   if (!limiter) {
     limiter = new Ratelimit({
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       redis: getRedis() as any,
       limiter: Ratelimit.fixedWindow(requests, `${windowSeconds} s`),
       prefix: "velthoryn:rl",

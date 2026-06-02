@@ -1,7 +1,9 @@
 import type { NextConfig } from "next";
 import { withSentryConfig } from "@sentry/nextjs";
+import path from "node:path";
 
 const nextConfig: NextConfig = {
+  outputFileTracingRoot: path.join(__dirname, "../.."),
   experimental: {
     serverActions: { bodySizeLimit: "10mb" },
   },
@@ -15,9 +17,9 @@ const nextConfig: NextConfig = {
             value: [
               "default-src 'self'",
               "script-src 'self' 'unsafe-eval' 'unsafe-inline'",
-              "style-src 'self' 'unsafe-inline'",
+              "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
               "img-src 'self' data: https:",
-              "font-src 'self' data:",
+              "font-src 'self' data: https://fonts.gstatic.com",
               "connect-src 'self' https://*.solana.com https://*.helius-rpc.com wss://*.helius-rpc.com https://*.supabase.co wss://*.solana.com https://api.devnet.solana.com https://api.mainnet-beta.solana.com",
               "frame-ancestors 'none'",
               "base-uri 'self'",

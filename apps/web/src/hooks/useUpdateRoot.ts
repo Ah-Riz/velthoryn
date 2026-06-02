@@ -1,8 +1,8 @@
 "use client";
 
 import { useCallback } from "react";
-import { PublicKey } from "@solana/web3.js";
-import { useWallet } from "@solana/wallet-adapter-react";
+import { PublicKey, Transaction } from "@solana/web3.js";
+import { useConnection, useWallet } from "@solana/wallet-adapter-react";
 import { useVestingProgram } from "@/hooks/useVestingProgram";
 import { type CreateRootVersionRequest } from "@/lib/api/validators";
 import { formatVestingError } from "@/lib/anchor/errors";
@@ -20,20 +20,24 @@ export interface UpdateRootResult {
 
 export function useUpdateRoot() {
   const program = useVestingProgram();
-  const { publicKey } = useWallet();
+  const { publicKey, sendTransaction } = useWallet();
+  const { connection } = useConnection();
 
   const updateRoot = useCallback(
     async (params: UpdateRootParams): Promise<UpdateRootResult> => {
       if (!program || !publicKey) throw new Error("Wallet not connected");
 
       const treePubkey = new PublicKey(params.treeAddress);
-      const sig = await program.methods
+      const ix = await program.methods
         .updateRoot(Array.from(Buffer.from(params.payload.merkleRoot, "hex")), params.payload.leafCount)
         .accounts({
           cancelAuthority: publicKey,
           vestingTree: treePubkey,
         })
-        .rpc();
+        .instruction();
+      const tx = new Transaction().add(ix);
+      const sig = await sendTransaction(tx, connection);
+      await connection.confirmTransaction(sig, "confirmed");
 
       let version: number | null = null;
       let indexWarning: string | null = null;
@@ -61,7 +65,7 @@ export function useUpdateRoot() {
 
       return { sig, version, indexWarning };
     },
-    [program, publicKey],
+    [program, publicKey, connection, sendTransaction],
   );
 
   return { updateRoot, formatVestingError };

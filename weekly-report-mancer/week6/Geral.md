@@ -162,7 +162,136 @@
 
 ---
 
-### 7. End-user documentation
+### 7. Funding recovery system (create/fund split)
+
+**Problem:** If `createCampaign` succeeded on-chain but `fundCampaign` failed (wallet rejection, insufficient balance, network timeout), the user was stuck — the campaign existed but had no tokens, and there was no way to resume.
+
+**Solution:** I built a localStorage-based pending funding recovery system.
+
+#### Main changes
+
+| Area | What changed |
+|---|---|
+| `persist.ts` | New module to store/retrieve pending unfunded campaigns in localStorage |
+| `PendingFundingsPanel.tsx` | New component showing unfunded campaigns with "Resume Funding" button |
+| Create pages (cliff/linear/milestone) | All 3 pages now show pending fundings panel at the top |
+| Campaign detail | Claim buttons disabled while campaign is underfunded |
+| Display | Shows human-readable token amounts (`0.003 SOL`) instead of raw lamports |
+
+#### Relevant commit
+
+- `7d7ffe5 Add campaign recovery and E2E coverage`
+
+---
+
+### 8. Campaign event timeline
+
+**Problem:** Users had no visibility into what happened to a campaign over time — cancels, pauses, withdrawals, milestone releases were invisible.
+
+**Solution:** I built a timeline component that shows all campaign lifecycle events.
+
+#### Main changes
+
+| Area | What changed |
+|---|---|
+| `CampaignTimeline.tsx` | 186-line component rendering event cards with timestamps and details |
+| `useCampaignTimeline.ts` | Hook fetching timeline events from the API |
+| Campaign detail page | Timeline integrated into the campaign view |
+
+---
+
+### 9. Playwright E2E test infrastructure
+
+**Problem:** There were no automated browser tests. Manual testing was the only way to verify UI flows worked end-to-end.
+
+**Solution:** I set up Playwright from scratch with a mock wallet system and wrote 13 E2E tests covering critical user flows.
+
+#### What was built
+
+| Area | What changed |
+|---|---|
+| `playwright.config.ts` | Full config with webServer auto-start, timeouts, chromium project |
+| Mock wallet (`WalletProvider`) | localStorage-based E2E mock that injects a fake connected wallet |
+| `helpers.ts` | Shared utilities: `enableE2eWallet`, `gotoWithRetry`, `selectSolToken`, `openCsvMode`, `parseCsv` |
+| `pageErrors.ts` | Utility to collect and filter known noisy page errors (hydration) |
+| `landing.spec.ts` | Landing page smoke test |
+| `create-pages.spec.ts` | 3 tests: cliff/linear/milestone disconnected state rendering |
+| `csv-validation.spec.ts` | 6 tests: type enforcement, duplicate detection, milestone index rules |
+| `funding-recovery.spec.ts` | 3 tests: pending funding panel visibility and resume button |
+
+#### Test results
+
+- **13/13 passing** on both `test:e2e` (Playwright-managed server) and `test:e2e:local` (pre-started dev server)
+
+#### Relevant commit
+
+- `7d7ffe5 Add campaign recovery and E2E coverage`
+
+---
+
+### 10. Test infrastructure improvements
+
+**Problem:** Running `pnpm test` required a Postgres database, making it impossible for quick local validation. CI was also failing intermittently.
+
+**Solution:** I split the test configs and fixed CI pipeline issues.
+
+#### Main changes
+
+| Area | What changed |
+|---|---|
+| `vitest.unit.config.ts` | New config that excludes DB-dependent tests (231 tests pass without Postgres) |
+| `test:unit` script | Runs unit tests only — no DB required |
+| `test:db` script | Explicit alias for DB-dependent test suite |
+| `test:e2e:deps` script | Documents Playwright OS dependency installation |
+| CI fixes | 3 commits (`bec33d6`, `ca3cc69`, `bc72cb9`) fixing lint, test, and workflow issues |
+
+---
+
+### 11. Landing page polish
+
+**Problem:** Landing page messaging was generic and navigation didn't guide users toward the product.
+
+**Solution:** I polished the hero section, FAQ, waitlist copy, and navigation flow.
+
+#### Relevant commit
+
+- `54a762c refactor: polish landing page messaging and nav`
+
+---
+
+### 12. WalletTokensProvider (real-time balance context)
+
+**Problem:** Multiple components needed wallet token balances but were fetching independently, causing redundant RPC calls and inconsistent state.
+
+**Solution:** I created a shared context provider that fetches and normalizes wallet token balances once, exposing them to all consumers.
+
+#### Main changes
+
+| Area | What changed |
+|---|---|
+| `WalletTokensProvider.tsx` | New context provider with auto-refetch, loading/error states |
+| Token normalization | Native SOL surfaced separately from SPL tokens |
+| Create flows | Token picker now reads from shared context instead of fetching independently |
+
+---
+
+### 13. IDL sync and auth gate fixes
+
+**Problem:** Frontend was intermittently failing because the committed IDL didn't match the deployed program, and campaign indexing was blocked by an unnecessary auth gate.
+
+**Solution:** Two IDL sync commits and one auth gate removal.
+
+#### Main changes
+
+| Area | What changed |
+|---|---|
+| IDL sync | Restored canonical IDL matching devnet deploy (`412d384`, `43c3feb`) |
+| Auth gate | Removed admin auth requirement from `POST /api/campaigns` to unblock indexing (`2057038`) |
+| Security test | Updated test expectations after auth gate removal (`1291a1d`) |
+
+---
+
+### 14. End-user documentation
 
 **Problem:** BD needed a clearer user-facing guide for testing and later product onboarding, especially on Devnet.
 
@@ -200,6 +329,12 @@
 | Recipient recipient-list modal | Working |
 | Allocation editor page | Working |
 | Vesting chart range controls + completed flat line | Working |
+| Funding recovery (create/fund split) | Working — pending campaigns persist and can resume |
+| Campaign event timeline | Working |
+| Playwright E2E tests | 13/13 passing |
+| Unit tests without DB | 231 passing via `test:unit` |
+| Landing page polish | Working |
+| WalletTokensProvider (shared balance context) | Working |
 | End-user Devnet guide | Draft complete |
 
 ### Not yet final
@@ -309,16 +444,119 @@ These need:
 
 ---
 
+### 15. Milestone campaign UI bug fixes
+
+**Problem:** Multiple bugs in milestone campaign flows:
+
+- "Claimed" status showing after claiming 1/3 milestones (campaigns page compared single-leaf amount vs total myClaimed)
+- No auto-refresh after claim/release/cancel actions
+- Activity timeline showing raw lamports instead of human-readable amounts
+- "Wait for milestone release" persisting after milestone was already triggered
+- Claim flow not auto-advancing to next unclaimed leaf
+
+**Solution:** Fixed multi-leaf status aggregation, added force-refresh on all actions, and fixed timeline amount formatting.
+
+#### Main changes
+
+| Area | What changed |
+|---|---|
+| `list.ts` | Added `getMultiLeafRecipientStreamStatus()` and `getMultiLeafClaimableAmount()` for correct multi-leaf aggregation |
+| `campaigns/page.tsx` | Refactored recipient loop to group by treeAddress and use multi-leaf aggregate functions |
+| `campaign/[id]/page.tsx` | All `onSuccess` callbacks now call `fetchTree(true)` to bypass throttle |
+| `CampaignTimeline.tsx` | `formatAmount` now divides raw lamports by `10^decimals` |
+| `ClaimWithProofButton.tsx` | Auto-advances `selectedIdx` to next unclaimed leaf after successful claim |
+| `TriggerMilestoneButton.tsx` | Returns null when `alreadyReleased` (no redundant badge) |
+| `MilestoneReleasePanel.tsx` | Added missing `confirmTransaction` after `sendTransaction` |
+
+#### Relevant commits
+
+- `71a4f93 fix: milestone campaign UI bugs — status, refresh, timeline, claim flow`
+- `46c46f1 fix(test): update tests for removed auth gate and TriggerMilestoneButton changes`
+
+---
+
+### 16. Responsive mobile layout
+
+**Problem:** Entire app only worked on desktop. Sidebar, header, and all pages had no mobile support.
+
+**Solution:** Built responsive shell layout with mobile sidebar drawer and responsive spacing across all pages.
+
+#### Main changes
+
+| Area | What changed |
+|---|---|
+| `Sidebar.tsx` | Extracted `SidebarContent` component. Desktop: `hidden lg:flex` fixed 240px. Mobile: overlay drawer (280px) with backdrop, auto-close on navigation |
+| `AppHeader.tsx` | Added hamburger button `lg:hidden`, mobile Velthoryn logo, responsive padding/sizing |
+| `layout.tsx` | Added `mobileMenuOpen` state, changed `pl-[240px]` → `lg:pl-[240px]`, responsive main padding |
+
+#### Relevant commit
+
+- `bdd6e9e feat: responsive mobile layout with sidebar drawer`
+
+---
+
+### 17. Comprehensive devnet integration E2E tests
+
+**Problem:** Only 13 integration tests existed, covering basic cliff/linear/milestone/cancel/pause. Many program instructions and error paths were untested.
+
+**Solution:** Built 34 new devnet integration tests covering all uncovered flows. Total: **47 integration tests, all passing on devnet**.
+
+#### New test coverage (34 tests in `devnet-vesting-extended.test.ts`)
+
+| Category | Tests | Error codes covered |
+|---|---|---|
+| Unpause flows | 4 tests: unpause+claim, non-paused, outsider, double-pause | NotPaused, AlreadyPaused, Unauthorized |
+| Linear full claim | 1 test: claim after end time = full amount | — |
+| Cancel + vested claim | 1 test: beneficiary claims vested portion after cancel | — |
+| Withdraw unvested | 2 tests: before cancel, during grace period | NotCancelled, GracePeriodActive |
+| Non-cancellable stream | 1 test: cancel non-cancellable | NotCancellable |
+| Fully claimed cancel | 1 test: cancel after full claim | FullyVested |
+| Milestone advanced | 3 tests: double release, outsider release, multi-release persistence | MilestoneAlreadyReleased, Unauthorized |
+| Close claim record | 2 tests: close after full claim, close before full claim | CannotClose |
+| Token balance tracking | 2 tests: vault decrease + beneficiary increase, conservation law | — |
+| Pause authority | 1 test: outsider pause | Unauthorized |
+| Cancel stream (instant settle) | 2 tests: before-cliff refund, mid-linear split | — |
+| Bulk campaign (Merkle) | 6 tests: create 3-leaf, claim with proof, wrong beneficiary, all-claim, bulk milestone release+claim, pre-release error | MilestoneNotReleased |
+| Cancelled campaign | 1 test: claim after cancel | — |
+| Sequential claims | 1 test: two partial claims accumulate | — |
+| Edge cases | 3 tests: same timestamps, cliff=start, zero amount | ZeroAmount |
+| Fund campaign | 1 test: overfunding | OverFunded |
+| Update root | 2 tests: outsider update, same root | Unauthorized, SameRoot |
+
+#### New helper functions added to `devnet-helpers.ts`
+
+- `unpauseStream` — unpause campaign
+- `withdrawUnvested` — withdraw unvested tokens after cancel + grace period
+- `closeClaimRecord` — close claim record after full claim
+- `cancelSingleStream` — instant settle for single-stream campaigns
+- `createBulkCampaignFixture` — create Merkle tree campaign with multiple beneficiaries
+- `claimWithProof` — claim with Merkle proof for bulk campaigns
+- `updateRoot` — root rotation
+- `fundCampaign` — additional funding
+
+#### Error codes now tested (18 of 41)
+
+NothingToClaim, MilestoneAlreadyClaimed, MilestoneNotReleased, MilestoneAlreadyReleased, AlreadyCancelled, Unauthorized, CampaignPaused, NotPaused, AlreadyPaused, NotCancellable, FullyVested, NotCancelled, GracePeriodActive, CannotClose, ZeroAmount, OverFunded, SameRoot, InvalidProof (via wrong beneficiary)
+
+---
+
 ## Metrics — Quantifiable frontend progress
 
 | Metric | Value |
 |---|---|
-| Geral commits this window | **3 meaningful product commits** (`9bba48e`, `cb08b83`, `ceff96f`) |
-| Main frontend files changed across those commits | 40+ |
+| Geral commits this week (since May 25) | **19 commits** |
+| Key feature commits | `9bba48e`, `cb08b83`, `ceff96f`, `7d7ffe5`, `54a762c`, `71a4f93`, `bdd6e9e` |
+| Main frontend files changed | 48+ files in largest commit alone |
+| New components built | `PendingFundingsPanel`, `CampaignTimeline`, `WalletTokensProvider`, E2E test infra |
+| Playwright E2E tests | 13 tests (all passing) |
+| Devnet integration E2E tests | **47 tests (all passing)** — 13 original + 34 new |
+| Unit tests | **236 passing** via `test:unit` |
 | User guide docs added | 1 end-user guide |
-| Week 6 planning docs added | 1 execution plan |
+| Week 6 planning docs added | 1 execution plan, 1 gap analysis (EN + ID) |
 | CSV validation tests added/updated | 8 passing cases in `bulk-campaign.test.ts` |
-| Major UX areas touched | create flow, claim flow, dashboard, campaigns list, campaign detail, chart, docs |
+| CI fixes | 3 commits unblocking pipeline |
+| Major UX areas touched | create flow, claim flow, dashboard, campaigns list, campaign detail, chart, funding recovery, landing page, E2E testing, responsive layout, docs |
+| Lines changed (week 6 window) | ~3,500+ insertions |
 
 ---
 

@@ -89,7 +89,7 @@ export function useCreateStream() {
       let sig: string;
 
       if (nativeSol) {
-        sig = await program.methods
+        const createIx = await program.methods
           .createStreamNative(args)
           .accounts({
             creator: publicKey,
@@ -97,7 +97,10 @@ export function useCreateStream() {
             systemProgram: SystemProgram.programId,
             rent: SYSVAR_RENT_PUBKEY,
           })
-          .rpc();
+          .instruction();
+        const createTx = new Transaction().add(createIx);
+        sig = await sendTransaction(createTx, connection);
+        await connection.confirmTransaction(sig, "confirmed");
       } else if (needsWrap) {
         const lamports = solToLamports(rawAmount, 0);
         const wrapIxs = await buildWrapSolInstructions(connection, publicKey, lamports);
@@ -125,7 +128,7 @@ export function useCreateStream() {
         sig = await sendTransaction(tx, connection);
         await connection.confirmTransaction(sig, "confirmed");
       } else {
-        sig = await program.methods
+        const createIx = await program.methods
           .createStream(args)
           .accounts({
             creator: publicKey,
@@ -139,7 +142,10 @@ export function useCreateStream() {
             systemProgram: SystemProgram.programId,
             rent: SYSVAR_RENT_PUBKEY,
           })
-          .rpc();
+          .instruction();
+        const createTx = new Transaction().add(createIx);
+        sig = await sendTransaction(createTx, connection);
+        await connection.confirmTransaction(sig, "confirmed");
       }
 
       const treeAddress = vestingTree.toBase58();

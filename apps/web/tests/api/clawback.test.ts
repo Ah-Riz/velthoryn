@@ -57,8 +57,6 @@ import {
 import { TEST_CREATOR_KEYPAIR, createAuthHeader } from "../helpers/wallet-auth";
 import { resetRateLimitForTests } from "@/lib/api/rate-limit";
 import { resetRedisForTests } from "@/lib/api/redis";
-import { db } from "@/lib/db";
-import { milestoneEvents } from "@/lib/db/schema";
 
 // ---------------------------------------------------------------------------
 // Test constants

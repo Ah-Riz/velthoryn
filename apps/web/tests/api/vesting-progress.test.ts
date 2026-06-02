@@ -131,7 +131,7 @@ describe("GET /api/beneficiary/:address/vesting-progress", () => {
 
   it("returns correct vestedSoFar, claimedSoFar, claimable, progressPercent", async () => {
     const amount = "1000000";
-    const { treeAddress, campaignId, beneficiary } = await seedLinearCampaign({
+    const { campaignId, beneficiary } = await seedLinearCampaign({
       startTime: 0,
       cliffTime: 0,
       endTime: 1,
@@ -178,7 +178,7 @@ describe("GET /api/beneficiary/:address/vesting-progress", () => {
     const endTime = 1700000000 + 100000;
     const cancelledAt = startTime + 10000;
 
-    const { treeAddress, beneficiary } = await seedLinearCampaign({
+    const { beneficiary } = await seedLinearCampaign({
       startTime,
       cliffTime,
       endTime,
@@ -202,7 +202,7 @@ describe("GET /api/beneficiary/:address/vesting-progress", () => {
 
   it("fully claimed campaign shows claimable = 0", async () => {
     const amount = "1000000";
-    const { treeAddress, campaignId, beneficiary } = await seedLinearCampaign({
+    const { campaignId, beneficiary } = await seedLinearCampaign({
       startTime: 0,
       cliffTime: 0,
       endTime: 1,

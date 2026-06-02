@@ -46,7 +46,6 @@ import {
   prepareBulkCampaign,
 } from "@/lib/campaign/bulk";
 import {
-  syncClaimEvents,
   parseClaimedEvent,
   CLAIMED_DISCRIMINATOR,
 } from "@/lib/indexer/claim-events";

@@ -146,6 +146,7 @@ async function processTransactions(params: {
       maxSupportedTransactionVersion: 0,
     });
     if (!tx?.meta?.logMessages) continue;
+    const txSlot = slot > 0 ? slot : tx.slot;
 
     const eventBuffers = extractAnchorEventData(tx.meta.logMessages);
     const claimedEvents = eventBuffers
@@ -175,7 +176,7 @@ async function processTransactions(params: {
           totalClaimedOverall: BigInt(event.totalClaimedOverall),
           milestoneIdx: event.milestoneIdx,
           signature,
-          slot: BigInt(slot),
+          slot: BigInt(txSlot),
           blockTime: BigInt(tx.blockTime ?? Math.floor(Date.now() / 1000)),
         }).onConflictDoNothing();
 
@@ -186,11 +187,11 @@ async function processTransactions(params: {
           })
           .where(eq(campaigns.id, campaignId));
 
-        await persistSyncCheckpoint(txDb, slot);
+        await persistSyncCheckpoint(txDb, txSlot);
       });
 
       processed++;
-      if (slot > lastSlot) lastSlot = slot;
+      if (txSlot > lastSlot) lastSlot = txSlot;
     }
   }
 
@@ -250,18 +251,15 @@ export async function syncClaimEventsForSignatures(
   }
 
   const connection = new Connection(rpcUrl, "confirmed");
-  const statuses = await connection.getSignatureStatuses(uniqueSignatures);
+  const statuses = await connection.getSignatureStatuses(uniqueSignatures, {
+    searchTransactionHistory: true,
+  });
 
   const batch = uniqueSignatures
     .map((signature, index) => ({
       signature,
       slot: statuses.value[index]?.slot ?? 0,
     }))
-    .filter((entry) => entry.slot > 0);
-
-  if (batch.length === 0) {
-    return { processed: 0, lastSlot: 0 };
-  }
 
   return processTransactions({ connection, signatures: batch });
 }

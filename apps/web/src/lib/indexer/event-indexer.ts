@@ -458,7 +458,7 @@ export async function indexEventBuffers(params: {
       if (campaignId === null) continue;
 
       await db.transaction(async (txDb) => {
-        await txDb
+        const inserted = await txDb
           .insert(streamCancelEvents)
           .values({
             campaignId,
@@ -469,7 +469,18 @@ export async function indexEventBuffers(params: {
             slot: BigInt(slot),
             blockTime,
           })
-          .onConflictDoNothing();
+          .onConflictDoNothing()
+          .returning({ id: streamCancelEvents.id });
+
+        if (inserted.length > 0) {
+          await txDb
+            .update(campaigns)
+            .set({
+              cancelledAt: event.cancelledAt,
+              totalClaimed: sql`${campaigns.totalClaimed} + ${event.amountToBeneficiary}`,
+            })
+            .where(eq(campaigns.id, campaignId));
+        }
 
         await persistSyncCheckpoint(txDb, slot);
       });

@@ -1,10 +1,12 @@
 "use client";
 
 import { useState } from "react";
-import { PublicKey } from "@solana/web3.js";
+import { PublicKey, SystemProgram, Transaction } from "@solana/web3.js";
 import { type Program } from "@coral-xyz/anchor";
 import { TOKEN_PROGRAM_ID, getAssociatedTokenAddressSync } from "@solana/spl-token";
+import { useWallet, useConnection } from "@solana/wallet-adapter-react";
 import { getGracePeriodState } from "@/lib/vesting/display";
+import { isNativeSol } from "@/lib/sol/auto-wrap";
 
 type Props = {
   program: Program;
@@ -33,6 +35,8 @@ export function WithdrawUnvestedButton({
   onSuccess,
   toast,
 }: Props) {
+  const { sendTransaction } = useWallet();
+  const { connection } = useConnection();
   const [loading, setLoading] = useState(false);
   const [confirmOpen, setConfirmOpen] = useState(false);
 
@@ -43,19 +47,35 @@ export function WithdrawUnvestedButton({
   async function handleWithdraw() {
     setLoading(true);
     try {
-      const creatorAta = getAssociatedTokenAddressSync(mint, publicKey);
+      if (isNativeSol(mint)) {
+        const ix = await program.methods
+          .withdrawUnvested()
+          .accountsPartial({
+            creator: publicKey,
+            vestingTree: treePubkey,
+            systemProgram: SystemProgram.programId,
+          })
+          .instruction();
+        const tx = new Transaction().add(ix);
+        await sendTransaction(tx, connection);
+      } else {
+        const creatorAta = getAssociatedTokenAddressSync(mint, publicKey);
 
-      await program.methods
-        .withdrawUnvested()
-        .accounts({
-          creator: publicKey,
-          vestingTree: treePubkey,
-          vaultAuthority,
-          vault,
-          creatorAta,
-          tokenProgram: TOKEN_PROGRAM_ID,
-        })
-        .rpc();
+        const ix = await program.methods
+          .withdrawUnvested()
+          .accounts({
+            creator: publicKey,
+            vestingTree: treePubkey,
+            vaultAuthority,
+            vault,
+            creatorAta,
+            tokenProgram: TOKEN_PROGRAM_ID,
+            systemProgram: SystemProgram.programId,
+          })
+          .instruction();
+        const tx = new Transaction().add(ix);
+        await sendTransaction(tx, connection);
+      }
 
       toast("Unvested tokens withdrawn.", "success");
       setConfirmOpen(false);

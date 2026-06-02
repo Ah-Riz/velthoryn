@@ -47,6 +47,7 @@ export type PreparedBulkCampaign = {
   leafCount: number;
   merkleRoot: string;
   totalSupply: string;
+  minCliffTime: string;
   releaseMix: {
     cliff: number;
     linear: number;
@@ -134,6 +135,12 @@ function parseReleaseType(value: string): 0 | 1 | 2 | null {
   return null;
 }
 
+function releaseTypeLabel(releaseType: 0 | 1 | 2): string {
+  if (releaseType === 0) return "Cliff";
+  if (releaseType === 1) return "Linear";
+  return "Milestone";
+}
+
 function parseTimestamp(value: string): number {
   const trimmed = value.trim();
   if (!trimmed) return Number.NaN;
@@ -206,6 +213,7 @@ function humanizeScheduleError(message: string): string {
 export function parseBulkCsv(
   text: string,
   mintDecimals: number | null,
+  expectedReleaseType?: 0 | 1 | 2,
 ): BulkCsvParseResult {
   const rows = parseCsvText(text);
   if (rows.length === 0) {
@@ -267,6 +275,10 @@ export function parseBulkCsv(
     const releaseType = parseReleaseType(releaseTypeValue);
     if (releaseType === null) {
       rowIssues.push("Unknown vesting type. Use Cliff, Linear, Milestone, or 0, 1, 2.");
+    } else if (expectedReleaseType !== undefined && releaseType !== expectedReleaseType) {
+      rowIssues.push(
+        `This page only accepts ${releaseTypeLabel(expectedReleaseType)} rows. Change releaseType to ${releaseTypeLabel(expectedReleaseType)} or use the ${releaseTypeLabel(releaseType)} create page.`,
+      );
     }
 
     const startTime = parseTimestamp(startTimeRaw);
@@ -385,12 +397,14 @@ export function prepareBulkCampaign(rows: BulkCsvRow[]): PreparedBulkCampaign {
   const tree = buildTree(leavesForTree);
 
   let totalSupply = 0n;
+  let minCliffTime = leavesForTree[0].cliffTs;
   let cliffCount = 0;
   let linearCount = 0;
   let milestoneCount = 0;
 
   const leaves = leavesForTree.map((leaf, index) => {
     totalSupply += leaf.amount;
+    if (leaf.cliffTs < minCliffTime) minCliffTime = leaf.cliffTs;
     if (leaf.releaseType === 0) cliffCount += 1;
     if (leaf.releaseType === 1) linearCount += 1;
     if (leaf.releaseType === 2) milestoneCount += 1;
@@ -412,6 +426,7 @@ export function prepareBulkCampaign(rows: BulkCsvRow[]): PreparedBulkCampaign {
     leafCount: leaves.length,
     merkleRoot: tree.rootHex,
     totalSupply: totalSupply.toString(),
+    minCliffTime: minCliffTime.toString(),
     releaseMix: {
       cliff: cliffCount,
       linear: linearCount,

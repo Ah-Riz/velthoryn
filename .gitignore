@@ -46,6 +46,7 @@ CLAUDE.md
 
 # Research docs (private, not for GitHub)
 research-docs/
+design.md
 
 # IDE / OS
 .idea/
@@ -59,4 +60,5 @@ Thumbs.db
 *.swo
 # Playwright MCP
 .playwright-mcp/
+apps/web/test-results/
 .mcp.json

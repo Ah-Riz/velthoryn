@@ -96,7 +96,23 @@ async function postCampaignsHandler(request: NextRequest) {
         createdAt: u64BigInt(data.createdAt),
         metadata: data.metadata ?? null,
       })
+      .onConflictDoNothing({ target: campaigns.treeAddress })
       .returning({ id: campaigns.id });
+
+    if (!inserted) {
+      const [existingAfterConflict] = await tx
+        .select({ id: campaigns.id })
+        .from(campaigns)
+        .where(eq(campaigns.treeAddress, data.treeAddress))
+        .limit(1);
+
+      if (existingAfterConflict) {
+        return jsonResponse({ ok: true, campaignId: existingAfterConflict.id }, { status: 200 });
+      }
+
+      throw new Error("Campaign insert conflicted but existing row was not found");
+    }
+
     const campaignId = inserted.id;
 
     const [insertedRootVersion] = await tx

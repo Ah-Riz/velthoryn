@@ -76,8 +76,8 @@ describe("TriggerMilestoneButton", () => {
     expect(screen.getByText(/Release Milestone #0/)).toBeTruthy();
   });
 
-  it("shows released badge when alreadyReleased", () => {
-    render(createElement(TriggerMilestoneButton, { ...baseProps, alreadyReleased: true }));
-    expect(screen.getByText(/Milestone #0 released/)).toBeTruthy();
+  it("renders nothing when alreadyReleased", () => {
+    const { container } = render(createElement(TriggerMilestoneButton, { ...baseProps, alreadyReleased: true }));
+    expect(container.innerHTML).toBe("");
   });
 });

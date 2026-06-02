@@ -16,6 +16,7 @@ export interface StreamSchedule {
 
 const LOCAL_PREFIX = "velthoryn:stream:";
 const PENDING_INDEX_PREFIX = "velthoryn:pending-index:";
+const PENDING_FUND_PREFIX = "velthoryn:pending-fund:";
 
 export interface StoredLocalStreamSchedule {
   treeAddress: string;
@@ -51,6 +52,10 @@ export function streamScheduleKey(treeAddress: string): string {
 
 export function pendingCampaignIndexKey(treeAddress: string): string {
   return `${PENDING_INDEX_PREFIX}${treeAddress}`;
+}
+
+export function pendingCampaignFundingKey(treeAddress: string): string {
+  return `${PENDING_FUND_PREFIX}${treeAddress}`;
 }
 
 function isStreamSchedule(value: unknown): value is StreamSchedule {
@@ -234,6 +239,64 @@ export function listPendingCampaignIndexesLocal(): CampaignIndexPayload[] {
 
       try {
         payloads.push(JSON.parse(raw) as CampaignIndexPayload);
+      } catch {
+        // ignore malformed pending payloads
+      }
+    }
+  } catch {
+    return [];
+  }
+
+  return payloads;
+}
+
+export interface PendingCampaignFundingPayload {
+  treeAddress: string;
+  creator: string;
+  mint: string;
+  totalSupply: string;
+  createdAt: number;
+  createSig?: string;
+}
+
+export function savePendingCampaignFundingLocal(
+  payload: PendingCampaignFundingPayload,
+): void {
+  if (typeof window === "undefined") return;
+  try {
+    localStorage.setItem(
+      pendingCampaignFundingKey(payload.treeAddress),
+      JSON.stringify(payload),
+    );
+  } catch {
+    // quota / private mode
+  }
+}
+
+export function removePendingCampaignFundingLocal(treeAddress: string): void {
+  if (typeof window === "undefined") return;
+  try {
+    localStorage.removeItem(pendingCampaignFundingKey(treeAddress));
+  } catch {
+    // noop
+  }
+}
+
+export function listPendingCampaignFundingsLocal(): PendingCampaignFundingPayload[] {
+  if (typeof window === "undefined") return [];
+
+  const payloads: PendingCampaignFundingPayload[] = [];
+
+  try {
+    for (let i = 0; i < localStorage.length; i += 1) {
+      const key = localStorage.key(i);
+      if (!key || !key.startsWith(PENDING_FUND_PREFIX)) continue;
+
+      const raw = localStorage.getItem(key);
+      if (!raw) continue;
+
+      try {
+        payloads.push(JSON.parse(raw) as PendingCampaignFundingPayload);
       } catch {
         // ignore malformed pending payloads
       }

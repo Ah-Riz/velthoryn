@@ -1,19 +1,26 @@
 import pino from "pino";
 
-const isProduction =
-  process.env.NODE_ENV === "production" || process.env.VERCEL === "1";
-
-export const logger = pino({
+const pinoLogger = pino({
   level: process.env.LOG_LEVEL ?? "info",
-  ...(isProduction
-    ? {}
-    : {
-        transport: {
-          target: "pino-pretty",
-          options: { colorize: true, translateTime: "SYS:standard" },
-        },
-      }),
 });
+
+type LogLevel = "debug" | "info" | "warn" | "error";
+type LogArgs = Parameters<typeof pinoLogger.info>;
+
+function safeLog(level: LogLevel, args: LogArgs): void {
+  try {
+    pinoLogger[level](...args);
+  } catch {
+    // Logging must never change API behavior.
+  }
+}
+
+export const logger = {
+  debug: (...args: LogArgs) => safeLog("debug", args),
+  info: (...args: LogArgs) => safeLog("info", args),
+  warn: (...args: LogArgs) => safeLog("warn", args),
+  error: (...args: LogArgs) => safeLog("error", args),
+};
 
 export interface RequestLogFields {
   requestId: string;

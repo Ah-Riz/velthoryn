@@ -39,6 +39,17 @@ function fmtDateFull(ts: number): string {
   return `${mon} ${d.getDate()}, ${d.getFullYear()} ${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
 }
 
+function safePct(value: number): number {
+  if (!Number.isFinite(value)) return 0;
+  return Math.min(100, Math.max(0, value));
+}
+
+function pctBetween(start: number, current: number, end: number): number {
+  const duration = end - start;
+  if (duration <= 0) return current >= end ? 100 : 0;
+  return safePct(((current - start) / duration) * 100);
+}
+
 function defaultFmtAmount(raw: bigint): string {
   if (raw === 0n) return "0";
   return raw.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ",");
@@ -62,10 +73,10 @@ function vestedPctAt(
   if (releaseType === 1) {
     if (t <= cliffTs) return 0;
     if (t >= effectiveEnd) {
-      return cancelledAt ? Math.min(100, ((effectiveEnd - cliffTs) / (endTs - cliffTs)) * 100) : 100;
+      return cancelledAt ? pctBetween(cliffTs, effectiveEnd, endTs) : 100;
     }
     const duration = endTs - cliffTs;
-    return duration > 0 ? ((t - cliffTs) / duration) * 100 : 0;
+    return duration > 0 ? safePct(((t - cliffTs) / duration) * 100) : 0;
   }
   const steps = milestoneCount || 1;
   const stepPct = 100 / steps;
@@ -87,7 +98,7 @@ function buildSmoothLinearPath(
   effectiveEnd: number,
   cancelledAt: number | null,
 ): string {
-  const endPct = cancelledAt ? Math.min(100, ((effectiveEnd - cliffTs) / (endTs - cliffTs)) * 100) : 100;
+  const endPct = cancelledAt ? pctBetween(cliffTs, effectiveEnd, endTs) : 100;
   const hasCliff = cliffTs > startTs;
 
   if (!hasCliff) {
@@ -96,7 +107,7 @@ function buildSmoothLinearPath(
     for (let i = 0; i <= steps; i++) {
       const t = startTs + ((effectiveEnd - startTs) * i) / steps;
       const pct = ((t - startTs) / (endTs - startTs)) * endPct;
-      pts.push([x(t), y(Math.min(pct, endPct))]);
+      pts.push([x(t), y(Math.min(safePct(pct), endPct))]);
     }
     return `M${pts.map((p) => `${p[0]},${p[1]}`).join(" L")}`;
   }
@@ -166,7 +177,7 @@ export function VestingChart({
   const effectiveEnd = cancelledAt && cancelledAt < endTs ? cancelledAt : endTs;
   const vestingComplete = now >= effectiveEnd;
   const finalPct = cancelledAt
-    ? Math.min(100, ((effectiveEnd - cliffTs) / (endTs - cliffTs)) * 100)
+    ? pctBetween(cliffTs, effectiveEnd, endTs)
     : 100;
 
   useEffect(() => {
@@ -200,8 +211,11 @@ export function VestingChart({
   const tMax = viewEnd;
   const tRange = tMax - tMin || 1;
 
-  const x = useCallback((t: number) => padLeft + ((t - tMin) / tRange) * chartW, [padLeft, tMin, tRange, chartW]);
-  const y = useCallback((pct: number) => padTop + chartH - (pct / 100) * chartH, [padTop, chartH]);
+  const x = useCallback((t: number) => {
+    const next = padLeft + ((t - tMin) / tRange) * chartW;
+    return Number.isFinite(next) ? next : padLeft;
+  }, [padLeft, tMin, tRange, chartW]);
+  const y = useCallback((pct: number) => padTop + chartH - (safePct(pct) / 100) * chartH, [padTop, chartH]);
   const tFromX = useCallback((px: number) => tMin + ((px - padLeft) / chartW) * tRange, [tMin, padLeft, chartW, tRange]);
 
   let curvePath: string;

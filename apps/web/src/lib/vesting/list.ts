@@ -84,3 +84,37 @@ export function getRecipientStreamStatus(
 
   return "Scheduled";
 }
+
+export function getMultiLeafRecipientStreamStatus(
+  streams: RecipientStream[],
+  nowTs: bigint,
+): StreamStatus {
+  if (streams.length === 0) return "Scheduled";
+  if (streams.length === 1) return getRecipientStreamStatus(streams[0], nowTs);
+
+  const first = streams[0];
+  const claimed = toBigInt(first.myClaimed);
+  const totalEntitled = streams.reduce((sum, s) => sum + toBigInt(s.myLeaf.amount), 0n);
+
+  if (totalEntitled > 0n && claimed >= totalEntitled) return "Claimed";
+  if (first.cancelledAt !== null) return "Cancelled";
+  if (first.paused) return "Paused";
+
+  const totalVested = streams.reduce((sum, s) => sum + vestedForRecipient(s, nowTs), 0n);
+  const claimable = totalVested > claimed ? totalVested - claimed : 0n;
+  if (claimable > 0n) return "Claimable";
+
+  return "Scheduled";
+}
+
+export function getMultiLeafClaimableAmount(
+  streams: RecipientStream[],
+  nowTs: bigint,
+): bigint {
+  if (streams.length === 0) return 0n;
+  if (streams.length === 1) return getRecipientClaimableAmount(streams[0], nowTs);
+
+  const claimed = toBigInt(streams[0].myClaimed);
+  const totalVested = streams.reduce((sum, s) => sum + vestedForRecipient(s, nowTs), 0n);
+  return totalVested > claimed ? totalVested - claimed : 0n;
+}

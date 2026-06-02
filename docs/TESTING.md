@@ -144,6 +144,17 @@ describe("clock test", () => {
 
 API route tests (`tests/api/*`) use a **real Postgres** database. CI provides Postgres via service containers in `web-ci.yml` and `lint.yml`. Hooks, merkle, and math tests do not need a database.
 
+### DB-free unit subset
+
+Use this when you only need deterministic parser/math/adapter coverage and do not want Vitest to touch Postgres:
+
+```bash
+cd apps/web
+pnpm test:unit
+```
+
+`test:unit` uses `vitest.unit.config.ts`, has no global DB setup, and excludes DB/indexer tests. This is the fastest local sanity check for CSV parsing, Merkle math, vesting schedule math, and Anchor adapter utilities.
+
 ### Local setup (Postgres required for full suite)
 
 ```bash
@@ -158,10 +169,11 @@ cd apps/web && pnpm db:migrate && pnpm test
 ```bash
 cd apps/web
 pnpm test              # full suite (requires DATABASE_URL)
+pnpm test:db           # explicit alias for the DB-backed suite
 pnpm test -- --reporter=verbose  # detailed output
 ```
 
-`tests/globalSetup.ts` runs `drizzle-kit push` locally when `DATABASE_URL` is set (skipped when `CI=true` — workflows apply migrations explicitly via `pnpm db:migrate`). Each API test file calls `resetDb()` in `beforeEach` to truncate tables.
+`tests/globalSetup.ts` refuses to run against hosted databases (Supabase, Neon, poolers) unless `ALLOW_REMOTE_DB_TEST_WRITES=true` is set. This prevents API tests from writing dummy campaign rows to production-like databases. Use local Postgres for normal development. `tests/globalSetup.ts` runs `drizzle-kit push` locally when `DATABASE_URL` is set (skipped when `CI=true` — workflows apply migrations explicitly via `pnpm db:migrate`). Each API test file calls `resetDb()` in `beforeEach` to truncate tables.
 
 **Test helpers:** `tests/helpers/db.ts` (`resetDb`), `tests/helpers/fixtures.ts` (`createCampaignViaPost`, `seedClaimEvent`), `tests/helpers/requests.ts` (shared campaign payloads).
 
@@ -221,6 +233,26 @@ pnpm tsx scripts/test-be-merkle-pipeline.ts --url https://your-app.vercel.app --
 ```
 
 Validates the full BE-SC pipeline: `prepareCampaign` → POST campaign → GET proof per beneficiary → verify proof against root. Tests 3 release types (Cliff, Linear, Milestone).
+
+## Browser E2E Smoke Tests
+
+```bash
+cd apps/web
+pnpm test:e2e:install   # first run only: downloads Chromium
+pnpm test:e2e:deps      # first run only: installs OS libs, may need sudo
+pnpm test:e2e
+```
+
+`pnpm test:e2e` starts Next.js on `127.0.0.1:3100` and runs the Playwright smoke tests in `tests/e2e/`.
+
+If Chromium exits with `error while loading shared libraries: libnspr4.so`, install the Playwright OS dependencies:
+
+```bash
+cd apps/web
+pnpm test:e2e:deps
+```
+
+On locked-down machines this may fail with `sudo: a password is required`; install `libnspr4`/Playwright Chromium dependencies at the OS level, then rerun `pnpm test:e2e`.
 
 CI runs this in `.github/workflows/web-ci.yml` using a Postgres service container.
 

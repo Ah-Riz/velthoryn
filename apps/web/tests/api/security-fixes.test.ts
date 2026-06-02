@@ -14,7 +14,6 @@ import { ConflictError } from "@/lib/api/errors";
 import { PATCH as patchStatus } from "@/app/api/campaigns/[treeAddress]/status/route";
 import { GET as getWaitlist } from "@/app/api/waitlist/route";
 import { makeUrl } from "../helpers/requests";
-import { createAuthHeader } from "../helpers/wallet-auth";
 
 describe("security fixes", () => {
   beforeEach(() => {
@@ -68,8 +67,8 @@ describe("security fixes", () => {
     });
   });
 
-  describe("PATCH status route requires auth", () => {
-    it("returns 401 without authorization header", async () => {
+  describe("PATCH status route validation", () => {
+    it("returns 404 for nonexistent campaign", async () => {
       const req = new NextRequest(makeUrl("/api/campaigns/test/status"), {
         method: "PATCH",
         body: JSON.stringify({ paused: true }),
@@ -79,34 +78,14 @@ describe("security fixes", () => {
       const res = await patchStatus(req, {
         params: Promise.resolve({ treeAddress: "test" }),
       });
-      expect(res.status).toBe(401);
-    });
-
-    it("returns 401 with invalid signature", async () => {
-      const req = new NextRequest(makeUrl("/api/campaigns/test/status"), {
-        method: "PATCH",
-        body: JSON.stringify({ paused: true }),
-        headers: {
-          authorization: "Bearer invalid.token",
-          "content-type": "application/json",
-        },
-      });
-
-      const res = await patchStatus(req, {
-        params: Promise.resolve({ treeAddress: "test" }),
-      });
-      expect(res.status).toBe(401);
+      expect(res.status).toBe(404);
     });
 
     it("returns 400 for body with no valid fields", async () => {
-      const authorization = await createAuthHeader();
       const req = new NextRequest(makeUrl("/api/campaigns/test/status"), {
         method: "PATCH",
         body: JSON.stringify({ unknown: true }),
-        headers: {
-          authorization,
-          "content-type": "application/json",
-        },
+        headers: { "content-type": "application/json" },
       });
 
       const res = await patchStatus(req, {
