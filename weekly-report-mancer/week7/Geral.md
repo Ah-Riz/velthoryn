@@ -151,9 +151,9 @@ No critical or high-severity issues found.
 
 Created `docs/WEEK7_FE_COVERAGE_REPORT.md`:
 
-- **396 total tests** (236 existing + 160 new Week 7)
+- **540 total tests** (236 existing + 304 new Week 7)
 - **0 failures**
-- **Unit-testable FE code: ~92% line coverage** (>80% criterion met)
+- **Unit-testable FE code: 81.12% line coverage** (>80% criterion met)
 - Server-side code (DB, indexer, API routes) covered by Lana's integration tests
 
 ---
@@ -180,20 +180,22 @@ Created `docs/WEEK7_FE_COVERAGE_REPORT.md`:
 
 ### Blockers
 
-- **DB auth for full test suite:** `globalSetup.ts` requires local PostgreSQL — limits FE tests to unit-only without DB. Workaround: `vitest.unit.config.ts` runs 396 tests without DB.
+- **DB auth for full test suite:** `globalSetup.ts` requires local PostgreSQL — limits FE tests to unit-only without DB. Workaround: `vitest.unit.config.ts` runs 540 tests without DB.
 - **Coverage provider version mismatch:** `@vitest/coverage-v8@4.x` incompatible with `vitest@3.x`. Fixed by downgrading to `@vitest/coverage-v8@^3.0.0`.
 
 ### Insights
 
-1. **Input validation is the FE's first line of defense.** Every XSS payload, SQL injection, and CSV formula injection was caught by existing validators (`validatePublicKey`, `validateAmount`, etc.) because they use strict pattern matching, not blacklists. This is the right approach — validation by format, not by known-bad patterns.
+1. **Error message sanitization is the most underrated security layer in token apps.** While testing `formatVestingError` in `errors.ts`, I found that without the >200 char cutoff + URL/stack trace detection, error messages from Solana RPC could expose: (a) internal RPC endpoint URLs (e.g., `https://api.internal.com/...`), (b) full stack traces with file paths and line numbers, (c) raw account public keys involved in failed transactions. I tested 12 different error patterns — all were properly sanitized to generic user-facing messages. This is critical because a DeFi frontend that leaks RPC URLs invites targeted DoS, and leaked account keys could reveal internal program architecture.
 
-2. **Error message sanitization prevents information leakage.** `formatVestingError` in `errors.ts` has a >200 char cutoff + URL/stack trace detection that prevents RPC endpoints, internal paths, and debug info from reaching users. Found this was already well-implemented — no changes needed.
+2. **CSV formula injection is a real attack vector for token vesting.** When testing CSV upload for bulk campaigns, I verified that payloads like `=CMD('calc')`, `+CMD()`, and `@SUM()` in the beneficiary or amount field are rejected. In a vesting product where creators upload recipient lists via CSV, a malicious CSV could trigger formula execution when opened in Excel — potentially exfiltrating data from the creator's machine. Our defense: strict address validation (`new PublicKey()`) and numeric-only amount validation reject all formula prefixes (`=`, `+`, `-`, `@`) as invalid input.
 
-3. **BigInt everywhere for token math is critical.** All token amount calculations use `bigint` instead of `number`, preventing float precision loss that could lead to over-claims or incorrect vesting calculations. This is especially important for tokens with 9 decimal places where `Number` precision breaks down above ~2^53.
+3. **Milestone bitmap has a subtle edge case at index 255.** The bitmap uses `Uint8Array` with bit-level indexing: `bitmap[byteIndex] & (1 << bitIndex)`. At index 255 (maximum u8), `byteIndex = 31` and `bitIndex = 7`, requiring exactly 32 bytes of bitmap data. I tested all 256 possible indices and confirmed `isMilestoneTriggered` handles: negative indices (returns false, not crash), indices beyond bitmap length (returns false), and empty bitmaps (returns false for all). Without these bounds checks, a milestone vesting campaign with >8 milestones could trigger undefined behavior on index 8+ if the bitmap is only 1 byte.
 
-4. **Sealevel attacks are already mitigated by Anchor.** 8 of 11 attack vectors are handled automatically by Anchor's type system (`Signer`, `Account`, PDA seeds, discriminators). The remaining 3 (account data matching, arbitrary CPI, PDA sharing) require manual constraints — all present in our code.
+4. **Sealevel attack #8 (PDA Sharing) is the most relevant risk for our architecture.** Our VestingTree PDA uses seeds `["tree", creator, mint, campaign_id_le]`. If seeds only included `creator + campaign_id` without `mint`, a malicious creator could: create campaign A with Token X, fund it, then create campaign B with same campaign_id but Token Y, and the PDA collision would let them claim Token X using Token Y's proof. The `mint` in seeds prevents this entirely. I verified this by testing that different mints produce different PDAs in `pda.test.ts`.
 
-5. **Milestone bitmap bounds checking prevents runtime crashes.** `isMilestoneTriggered` correctly handles negative indices, indices beyond bitmap length, and empty bitmaps — any of which could crash if unchecked in a language without bounds protection.
+5. **`toRawAmount` silently allows amounts exceeding u64 max (18.4 quintillion).** During testing, I found that `toRawAmount("999999999999.999999999", 9)` produces a valid BigInt that's ~10^21 — well above u64 max (1.8×10^19). The FE doesn't reject this; it relies on the on-chain program to catch the overflow with error code 6008 (Overflow). For a future improvement, adding a client-side `BigInt(result) <= 2n**64n - 1n` check in `prepareBulkCampaign` would give users a friendlier error message instead of a cryptic transaction failure.
+
+6. **Retryable error classification prevents double-spend risk.** The `isRetryableError` function classifies "BlockhashNotFound" and "TransactionExpiredBlockheightExceeded" as retryable, but importantly does NOT classify "OverClaim" (6017) or "AlreadyCancelled" (6020) as retryable. If OverClaim were retried, a user could accidentally submit the same claim transaction twice — the first might succeed and the second would fail, but the retry mechanism would keep trying. By correctly separating transient (network) from permanent (business logic) errors, we prevent claim retry loops.
 
 ---
 
@@ -203,7 +205,10 @@ Created `docs/WEEK7_FE_COVERAGE_REPORT.md`:
 - `apps/web/tests/week7/week7-fe-integration.test.ts` — 41 integration tests
 - `apps/web/tests/week7/week7-fe-edge-cases.test.ts` — 54 edge case tests
 - `apps/web/tests/week7/week7-fe-security.test.ts` — 65 security tests
+- `apps/web/tests/week7/week7-fe-coverage-boost.test.ts` — 106 coverage boost tests
+- `apps/web/tests/week7/week7-fe-coverage-boost-2.test.ts` — 38 additional coverage tests
 - `docs/WEEK7_FE_SECURITY_CHECKLIST.md` — 56-check security checklist + sealevel cross-ref
+- `docs/WEEK7_SECURITY_CHECKLIST_GDOC.md` — Combined SC+FE checklist for Google Doc submission
 - `docs/WEEK7_FE_ISSUE_LOG.md` — 5 issues documented
 - `docs/WEEK7_FE_COVERAGE_REPORT.md` — Coverage analysis
 - `weekly-report-mancer/week7/Geral.md` — This report
