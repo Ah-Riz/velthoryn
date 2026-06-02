@@ -21,6 +21,7 @@ import {
   removePendingCampaignFundingLocal,
 } from "@/lib/stream/persist";
 import { CancelConfirmDialog } from "@/components/campaign/detail/CancelConfirmDialog";
+import { createAuthHeader } from "@/lib/api/client-auth";
 import { MilestoneStatusBadge } from "@/components/campaign/detail/MilestoneStatusBadge";
 import { PauseToggleButton } from "@/components/campaign/detail/PauseToggleButton";
 import { TriggerMilestoneButton } from "@/components/campaign/detail/TriggerMilestoneButton";
@@ -231,7 +232,7 @@ function truncateAddress(addr: string, chars = 6): string {
 
 export default function CampaignPage({ params }: { params: Promise<{ id: string }> }) {
   const { id: treeAddress } = use(params);
-  const { publicKey, sendTransaction } = useWallet();
+  const { publicKey, signMessage, sendTransaction } = useWallet();
   const { connection } = useConnection();
   const program = useVestingProgram();
   const { fundCampaign } = useCreateCampaign();
@@ -1463,11 +1464,21 @@ export default function CampaignPage({ params }: { params: Promise<{ id: string 
       void queryClient.invalidateQueries({
         queryKey: ["claimRecord", treeAddress, beneficiaryKey],
       });
-      void fetch("/api/claims/sync", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ signature: sig }),
-      })
+      void (async () => {
+        const headers: Record<string, string> = { "Content-Type": "application/json" };
+        if (publicKey && signMessage) {
+          try {
+            headers.authorization = await createAuthHeader({ publicKey, signMessage });
+          } catch {
+            // Wallet signing unavailable — skip sync
+            return;
+          }
+        }
+        await fetch("/api/claims/sync", {
+          method: "POST",
+          headers,
+          body: JSON.stringify({ signature: sig }),
+        })
         .then(async (res) => {
           if (!res.ok) {
             const body = await res.text();
@@ -1483,6 +1494,7 @@ export default function CampaignPage({ params }: { params: Promise<{ id: string 
         .catch((syncError) => {
           console.warn("[claim sync] Error:", syncError);
         });
+      })();
 
       const newClaimed = nextClaimed.toString();
       queryClient.setQueriesData(

@@ -99,7 +99,7 @@ pnpm install
 solana-keygen new -o target/deploy/vesting-keypair.json --no-bip39-passphrase
 ```
 
-> The program ID is already hardcoded in `Anchor.toml` and `programs/vesting/src/lib.rs` (`G6iaigUdi2btFwUc2N65twfxwA8Ew5uKKhKJ5RJa8wvu`). The keypair file is only needed locally to sign a redeploy — for normal build and test it isn't used.
+> The program ID is hardcoded in `Anchor.toml` and `programs/vesting/src/lib.rs` (`G6iaigUdi2btFwUc2N65twfxwA8Ew5uKKhKJ5RJa8wvu`). To run the integration tests locally you need the matching program keypair — see [`docs/LOCAL_DEV.md`](docs/LOCAL_DEV.md) for the full explanation and workarounds. CI runs the full suite on every push using the `PROGRAM_KEYPAIR_JSON` secret.
 
 ```bash
 anchor build           # produces target/idl/vesting.json + target/types/vesting.ts

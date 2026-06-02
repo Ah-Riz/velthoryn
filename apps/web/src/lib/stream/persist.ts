@@ -370,6 +370,7 @@ export function buildCreateStreamIndexPayload(params: {
 
 export async function indexCampaign(
   payload: CampaignIndexPayload,
+  authHeaders?: Record<string, string>,
 ): Promise<void> {
   savePendingCampaignIndexLocal(payload);
 
@@ -402,6 +403,7 @@ export async function indexCampaign(
     headers: {
       "Content-Type": "application/json",
       "x-request-id": requestId,
+      ...authHeaders,
     },
     body: JSON.stringify(payload),
   });
@@ -427,6 +429,7 @@ export async function indexCampaign(
 
 export async function indexStreamCampaign(
   payload: CreateStreamIndexPayload,
+  authHeaders?: Record<string, string>,
 ): Promise<void> {
-  await indexCampaign(payload);
+  await indexCampaign(payload, authHeaders);
 }

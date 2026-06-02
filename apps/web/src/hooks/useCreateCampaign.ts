@@ -21,6 +21,7 @@ import {
   savePendingCampaignFundingLocal,
   saveStreamScheduleLocal,
 } from "@/lib/stream/persist";
+import { createAuthHeader } from "@/lib/api/client-auth";
 import { useVestingProgram } from "./useVestingProgram";
 import { buildWrapSolInstructions, isNativeSol } from "@/lib/sol/auto-wrap";
 
@@ -60,7 +61,7 @@ export interface CreateAndFundCampaignResult {
 
 export function useCreateCampaign() {
   const program = useVestingProgram();
-  const { publicKey, sendTransaction } = useWallet();
+  const { publicKey, sendTransaction, signMessage } = useWallet();
   const { connection } = useConnection();
 
   const createCampaign = useCallback(
@@ -145,6 +146,10 @@ export function useCreateCampaign() {
       });
 
       try {
+        const authorization = signMessage
+          ? await createAuthHeader({ publicKey, signMessage })
+          : undefined;
+
         await indexCampaign(
           buildCreateCampaignIndexPayload({
             treeAddress,
@@ -156,6 +161,7 @@ export function useCreateCampaign() {
             pauseAuthority: publicKey.toBase58(),
             prepared: params.prepared,
           }),
+          authorization ? { authorization } : undefined,
         );
       } catch (error) {
         indexWarning =

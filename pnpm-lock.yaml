@@ -50,6 +50,9 @@ importers:
       mocha:
         specifier: ^10.8.2
         version: 10.8.2
+      postgres:
+        specifier: ^3.4.9
+        version: 3.4.9
       solana-bankrun:
         specifier: ^0.4.0
         version: 0.4.0(bufferutil@4.1.0)(typescript@5.9.3)

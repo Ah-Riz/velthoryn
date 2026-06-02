@@ -4,7 +4,7 @@ import { NextRequest } from "next/server";
 import { GET } from "@/app/api/beneficiary/[address]/vesting-progress/route";
 import { resetDb } from "../helpers/db";
 import { createCampaignViaPost, seedClaimEvent } from "../helpers/fixtures";
-import { makeUrl, CREATOR } from "../helpers/requests";
+import { makeUrl } from "../helpers/requests";
 import { resetRateLimitForTests } from "@/lib/api/rate-limit";
 import { resetRedisForTests } from "@/lib/api/redis";
 import { db } from "@/lib/db";
@@ -57,7 +57,6 @@ async function seedLinearCampaign(
   const endTime = overrides.endTime ?? 1700000000 + 365 * 24 * 3600;
 
   const { treeAddress, campaignId } = await createCampaignViaPost({
-    creator: CREATOR,
     leaf: {
       beneficiary,
       amount,

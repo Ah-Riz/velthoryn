@@ -17,6 +17,7 @@ import { formatVestingError } from "@/lib/anchor/errors";
 import { isNativeSol, isWrappedSol } from "@/lib/sol/auto-wrap";
 import { formatCountdown } from "@/lib/vesting/display";
 import { isMilestoneTriggered } from "@/lib/vesting/milestone";
+import { createAuthHeader } from "@/lib/api/client-auth";
 
 interface ProofLeaf {
   leafIndex: number;
@@ -201,7 +202,7 @@ export function ClaimWithProofButton({
   onSuccess,
   toast,
 }: Props) {
-  const { sendTransaction, signTransaction } = useWallet();
+  const { sendTransaction, signTransaction, signMessage, publicKey: walletPublicKey } = useWallet();
   const queryClient = useQueryClient();
   const [loading, setLoading] = useState(false);
   const [selectedIdx, setSelectedIdx] = useState(0);
@@ -534,11 +535,22 @@ export function ClaimWithProofButton({
         queryKey: ["beneficiaryCampaigns"],
       });
       const syncClaim = async (retries = 5) => {
+        let authorization: string | undefined;
+        if (walletPublicKey && signMessage) {
+          try {
+            authorization = await createAuthHeader({ publicKey: walletPublicKey, signMessage });
+          } catch {
+            // Wallet signing unavailable — skip sync
+            return;
+          }
+        }
         for (let i = 0; i < retries; i++) {
           try {
+            const headers: Record<string, string> = { "Content-Type": "application/json" };
+            if (authorization) headers.authorization = authorization;
             const res = await fetch(`/api/claims/sync`, {
               method: "POST",
-              headers: { "Content-Type": "application/json" },
+              headers,
               body: JSON.stringify({ signature: sig }),
             });
             if (res.ok) {
