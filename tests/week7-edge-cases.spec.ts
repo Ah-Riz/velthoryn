@@ -915,4 +915,89 @@ describe("week7 edge case tests (bankrun)", () => {
     const postVault = await getAccount(provider.connection, vault);
     expect(Number(postVault.amount)).to.equal(0);
   });
+
+  // =========================================================================
+  // EC19: cancel_stream at exactly endTime — 100% vested, 0% to creator
+  // =========================================================================
+  it("EC19: cancel_stream at exactly endTime — full amount to beneficiary, none to creator", async () => {
+    const { context, provider, program, creator, cancelAuthority } = freshCtx();
+    const beneficiary = await makeBeneficiaryTx(provider);
+    const AMOUNT = 10000;
+
+    const { mint } = await createTestMintTx(provider, creator.publicKey);
+    const creatorAta = await fundCreatorAtaTx(provider, mint, creator.publicKey, AMOUNT);
+
+    const [treePda] = await treePDA(PROGRAM_ID, creator.publicKey, mint, 7010);
+    const [vaultAuthPda] = await vaultAuthorityPDA(PROGRAM_ID, treePda);
+    const [crPda] = await claimRecordPDA(PROGRAM_ID, treePda, beneficiary.publicKey);
+    const vault = getAssociatedTokenAddressSync(mint, vaultAuthPda, true);
+    const beneficiaryAta = await createBeneficiaryAta(provider, mint, beneficiary.publicKey);
+
+    const now = await bankrunNow(context);
+    const start = now;
+    const cliff = now + 500;
+    const end = now + 1000;
+
+    // Create linear stream
+    await program.methods
+      .createStream({
+        campaignId: new BN(7010),
+        beneficiary: beneficiary.publicKey,
+        amount: new BN(AMOUNT),
+        releaseType: 1, // Linear
+        startTime: new BN(start),
+        cliffTime: new BN(cliff),
+        endTime: new BN(end),
+        milestoneIdx: 0,
+        cancellable: true,
+        cancelAuthority: cancelAuthority.publicKey,
+        pauseAuthority: null,
+      })
+      .accounts({
+        creator: creator.publicKey,
+        vestingTree: treePda,
+        vaultAuthority: vaultAuthPda,
+        vault,
+        sourceAta: creatorAta,
+        mint,
+      })
+      .signers([creator])
+      .rpc();
+
+    // Warp to EXACTLY endTime — fully vested
+    await warpClock(context, end);
+
+    const preBeneficiaryBal = Number((await getAccount(provider.connection, beneficiaryAta)).amount);
+    const preCreatorBal = Number((await getAccount(provider.connection, creatorAta)).amount);
+
+    // Cancel at exactly endTime
+    await program.methods
+      .cancelStream({
+        releaseType: 1,
+        startTime: new BN(start),
+        cliffTime: new BN(cliff),
+        endTime: new BN(end),
+        milestoneIdx: 0,
+      })
+      .accounts({
+        creator: creator.publicKey,
+        beneficiary: beneficiary.publicKey,
+        vestingTree: treePda,
+        claimRecord: crPda,
+        vaultAuthority: vaultAuthPda,
+        vault,
+        beneficiaryAta,
+        creatorAta,
+        mint,
+      })
+      .signers([creator])
+      .rpc();
+
+    // At endTime: 100% vested → all to beneficiary, 0% to creator
+    const postBeneficiaryBal = Number((await getAccount(provider.connection, beneficiaryAta)).amount);
+    const postCreatorBal = Number((await getAccount(provider.connection, creatorAta)).amount);
+
+    expect(postBeneficiaryBal - preBeneficiaryBal).to.equal(AMOUNT);
+    expect(postCreatorBal - preCreatorBal).to.equal(0);
+  });
 });
