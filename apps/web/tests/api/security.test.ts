@@ -24,7 +24,7 @@ describe("security controls", () => {
     vi.unstubAllEnvs();
   });
 
-  it("accepts unauthenticated POST /api/campaigns (no auth gate)", async () => {
+  it("rejects unauthenticated POST /api/campaigns (auth required)", async () => {
     const req = new NextRequest(makeUrl("/api/campaigns"), {
       method: "POST",
       body: JSON.stringify(makeCampaignBody()),
@@ -32,10 +32,8 @@ describe("security controls", () => {
     });
 
     const res = await postCampaigns(req);
-    // Route no longer requires auth — request proceeds to validation/insert.
-    // Valid payload returns 201 (created) or 200 (duplicate); invalid returns 400.
-    expect([200, 201, 400]).toContain(res.status);
-    expect(res.status).not.toBe(401);
+    // Route now requires wallet auth — unauthenticated request returns 401.
+    expect(res.status).toBe(401);
   });
 
   it("accepts valid wallet signature", async () => {

@@ -12,6 +12,7 @@ import {
   rootUpdateEvents,
   withdrawEvents,
   streamCancelEvents,
+  instantRefundEvents,
 } from "@/lib/db/schema";
 import {
   computeSingleLeafRoot,
@@ -19,7 +20,7 @@ import {
   makeLeaf,
   makeUrl,
 } from "./requests";
-import { createAuthHeader } from "./wallet-auth";
+import { createAuthHeader, TEST_CREATOR_KEYPAIR } from "./wallet-auth";
 import { resetRedisForTests } from "@/lib/api/redis";
 
 export function uniqueTreeAddress(): string {
@@ -264,5 +265,30 @@ export async function seedStreamCancelEvent(
     signature: sig,
     slot: BigInt(overrides.slot ?? 1000),
     blockTime: BigInt(overrides.blockTime ?? 1700070000),
+  });
+}
+
+export async function seedInstantRefundEvent(
+  campaignId: number,
+  overrides: Partial<{
+    cancelledAt: number;
+    refundedTo: string;
+    amount: number;
+    signature: string;
+    slot: number;
+    blockTime: number;
+  }> = {},
+): Promise<void> {
+  const sig =
+    overrides.signature ??
+    `irefund_sig_${campaignId}_${Date.now()}_${Math.random().toString(36).slice(2)}`;
+  await db.insert(instantRefundEvents).values({
+    campaignId,
+    cancelledAt: BigInt(overrides.cancelledAt ?? 1700080000),
+    refundedTo: overrides.refundedTo ?? "11111111111111111111111111111112",
+    amount: BigInt(overrides.amount ?? 1000000),
+    signature: sig,
+    slot: BigInt(overrides.slot ?? 1000),
+    blockTime: BigInt(overrides.blockTime ?? 1700080000),
   });
 }

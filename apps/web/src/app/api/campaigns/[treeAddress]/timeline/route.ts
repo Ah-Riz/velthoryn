@@ -144,6 +144,17 @@ async function getTimelineHandler(
     FROM stream_cancel_events
     WHERE campaign_id = ${campaignId} ${fromCondition} ${toCondition}
 
+    UNION ALL
+
+    SELECT 'instant_refunded' AS type, block_time, signature,
+      json_build_object(
+        'cancelledAt', cancelled_at::text,
+        'refundedTo', refunded_to,
+        'amount', amount::text
+      ) AS data
+    FROM instant_refund_events
+    WHERE campaign_id = ${campaignId} ${fromCondition} ${toCondition}
+
     ORDER BY block_time DESC
     LIMIT ${limit}
   `;
@@ -157,7 +168,8 @@ async function getTimelineHandler(
       (SELECT COUNT(*) FROM root_update_events WHERE campaign_id = ${campaignId} ${fromCondition} ${toCondition}) +
       (SELECT COUNT(*) FROM withdraw_events WHERE campaign_id = ${campaignId} ${fromCondition} ${toCondition}) +
       (SELECT COUNT(*) FROM milestone_events WHERE campaign_id = ${campaignId} ${fromCondition} ${toCondition}) +
-      (SELECT COUNT(*) FROM stream_cancel_events WHERE campaign_id = ${campaignId} ${fromCondition} ${toCondition})
+      (SELECT COUNT(*) FROM stream_cancel_events WHERE campaign_id = ${campaignId} ${fromCondition} ${toCondition}) +
+      (SELECT COUNT(*) FROM instant_refund_events WHERE campaign_id = ${campaignId} ${fromCondition} ${toCondition})
     ) AS total
   `;
 

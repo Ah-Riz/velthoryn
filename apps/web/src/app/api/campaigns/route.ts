@@ -7,8 +7,10 @@ import { createCampaignRequestSchema } from "@/lib/api/validators";
 import { verifyAllLeaves } from "@/lib/merkle/verify";
 import { ValidationError } from "@/lib/api/errors";
 import { withRoute } from "@/lib/api/route-wrapper";
+import { getAuthenticatedWallet } from "@/lib/api/auth-middleware";
 import { getRequestId } from "@/lib/api/request-id";
 import { logger } from "@/lib/api/logger";
+import { ForbiddenError } from "@/lib/api/errors";
 
 function u64BigInt(value: string | number): bigint {
   return BigInt(value);
@@ -32,6 +34,12 @@ async function postCampaignsHandler(request: NextRequest) {
   }
 
   const data = parsed.data;
+
+  // Verify the authenticated wallet is the campaign creator
+  const authWallet = getAuthenticatedWallet(request);
+  if (authWallet !== data.creator) {
+    throw new ForbiddenError("Authenticated wallet does not match creator");
+  }
 
   if (data.leafCount !== data.leaves.length) {
     throw new ValidationError(
@@ -193,6 +201,7 @@ async function getCampaignsHandler(request: NextRequest) {
 
 export const POST = withRoute(
   {
+    auth: true,
     rateLimit: { requests: 10, window: 60 },
     bodyLimit: "campaigns",
   },

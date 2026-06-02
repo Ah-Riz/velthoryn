@@ -125,8 +125,20 @@ jobs:
           CARGO_TARGET_DIR: ${{ github.workspace }}/target
         run: pnpm exec ts-mocha -p ./tsconfig.json -t 1000000 'tests/vesting-native-sol.spec.ts'
 
+      # Week 7 coverage gap tests — runs the dedicated gap suite (errors 6025,
+      # 6036 and event listener assertions) on its own so failures are clearly
+      # labelled. See docs/WEEK7_COVERAGE_REPORT.md for the full coverage matrix.
+      - name: Coverage gap tests (localnet, week7-coverage-gaps.spec.ts)
+        env:
+          TEST_SKIP_BUILD: "1"
+          TEST_RESET_VALIDATOR: "1"
+          CARGO_TARGET_DIR: ${{ github.workspace }}/target
+          ANCHOR_TEST_GLOB: "tests/week7-coverage-gaps.spec.ts"
+        run: pnpm test:localnet
+
       - name: Integration tests (localnet)
         env:
           TEST_SKIP_BUILD: "1"
+          TEST_RESET_VALIDATOR: "1"
           CARGO_TARGET_DIR: ${{ github.workspace }}/target
         run: pnpm test:localnet

@@ -38,7 +38,7 @@ export async function warpClock(
   const currentClock = await context.banksClient.getClock();
   context.setClock(
     new Clock(
-      currentClock.slot,
+      currentClock.slot + 1n,
       BigInt(unixTimestamp),
       currentClock.epoch,
       currentClock.leaderScheduleEpoch,

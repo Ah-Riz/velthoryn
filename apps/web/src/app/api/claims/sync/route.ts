@@ -24,6 +24,6 @@ async function postClaimsSyncHandler(request: NextRequest) {
 }
 
 export const POST = withRoute(
-  { rateLimit: { requests: 5, window: 60 } },
+  { auth: true, rateLimit: { requests: 5, window: 60 } },
   postClaimsSyncHandler,
 );
