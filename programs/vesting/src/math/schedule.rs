@@ -104,4 +104,119 @@ mod tests {
         assert_eq!(get_vested_amount(&l, Some(150), 999), 500);
         assert_eq!(get_vested_amount(&l, None, 999), 1_000);
     }
+
+    mod proptest_tests {
+        use super::*;
+        use proptest::prop_assert;
+        use proptest::prop_assert_eq;
+        use proptest::prop_assume;
+
+        // Helper to sort 3 values so start <= cliff <= end
+        fn sort3(a: i64, b: i64, c: i64) -> (i64, i64, i64) {
+            let mut v = [a, b, c];
+            v.sort();
+            (v[0], v[1], v[2])
+        }
+
+        proptest::proptest! {
+            /// Invariant: vested amount never exceeds total amount
+            #[test]
+            fn vested_never_exceeds_amount(
+                amount in 1u64..u64::MAX,
+                start in 0i64..1_000_000i64,
+                cliff in 0i64..1_000_000i64,
+                end in 0i64..1_000_000i64,
+                now in 0i64..2_000_000i64,
+            ) {
+                let (_start, cliff, end) = sort3(start, cliff, end);
+                let l = leaf(amount, cliff, end, 1); // linear
+                let v = vested(&l, now);
+                prop_assert!(v <= amount, "vested {} > amount {}", v, amount);
+            }
+
+            /// Invariant: cliff release is all-or-nothing
+            #[test]
+            fn cliff_all_or_nothing(
+                amount in 1u64..1_000_000u64,
+                cliff in 1i64..1_000_000i64,
+                now in 0i64..2_000_000i64,
+            ) {
+                let l = leaf(amount, cliff, cliff + 100, 0);
+                let v = vested(&l, now);
+                prop_assert!(
+                    v == 0 || v == amount,
+                    "cliff vested {} is neither 0 nor {}", v, amount
+                );
+            }
+
+            /// Invariant: linear vesting is monotonically non-decreasing over time
+            #[test]
+            fn linear_monotonic(
+                amount in 1u64..1_000_000u64,
+                cliff in 1i64..100_000i64,
+                duration in 1i64..100_000i64,
+                t1 in 0i64..200_000i64,
+                t2_delta in 1i64..200_000i64,
+            ) {
+                let end = cliff + duration;
+                let t2 = t1 + t2_delta;
+                let l = leaf(amount, cliff, end, 1);
+                let v1 = vested(&l, t1);
+                let v2 = vested(&l, t2);
+                prop_assert!(v2 >= v1, "vested decreased: t1={} v1={}, t2={} v2={}", t1, v1, t2, v2);
+            }
+
+            /// Invariant: cancel clamp — get_vested_amount with cancel <= now is same as vested(cancel)
+            #[test]
+            fn cancel_clamps_to_cancel_time(
+                amount in 1u64..1_000_000u64,
+                cliff in 1i64..100_000i64,
+                end_delta in 1i64..100_000i64,
+                cancel_delta in 0i64..200_000i64,
+                now_extra in 0i64..200_000i64,
+            ) {
+                let end = cliff + end_delta;
+                let cancel_at = cliff + cancel_delta;
+                let now = cancel_at + now_extra;
+                let l = leaf(amount, cliff, end, 1);
+                let with_cancel = get_vested_amount(&l, Some(cancel_at), now);
+                let at_cancel = vested(&l, cancel_at);
+                prop_assert_eq!(with_cancel, at_cancel);
+            }
+
+            /// Invariant: vested is 0 before cliff for all release types
+            #[test]
+            fn zero_before_cliff(
+                amount in 1u64..1_000_000u64,
+                cliff in 1i64..100_000i64,
+                release_type in 0u8..3u8,
+                now in 0i64..100_000i64,
+            ) {
+                prop_assume!(now < cliff);
+                let l = leaf(amount, cliff, cliff + 100, release_type);
+                let v = vested(&l, now);
+                prop_assert_eq!(v, 0, "vested {} > 0 before cliff for type {}", v, release_type);
+            }
+
+            /// Invariant: linear vesting at midpoint is approximately half
+            #[test]
+            fn linear_midpoint_approx_half(
+                amount in 100u64..1_000_000u64,
+                cliff in 1i64..100_000i64,
+                duration in 2i64..100_000i64,
+            ) {
+                let end = cliff + duration;
+                let mid = cliff + duration / 2;
+                let l = leaf(amount, cliff, end, 1);
+                let v = vested(&l, mid);
+                let half = amount / 2;
+                // Integer division rounding: bound is ceil(amount / duration)
+                let tolerance = (amount / duration as u64) + 1;
+                prop_assert!(
+                    (v as i128 - half as i128).unsigned_abs() <= tolerance as u128,
+                    "midpoint vested {} not ~half {} (amount={}, duration={})", v, half, amount, duration
+                );
+            }
+        }
+    }
 }

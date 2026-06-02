@@ -46,6 +46,9 @@ velthoryn/
 - Sealevel-attacks gap tests: `tests/sealevel-attacks-gap.spec.ts` via **solana-bankrun** (4 tests: duplicate accounts #6, PDA sharing #8, close-reinit #9)
 - LiteSVM PoC: `tests/vesting-litesvm.spec.ts` via **LiteSVM** (5 tests: boot, mint, time-travel, program loading, simulation)
 - Mollusk CU benchmark: `programs/vesting/tests/compute_units.rs` via **Mollusk** (1 test: CU consumption measurement)
+- Mollusk instruction tests: `programs/vesting/tests/instructions.rs` via **Mollusk** (14 tests: create_campaign_native happy + 3 errors, get_vested_amount 6 scenarios, pause/unpause 3 auth checks)
+- Mollusk CU benchmarks: `programs/vesting/tests/benchmarks.rs` via **Mollusk** (9 benchmarks: get_vested_amount 7 release types, create_campaign_native 2 configs)
+- proptest property tests: `programs/vesting/src/math/` via **proptest** (10 tests: schedule 6 invariants, merkle 4 invariants)
 
 See [`docs/STREAM_MODEL.md`](docs/STREAM_MODEL.md) (tutorial `Stream` PDA vs campaign model) and [`docs/ERROR_MAP.md`](docs/ERROR_MAP.md).
 

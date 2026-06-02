@@ -7,7 +7,9 @@
 - On-chain (Anchor): **127+ passing** across 15 files (`pnpm test:localnet`)
 - Web (Vitest): **553 passing**, 13 skipped (devnet integration; Postgres required)
 - Trident fuzz: smoke test in CI (`trident-tests/fuzz_vesting`)
-- Rust unit tests: **13** (math/merkle + math/schedule + mollusk CU smoke)
+- Rust unit tests: **23** (math/merkle + math/schedule + proptest + mollusk CU smoke)
+- Mollusk instruction tests: **14** (create_campaign_native, get_vested_amount, pause/unpause)
+- Mollusk CU benchmarks: **9** measurements across 2 test functions
 
 | Test File | Tests | Purpose |
 |-----------|-------|---------|
@@ -23,6 +25,8 @@
 | `tests/sealevel-attacks-gap.spec.ts` | 4 | Security gap tests from [coral-xyz/sealevel-attacks](https://github.com/coral-xyz/sealevel-attacks) analysis |
 | `tests/vesting-litesvm.spec.ts` | 5 | LiteSVM PoC — boot, mint, time-travel, program loading |
 | `programs/vesting/tests/compute_units.rs` | 1 | Mollusk CU benchmark smoke test |
+| `programs/vesting/tests/instructions.rs` | 14 | Mollusk instruction tests — create_campaign_native, get_vested_amount, pause/unpause |
+| `programs/vesting/tests/benchmarks.rs` | 9 | Mollusk CU benchmarks — get_vested_amount (7) + create_campaign_native (2) |
 
 ## Running Tests
 
@@ -121,19 +125,71 @@ Proof-of-concept using [LiteSVM](https://github.com/LiteSVM/litesvm) as an alter
 | Program .so loading | Loads `vesting.so` and verifies executable account |
 | Simulation | Confirms Clock sysvar state after warp |
 
+### proptest — Property-Based Tests (Rust)
+
+```bash
+cargo test --manifest-path programs/vesting/Cargo.toml --lib -- proptest
+# Expected: 10 passed
+```
+
+[proptest](https://crates.io/crates/proptest) generates arbitrary inputs to automatically find edge cases. Tests are in `src/math/schedule.rs` (6 tests) and `src/math/merkle.rs` (4 tests).
+
+| Test | Invariant Verified |
+|------|--------------------|
+| `vested_never_exceeds_amount` | vested ≤ amount for any (amount, cliff, end, now) |
+| `cliff_all_or_nothing` | Cliff returns exactly 0 or full amount |
+| `linear_monotonic` | Linear vesting never decreases over time |
+| `cancel_clamps_to_cancel_time` | Cancel freezes vesting at cancel timestamp |
+| `zero_before_cliff` | All release types return 0 before cliff |
+| `linear_midpoint_approx_half` | Midpoint ≈ half with integer rounding tolerance |
+| `tampered_proof_always_fails` | Any bit-flip in root breaks Merkle proof |
+| `single_leaf_root_equals_hash` | Leaf hash = root for 1-leaf tree |
+| `proof_len_for_powers_of_two` | max_proof_len = log₂(n) for powers of 2 |
+| `proof_len_bounded` | Never exceeds MAX_MERKLE_PROOF_LEN |
+
+### Mollusk Instruction Tests (Rust)
+
+```bash
+BPF_OUT_DIR=../../target/deploy cargo test --manifest-path programs/vesting/Cargo.toml --test instructions -- --show-output
+# Expected: 14 passed
+```
+
+Instruction-level tests using [Mollusk](https://github.com/anza-xyz/mollusk) to execute Anchor instructions directly against the SVM — no validator, no network. Tests cover `create_campaign_native` (happy path + 3 error cases), `get_vested_amount` (6 release-type scenarios), and `pause/unpause_campaign` (happy path + 3 authorization errors).
+
 ### Mollusk CU Benchmarks (Rust)
+
+```bash
+BPF_OUT_DIR=../../target/deploy cargo test --manifest-path programs/vesting/Cargo.toml --test benchmarks -- --show-output
+# Expected: 2 passed (9 benchmarks total)
+```
+
+[Mollusk](https://github.com/anza-xyz/mollusk) is a lightweight SVM test harness from Anza. It loads the compiled `.so` binary directly and executes instructions without AccountsDB/Bank overhead — the fastest possible unit test for Solana programs. Reports compute units consumed per instruction.
+
+| Benchmark | Compute Units |
+|-----------|---------------|
+| `get_vested_amount [cliff, before]` | 615 |
+| `get_vested_amount [cliff, after]` | 615 |
+| `get_vested_amount [linear, mid]` | 909 |
+| `get_vested_amount [linear, full]` | 614 |
+| `get_vested_amount [milestone, no flag]` | 624 |
+| `get_vested_amount [milestone, flag]` | 655 |
+| `get_vested_amount [cancelled]` | 916 |
+| `create_campaign_native [100 leaves]` | 9,378 |
+| `create_campaign_native [10k leaves]` | 9,372 |
+
+### Mollusk CU Smoke Test (Rust)
 
 ```bash
 BPF_OUT_DIR=target/deploy cargo test --manifest-path programs/vesting/Cargo.toml --test compute_units -- --show-output
 # Expected: 1 passed
 ```
 
-[Mollusk](https://github.com/anza-xyz/mollusk) is a lightweight SVM test harness from Anza. It loads the compiled `.so` binary directly and executes instructions without AccountsDB/Bank overhead — the fastest possible unit test for Solana programs. Reports compute units consumed per instruction.
+Baseline smoke test that verifies the program loads and reports CU consumption.
 
 ```bash
-# Full Rust test suite (unit + mollusk):
-BPF_OUT_DIR=target/deploy cargo test --manifest-path programs/vesting/Cargo.toml -- --show-output
-# Expected: 13 passed (11 existing math tests + 1 mollusk + 1 inline)
+# Full Rust test suite (unit + proptest + mollusk):
+BPF_OUT_DIR=../../target/deploy cargo test --manifest-path programs/vesting/Cargo.toml -- --show-output
+# Expected: 40 passed (23 lib + 14 instructions + 2 benchmarks + 1 compute_units)
 ```
 
 **Sealevel-attacks applicability:** 8 of 11 attack categories from `coral-xyz/sealevel-attacks` are already mitigated by Anchor's built-in safety features (Signer type, Account discriminator, init constraint, Program type, seeds+bump, Sysvar type, owner checks, type safety). The remaining 3 (#6 duplicate accounts, #8 PDA sharing, #9 closing accounts) are now explicitly proven safe by the gap tests above.
@@ -176,6 +232,7 @@ Tests that call `setClock` on the public RPC skip on devnet (see `skipIfClockNot
 | `solana-bankrun` + `anchor-bankrun` | TypeScript | Deterministic clock-dependent tests, embedded validator | Fast (~600ms per file) |
 | **LiteSVM** + `anchor-litesvm` | TypeScript | In-process VM, time-travel, arbitrary account states, simulation | Faster (~110ms per file) |
 | **Mollusk** | Rust only | CU benchmarking, per-instruction unit tests, no AccountsDB | Fastest |
+| **proptest** | Rust only | Property-based testing — generates arbitrary inputs to find edge cases | Instant |
 
 ### Writing Tests
 
