@@ -229,29 +229,32 @@ describe("week7 — coverage gaps: error codes + events", () => {
     before(async () => {
       // Subscribe to every event the program emits. The subscription lives for
       // the whole describe block so all events in the lifecycle are captured.
+      // addEventListener is async (returns Promise<number>) — MUST be awaited
+      // or the subscription isn't established before tests run.
       const subs: number[] = [];
-      const on = (name: string, mark: () => void) => {
+      const on = async (name: string, mark: () => void) => {
         try {
-          const id = program.addEventListener(name, () => mark());
+          const id = await program.addEventListener(name, () => mark());
           subs.push(id);
-        } catch {
+        } catch (e) {
           // provider doesn't expose log subscriptions in this env — covered by
           // the log-text fallback assertions inside the lifecycle test.
+          console.warn(`[week7-coverage-gaps] addEventListener("${name}") failed:`, (e as Error).message);
         }
       };
 
-      on("CampaignCreated",   () => { sawCampaignCreated = true; });
-      on("CampaignFunded",    () => { sawCampaignFunded = true; });
-      on("Claimed",           () => { sawClaimed = true; });
-      on("RootUpdated",       () => { sawRootUpdated = true; });
-      on("UnvestedWithdrawn", () => { sawUnvestedWithdrawn = true; });
-      on("CampaignPaused",    () => { sawCampaignPaused = true; });
-      on("CampaignUnpaused",  () => { sawCampaignUnpaused = true; });
-      on("ClaimRecordClosed", () => { sawClaimRecordClosed = true; });
-      on("MilestoneReleased", () => { sawMilestoneReleased = true; });
-      on("CampaignCancelled", () => { sawCampaignCancelled = true; });
-      on("StreamCancelled",   () => { sawStreamCancelled = true; });
-      on("InstantRefunded",   () => { sawInstantRefunded = true; });
+      await on("CampaignCreated",   () => { sawCampaignCreated = true; });
+      await on("CampaignFunded",    () => { sawCampaignFunded = true; });
+      await on("Claimed",           () => { sawClaimed = true; });
+      await on("RootUpdated",       () => { sawRootUpdated = true; });
+      await on("UnvestedWithdrawn", () => { sawUnvestedWithdrawn = true; });
+      await on("CampaignPaused",    () => { sawCampaignPaused = true; });
+      await on("CampaignUnpaused",  () => { sawCampaignUnpaused = true; });
+      await on("ClaimRecordClosed", () => { sawClaimRecordClosed = true; });
+      await on("MilestoneReleased", () => { sawMilestoneReleased = true; });
+      await on("CampaignCancelled", () => { sawCampaignCancelled = true; });
+      await on("StreamCancelled",   () => { sawStreamCancelled = true; });
+      await on("InstantRefunded",   () => { sawInstantRefunded = true; });
 
       listenerStop = async () => {
         for (const id of subs) {
