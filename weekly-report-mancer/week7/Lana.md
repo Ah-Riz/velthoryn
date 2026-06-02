@@ -2,7 +2,7 @@
 
 **Scope:** BE-DB-SC-Merkle (backend API, Postgres/indexer, Solana program, Merkle client). Frontend UI is out of scope unless noted as a dependency on Geral.
 
-**This week (chronological):** Week 7 test suites (integration, edge cases, security, coverage gaps) → devnet program upgrade + IDL sync → full feature validation (4 core features, 27/27 PASS) → bug fix (timeline `instant_refund_events` gap) → validation report + cost analysis → acceptance criteria closure (14/14 sub-items PASS).
+**This week (chronological):** Week 7 test suites (integration, edge cases, security, coverage gaps) → devnet program upgrade + IDL sync → full feature validation (4 core features, 27/27 PASS) → bug fix (timeline `instant_refund_events` gap) → validation report + cost analysis → acceptance criteria closure (14/14 sub-items PASS) → **sealevel-attacks analysis + LiteSVM/Mollusk integration**.
 
 ---
 
@@ -26,6 +26,11 @@
 | **Docs** | Feature validation report | `docs/WEEK7_FEATURE_VALIDATION_REPORT.md` — 27/27 checks PASS, 0 bugs remaining |
 | **Docs** | Coverage report | `docs/WEEK7_COVERAGE_REPORT.md` — 98.02% host-buildable code, 14/14 instructions exercised, >80% criterion met |
 | **CI** | GitHub Actions green | `ci.yml` + `lint.yml` + `web-ci.yml` all passing on `dev_lana` |
+| **SC** | Sealevel-attacks gap tests | `tests/sealevel-attacks-gap.spec.ts` — **4 tests**: duplicate mutable accounts (#6), cross-tree PDA sharing (#8), closed account reinit (#9) — all PASS via bankrun |
+| **SC** | LiteSVM PoC integrated | `tests/vesting-litesvm.spec.ts` — **5 tests**: boot, mint, time-travel, .so loading, simulation — all PASS (~110ms) |
+| **SC** | Mollusk CU benchmark | `programs/vesting/tests/compute_units.rs` — **1 test**: program loads and reports 1,738 CU baseline — PASS |
+| **Docs** | Sealevel-attacks analysis | Full 11-category applicability matrix: 8/11 already mitigated by Anchor; 3 now explicitly proven safe |
+| **Docs** | TESTING.md updated | Added LiteSVM, Mollusk, sealevel-attacks sections + testing frameworks comparison table |
 
 ### Acceptance criteria (14/14 PASS)
 
@@ -88,11 +93,15 @@
 | Instructions (total) | **18** (14 SPL + 3 native + `instant_refund_campaign`) |
 | Error variants | **41** |
 | Events | **12** (all emitted, all indexed) |
-| Week 7 SC test suites | **4** new (integration 21, edge-cases 8, security 29, coverage 7 = **65 tests**) |
+| Week 7 SC test suites | **7** new (integration 21, edge-cases 8, security 29, coverage 7, sealevel-attacks 4, litesvm 5, mollusk 1 = **75 tests**) |
+| Rust unit tests | **13** (math/merkle 5, math/schedule 6, mollusk 1, inline 1) |
+| Total SC tests | **127+** passing |
 | Timeline API tests | **9/9** PASS (was 7, +2 for instant_refunded) |
 | Feature validation checks | **27/27** PASS |
 | Acceptance criteria sub-items | **14/14** PASS |
 | Bugs found | **1** Low (fixed) |
+| Sealevel-attacks coverage | **11/11** categories analyzed (8 auto-mitigated by Anchor, 3 explicitly proven) |
+| Testing frameworks | **4** (test-validator, bankrun, LiteSVM, Mollusk) |
 | TODO/FIXME/HACK | **0** |
 | DB migrations cumulative | `0000`–`0008` (9 total) |
 | Merkle break-even | **N ≥ 2** recipients |
@@ -100,4 +109,4 @@
 | Devnet program | Upgraded, slot 466620187 |
 | Reports delivered | `WEEK7_FEATURE_VALIDATION_REPORT.md`, `WEEK7_COVERAGE_REPORT.md` |
 
-**Week 7 test growth:** 4 new on-chain suites (+65 tests), 2 new timeline tests (+2). Full feature validation across SC+BE+DB+Merkle with PASS evidence on every checklist item. All 14 acceptance criteria sub-items PASS.
+**Week 7 test growth:** 7 new on-chain suites (+75 tests), 2 new timeline tests (+2). Full feature validation across SC+BE+DB+Merkle with PASS evidence on every checklist item. All 14 acceptance criteria sub-items PASS. Sealevel-attacks analysis confirms all 11 categories are mitigated. Two new testing frameworks (LiteSVM, Mollusk) integrated for faster iteration and CU benchmarking.
