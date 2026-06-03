@@ -55,6 +55,20 @@ mod tests {
         }
     }
 
+    /// Variant that allows start_time < cliff_time.
+    fn leaf_with_start(amount: u64, start: i64, cliff: i64, end: i64, typ: u8) -> VestingLeaf {
+        VestingLeaf {
+            leaf_index: 0,
+            beneficiary: Pubkey::default(),
+            amount,
+            release_type: typ,
+            start_time: start,
+            cliff_time: cliff,
+            end_time: end,
+            milestone_idx: 0,
+        }
+    }
+
     #[test]
     fn cliff_before_after() {
         let l = leaf(1_000, 100, 200, 0);
@@ -88,7 +102,11 @@ mod tests {
     fn linear_no_overflow_at_max_amount() {
         let l = leaf(u64::MAX, 0, 1_000_000, 1);
         let half = vested(&l, 500_000);
-        assert!(half >= u64::MAX / 2 - 1);
+        // Exact expected: u64::MAX * 500_000 / 1_000_000 = u64::MAX / 2
+        // u128 math prevents overflow, so result should be exact
+        let expected = (u64::MAX as u128 * 500_000 / 1_000_000) as u64;
+        assert!(half >= u64::MAX / 2 - 1, "half {} too far from MAX/2 {}", half, u64::MAX / 2);
+        assert_eq!(half, expected, "u128 math should give exact result");
     }
 
     #[test]
@@ -216,6 +234,71 @@ mod tests {
                     (v as i128 - half as i128).unsigned_abs() <= tolerance as u128,
                     "midpoint vested {} not ~half {} (amount={}, duration={})", v, half, amount, duration
                 );
+            }
+
+            /// Invariant: start_time < cliff_time doesn't affect vesting
+            /// (start_time is ignored by the vested() function; only cliff/end matter)
+            #[test]
+            fn start_before_cliff_same_as_start_eq_cliff(
+                amount in 1u64..1_000_000u64,
+                start in 0i64..50_000i64,
+                cliff_delta in 1i64..50_000i64,
+                end_delta in 1i64..50_000i64,
+                now in 0i64..200_000i64,
+            ) {
+                let cliff = start + cliff_delta;
+                let end = cliff + end_delta;
+                let l_start_eq = leaf(amount, cliff, end, 1);
+                let l_start_before = leaf_with_start(amount, start, cliff, end, 1);
+                let v_eq = vested(&l_start_eq, now);
+                let v_before = vested(&l_start_before, now);
+                prop_assert_eq!(v_eq, v_before,
+                    "start<cliff ({}) should give same result as start=cliff ({}) at now={}",
+                    start, cliff, now);
+            }
+
+            /// Invariant: vested never exceeds amount even at u64::MAX amounts
+            #[test]
+            fn vested_never_exceeds_extreme_amount(
+                now in 0i64..2_000_000i64,
+            ) {
+                let amount = u64::MAX;
+                let l = leaf(amount, 0, 1_000_000, 1);
+                let v = vested(&l, now);
+                prop_assert!(v <= amount, "vested {} > u64::MAX at now={}", v, now);
+            }
+
+            /// Invariant: vested never exceeds amount for extreme cliff/end ranges
+            #[test]
+            fn vested_bounded_wide_range(
+                amount in 1u64..u64::MAX,
+                cliff in 0i64..i64::MAX / 2,
+                end_delta in 1i64..100_000i64,
+                now_offset in 0i64..200_000i64,
+            ) {
+                let end = cliff.saturating_add(end_delta);
+                let now = cliff.saturating_sub(50_000).saturating_add(now_offset);
+                let l = leaf(amount, cliff, end, 1);
+                let v = vested(&l, now);
+                prop_assert!(v <= amount, "vested {} > amount {}", v, amount);
+            }
+
+            /// Invariant: get_vested_amount with cancel never exceeds vested at cancel
+            #[test]
+            fn cancel_clamp_never_exceeds_uncancelled(
+                amount in 1u64..1_000_000u64,
+                cliff in 1i64..100_000i64,
+                end_delta in 1i64..100_000i64,
+                cancel_delta in 0i64..200_000i64,
+            ) {
+                let end = cliff + end_delta;
+                let cancel_at = cliff + cancel_delta;
+                let now = cancel_at + 100_000; // well past cancel
+                let l = leaf(amount, cliff, end, 1);
+                let with_cancel = get_vested_amount(&l, Some(cancel_at), now);
+                let at_cancel = vested(&l, cancel_at);
+                prop_assert!(with_cancel <= at_cancel,
+                    "cancel-clamped {} > vested at cancel time {}", with_cancel, at_cancel);
             }
         }
     }

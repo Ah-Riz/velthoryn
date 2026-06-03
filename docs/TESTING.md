@@ -7,9 +7,9 @@
 - On-chain (Anchor): **127+ passing** across 15 files (`pnpm test:localnet`)
 - Web (Vitest): **553 passing**, 13 skipped (devnet integration; Postgres required)
 - Trident fuzz: smoke test in CI (`trident-tests/fuzz_vesting`)
-- Rust unit tests: **23** (math/merkle + math/schedule + proptest + mollusk CU smoke)
-- Mollusk instruction tests: **14** (create_campaign_native, get_vested_amount, pause/unpause)
-- Mollusk CU benchmarks: **9** measurements across 2 test functions
+- Rust unit tests: **31** (math/merkle + math/schedule proptests + inline)
+- Mollusk instruction tests: **72 active** across 7 test files (18 ignored — Mollusk limitations)
+- Mollusk CU benchmarks: **2** measurements across 2 test functions
 
 | Test File | Tests | Purpose |
 |-----------|-------|---------|
@@ -24,9 +24,15 @@
 | `tests/golden_vector.spec.ts` | 1 | Cross-language hash verification |
 | `tests/sealevel-attacks-gap.spec.ts` | 4 | Security gap tests from [coral-xyz/sealevel-attacks](https://github.com/coral-xyz/sealevel-attacks) analysis |
 | `tests/vesting-litesvm.spec.ts` | 5 | LiteSVM PoC — boot, mint, time-travel, program loading |
-| `programs/vesting/tests/compute_units.rs` | 1 | Mollusk CU benchmark smoke test |
-| `programs/vesting/tests/instructions.rs` | 14 | Mollusk instruction tests — create_campaign_native, get_vested_amount, pause/unpause |
-| `programs/vesting/tests/benchmarks.rs` | 9 | Mollusk CU benchmarks — get_vested_amount (7) + create_campaign_native (2) |
+| `programs/vesting/tests/test_helpers.rs` | — | Shared Mollusk helpers — account builders, error constants, Merkle tree, ix data |
+| `programs/vesting/tests/instructions.rs` | 14 | Mollusk — create_campaign_native, get_vested_amount, pause/unpause |
+| `programs/vesting/tests/stream.rs` | 7 | Mollusk — create_stream_native (happy, cliff, cancellable, zero amount, errors) |
+| `programs/vesting/tests/admin.rs` | 18 (+6 ign.) | Mollusk — set_milestone, update_root, fund_campaign_native, cancel_campaign, instant_refund |
+| `programs/vesting/tests/cancel.rs` | 5 (+9 ign.) | Mollusk — cancel_campaign, cancel_stream (native SOL) |
+| `programs/vesting/tests/claim.rs` | 16 | Mollusk — claim (happy, partial, over-claim, wrong-proof, wrong-beneficiary, cancelled, paused, milestone) |
+| `programs/vesting/tests/cleanup.rs` | 2 (+3 ign.) | Mollusk — withdraw_unvested, close_claim_record |
+| `programs/vesting/tests/lifecycle.rs` | 8 | Mollusk — multi-instruction lifecycle sequences (create→pause→unpause, create→cancel→withdraw) |
+| `programs/vesting/tests/benchmarks.rs` | 2 | Mollusk CU benchmarks — get_vested_amount (7 scenarios) + create_campaign_native (2 configs) |
 
 ## Running Tests
 
@@ -129,10 +135,10 @@ Proof-of-concept using [LiteSVM](https://github.com/LiteSVM/litesvm) as an alter
 
 ```bash
 cargo test --manifest-path programs/vesting/Cargo.toml --lib -- proptest
-# Expected: 10 passed
+# Expected: 20 passed
 ```
 
-[proptest](https://crates.io/crates/proptest) generates arbitrary inputs to automatically find edge cases. Tests are in `src/math/schedule.rs` (6 tests) and `src/math/merkle.rs` (4 tests).
+[proptest](https://crates.io/crates/proptest) generates arbitrary inputs to automatically find edge cases. Tests are in `src/math/schedule.rs` (11 proptests + 5 unit tests) and `src/math/merkle.rs` (7 proptests + 7 unit tests).
 
 | Test | Invariant Verified |
 |------|--------------------|
@@ -142,54 +148,66 @@ cargo test --manifest-path programs/vesting/Cargo.toml --lib -- proptest
 | `cancel_clamps_to_cancel_time` | Cancel freezes vesting at cancel timestamp |
 | `zero_before_cliff` | All release types return 0 before cliff |
 | `linear_midpoint_approx_half` | Midpoint ≈ half with integer rounding tolerance |
-| `tampered_proof_always_fails` | Any bit-flip in root breaks Merkle proof |
+| `start_before_cliff_same_as_start_eq_cliff` | start_time < cliff_time doesn't affect vesting |
+| `vested_never_exceeds_extreme_amount` | vested ≤ amount even at u64::MAX |
+| `vested_bounded_wide_range` | vested bounded for extreme cliff/end ranges |
+| `cancel_clamp_never_exceeds_uncancelled` | get_vested_amount with cancel ≤ vested at cancel time |
+| `tampered_root_always_fails` | Any bit-flip in root breaks Merkle proof |
+| `tampered_proof_always_fails` | Any bit-flip in proof breaks verification |
 | `single_leaf_root_equals_hash` | Leaf hash = root for 1-leaf tree |
 | `proof_len_for_powers_of_two` | max_proof_len = log₂(n) for powers of 2 |
 | `proof_len_bounded` | Never exceeds MAX_MERKLE_PROOF_LEN |
+| `verify_non_power_of_two_tree` | Verification works for non-power-of-2 tree sizes |
+| `verify_large_tree` | Verification works for trees up to 64 leaves |
+| `sibling_tampering_detected` | Flipping sibling bits always fails |
 
 ### Mollusk Instruction Tests (Rust)
 
 ```bash
-BPF_OUT_DIR=../../target/deploy cargo test --manifest-path programs/vesting/Cargo.toml --test instructions -- --show-output
-# Expected: 14 passed
+# Run all Mollusk tests:
+BPF_OUT_DIR=../../target/deploy cargo test --manifest-path programs/vesting/Cargo.toml --test instructions --test stream --test admin --test cancel --test claim --test cleanup --test lifecycle -- --show-output
+# Expected: 72 passed, 18 ignored
+
+# Individual suites:
+BPF_OUT_DIR=../../target/deploy cargo test --manifest-path programs/vesting/Cargo.toml --test instructions -- --show-output  # 14
+BPF_OUT_DIR=../../target/deploy cargo test --manifest-path programs/vesting/Cargo.toml --test stream -- --show-output      # 7
+BPF_OUT_DIR=../../target/deploy cargo test --manifest-path programs/vesting/Cargo.toml --test admin -- --show-output       # 18 active + 6 ignored
+BPF_OUT_DIR=../../target/deploy cargo test --manifest-path programs/vesting/Cargo.toml --test cancel -- --show-output      # 5 active + 9 ignored
+BPF_OUT_DIR=../../target/deploy cargo test --manifest-path programs/vesting/Cargo.toml --test claim -- --show-output       # 16
+BPF_OUT_DIR=../../target/deploy cargo test --manifest-path programs/vesting/Cargo.toml --test cleanup -- --show-output     # 2 active + 3 ignored
+BPF_OUT_DIR=../../target/deploy cargo test --manifest-path programs/vesting/Cargo.toml --test lifecycle -- --show-output   # 8
 ```
 
-Instruction-level tests using [Mollusk](https://github.com/anza-xyz/mollusk) to execute Anchor instructions directly against the SVM — no validator, no network. Tests cover `create_campaign_native` (happy path + 3 error cases), `get_vested_amount` (6 release-type scenarios), and `pause/unpause_campaign` (happy path + 3 authorization errors).
+Instruction-level tests using [Mollusk](https://github.com/anza-xyz/mollusk) to execute Anchor instructions directly against the SVM — no validator, no network. Tests are organized by instruction domain across 7 test files with shared helpers in `test_helpers.rs` (938 lines). Covers 13/18 instruction handlers (72%); remaining 5 use `init_if_needed` or optional SPL accounts that Mollusk 0.13 cannot resolve.
+
+| Test File | Active | Ignored | Instructions Covered |
+|-----------|--------|---------|---------------------|
+| `instructions.rs` | 14 | 0 | create_campaign_native, get_vested_amount, pause/unpause |
+| `stream.rs` | 7 | 0 | create_stream_native |
+| `admin.rs` | 18 | 6 | set_milestone_released, update_root, fund_campaign_native, cancel_campaign, instant_refund |
+| `cancel.rs` | 5 | 9 | cancel_campaign, cancel_stream |
+| `claim.rs` | 16 | 0 | claim (SPL + native SOL) |
+| `cleanup.rs` | 2 | 3 | withdraw_unvested, close_claim_record |
+| `lifecycle.rs` | 8 | 0 | Multi-instruction state transitions |
 
 ### Mollusk CU Benchmarks (Rust)
 
 ```bash
 BPF_OUT_DIR=../../target/deploy cargo test --manifest-path programs/vesting/Cargo.toml --test benchmarks -- --show-output
-# Expected: 2 passed (9 benchmarks total)
+# Expected: 2 passed (9 benchmark scenarios total)
 ```
 
 [Mollusk](https://github.com/anza-xyz/mollusk) is a lightweight SVM test harness from Anza. It loads the compiled `.so` binary directly and executes instructions without AccountsDB/Bank overhead — the fastest possible unit test for Solana programs. Reports compute units consumed per instruction.
 
 | Benchmark | Compute Units |
 |-----------|---------------|
-| `get_vested_amount [cliff, before]` | 615 |
-| `get_vested_amount [cliff, after]` | 615 |
-| `get_vested_amount [linear, mid]` | 909 |
-| `get_vested_amount [linear, full]` | 614 |
-| `get_vested_amount [milestone, no flag]` | 624 |
-| `get_vested_amount [milestone, flag]` | 655 |
-| `get_vested_amount [cancelled]` | 916 |
-| `create_campaign_native [100 leaves]` | 9,378 |
-| `create_campaign_native [10k leaves]` | 9,372 |
-
-### Mollusk CU Smoke Test (Rust)
+| `get_vested_amount` — 7 release-type scenarios | 615–916 |
+| `create_campaign_native` — 2 leaf counts | 9,372–9,378 |
 
 ```bash
-BPF_OUT_DIR=target/deploy cargo test --manifest-path programs/vesting/Cargo.toml --test compute_units -- --show-output
-# Expected: 1 passed
-```
-
-Baseline smoke test that verifies the program loads and reports CU consumption.
-
-```bash
-# Full Rust test suite (unit + proptest + mollusk):
+# Full Rust test suite (unit + proptest + Mollusk):
 BPF_OUT_DIR=../../target/deploy cargo test --manifest-path programs/vesting/Cargo.toml -- --show-output
-# Expected: 40 passed (23 lib + 14 instructions + 2 benchmarks + 1 compute_units)
+# Expected: 103 passed, 18 ignored
 ```
 
 **Sealevel-attacks applicability:** 8 of 11 attack categories from `coral-xyz/sealevel-attacks` are already mitigated by Anchor's built-in safety features (Signer type, Account discriminator, init constraint, Program type, seeds+bump, Sysvar type, owner checks, type safety). The remaining 3 (#6 duplicate accounts, #8 PDA sharing, #9 closing accounts) are now explicitly proven safe by the gap tests above.

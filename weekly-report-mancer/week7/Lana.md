@@ -99,13 +99,16 @@
 | Error variants | **41** |
 | Events | **12** (all emitted, all indexed) |
 | Week 7 SC test suites | **10** new (integration 21, edge-cases 8, security 29, coverage 7, sealevel-attacks 4, litesvm 5, mollusk scaffold 1, mollusk instructions 14, mollusk benchmarks 9, proptest 10 = **108 tests**) |
-| Rust unit tests | **23** (math/merkle 5, math/schedule 6, proptest 10, mollusk scaffold 1, inline 1) |
-| Total SC tests | **127+** passing (TS integration) + **40** passing (Rust: proptest + Mollusk) |
+| Rust unit + proptest | **31** (math/merkle 14, math/schedule 16, inline 1) |
+| Mollusk instruction tests | **72 active** + **18 ignored** across 7 domain-specific files (instructions 14, stream 7, admin 18+6, cancel 5+9, claim 16, cleanup 2+3, lifecycle 8) |
+| Mollusk CU benchmarks | **2** tests (9 benchmark scenarios) |
+| Total SC tests | **127+** passing (TS integration) + **103** active passing (Rust: proptest + Mollusk) |
 | Timeline API tests | **9/9** PASS (was 7, +2 for instant_refunded) |
 | Feature validation checks | **27/27** PASS |
 | Acceptance criteria sub-items | **14/14** PASS |
 | Bugs found | **1** Low (fixed) |
 | Sealevel-attacks coverage | **11/11** categories analyzed (8 auto-mitigated by Anchor, 3 explicitly proven) |
+| Instruction coverage (Mollusk) | **13/18** handlers (72%), **29/41** error codes (71%) |
 | Testing frameworks | **5** (test-validator, bankrun, LiteSVM, Mollusk, proptest) |
 | TODO/FIXME/HACK | **0** |
 | DB migrations cumulative | `0000`–`0008` (9 total) |
@@ -114,4 +117,30 @@
 | Devnet program | Upgraded, slot 466620187 |
 | Reports delivered | `WEEK7_FEATURE_VALIDATION_REPORT.md`, `WEEK7_COVERAGE_REPORT.md`, `TESTING_TOOLS_REPORT.md`, `TESTING_TOOLS.md` |
 
-**Week 7 test growth:** 10 new on-chain/Rust suites (+108 tests), 2 new timeline tests (+2). Full feature validation across SC+BE+DB+Merkle with PASS evidence on every checklist item. All 14 acceptance criteria sub-items PASS. Sealevel-attacks analysis confirms all 11 categories are mitigated. Three new testing frameworks (LiteSVM, Mollusk, proptest) integrated for faster iteration, CU benchmarking, and property-based edge-case discovery.
+**Week 7 test growth:** 10 new on-chain/Rust suites (+108 tests), 2 new timeline tests (+2). Rust test suite refactored from 4 monolithic files to 8 domain-specific files with shared `test_helpers.rs` (938 lines). Proptest expanded from 10 → 20 property tests. Mollusk tests expanded from 14 → 72 active (+ 18 ignored). Full feature validation across SC+BE+DB+Merkle with PASS evidence on every checklist item. All 14 acceptance criteria sub-items PASS. Sealevel-attacks analysis confirms all 11 categories are mitigated. Five testing frameworks integrated.
+
+---
+
+## What's Next (Week 8+)
+
+### SC — Solana Program
+- [ ] **Upgrade Mollusk** — when 0.14+ supports `init_if_needed`, activate 18 ignored tests (cancel_stream 9, instant_refund 4, withdraw_unvested 3, fund_campaign_native 1)
+- [ ] **Coverage gap closure** — add Mollusk tests for remaining 5/18 handlers (`claim`/`withdraw` SPL path, `create_stream` SPL, `create_campaign` SPL, `fund_campaign` SPL) when Mollusk supports optional Token accounts
+- [ ] **Formal CU budget audit** — establish per-instruction CU budgets, document max CU for all 18 handlers, set `compute_budget` limits in production
+- [ ] **Mainnet readiness checklist** — rent exemption validation, account sizing audit, program authority transfer to multisig
+
+### BE — Backend API
+- [ ] **Sentry live DSN** — connect production error monitoring (currently scaffolding only)
+- [ ] **k6 load tests** — benchmark API routes under load (`/api/campaigns`, `/api/campaigns/prepare`, proof endpoint)
+- [ ] **Rate limiting** — add per-IP and per-wallet rate limiting on public endpoints
+- [ ] **API versioning deprecation policy** — document `X-API-Version` sunset timeline
+
+### FE — Frontend (Geral dependency)
+- [ ] **Native SOL create flows** — FE uses `*_native` instructions when mint = `NATIVE_SOL_MINT` (BE exposes fields + tx builders)
+- [ ] **Instant refund UI** — Cancel UI distinguishes instant vs grace refund (`instantRefundEligible` + `POST .../instant-refund`)
+- [ ] **Milestone management UI** — Creator milestone release toggle in campaign detail
+
+### Security & Ops
+- [ ] **External audit** — formal third-party Solana program audit before mainnet
+- [ ] **Mainnet deploy checklist** — upgrade authority to multisig, verify program buffer, final IDL verification
+- [ ] **Monitoring dashboard** — Grafana/PagerDuty for program + API health

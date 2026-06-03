@@ -131,46 +131,105 @@ mod tests {
         use proptest::prop_assert;
         use proptest::prop_assert_eq;
 
+        /// Build a tree from `n` leaves and return (root, Vec<(hash, proof, index)>)
+        fn build_tree(n: usize) -> ([u8; 32], Vec<([u8; 32], Vec<[u8; 32]>, u32)>) {
+            let leaves: Vec<VestingLeaf> = (0..n).map(|i| VestingLeaf {
+                leaf_index: i as u32,
+                beneficiary: Pubkey::new_unique(),
+                amount: 1_000 + i as u64,
+                release_type: 1,
+                start_time: 0,
+                cliff_time: 0,
+                end_time: 1_000,
+                milestone_idx: 0,
+            }).collect();
+            let hashes: Vec<[u8; 32]> = leaves.iter().map(leaf_hash).collect();
+
+            // Pad to next power of 2
+            let mut tree_size = 1;
+            while tree_size < n {
+                tree_size *= 2;
+            }
+            let padded: Vec<[u8; 32]> = {
+                let mut p = hashes.clone();
+                p.resize(tree_size, *p.last().unwrap());
+                p
+            };
+
+            // Build levels bottom-up
+            let mut levels: Vec<Vec<[u8; 32]>> = vec![padded.clone()];
+            let mut current = padded;
+            while current.len() > 1 {
+                let mut next = Vec::new();
+                for i in (0..current.len()).step_by(2) {
+                    next.push(node_hash(current[i], current[i + 1]));
+                }
+                levels.push(next.clone());
+                current = next;
+            }
+            let root = current[0];
+
+            // Compute proofs for each leaf
+            let entries: Vec<([u8; 32], Vec<[u8; 32]>, u32)> = (0..n).map(|leaf_idx| {
+                let mut proof = Vec::new();
+                let mut idx = leaf_idx;
+                for level in 0..levels.len() - 1 {
+                    let sibling = if idx % 2 == 0 {
+                        levels[level].get(idx + 1).copied().unwrap_or(levels[level][idx])
+                    } else {
+                        levels[level][idx - 1]
+                    };
+                    proof.push(sibling);
+                    idx /= 2;
+                }
+                (hashes[leaf_idx], proof, leaf_idx as u32)
+            }).collect();
+
+            (root, entries)
+        }
+
         proptest::proptest! {
-            /// Invariant: any tampered proof byte causes verification to fail
+            /// Invariant: any tampered root byte causes verification to fail
             #[test]
-            fn tampered_proof_always_fails(
+            fn tampered_root_always_fails(
                 leaf_idx in 0u32..16u32,
                 tamper_byte_idx in 0usize..32usize,
                 tamper_bit in 0u8..8u8,
             ) {
-                // Build a 4-leaf tree
-                let leaves: Vec<VestingLeaf> = (0..4).map(|i| VestingLeaf {
-                    leaf_index: i,
-                    beneficiary: Pubkey::new_unique(),
-                    amount: 1_000,
-                    release_type: 1,
-                    start_time: 0,
-                    cliff_time: 0,
-                    end_time: 1_000,
-                    milestone_idx: 0,
-                }).collect();
-                let hashes: Vec<[u8; 32]> = leaves.iter().map(leaf_hash).collect();
-                let l1_0 = node_hash(hashes[0], hashes[1]);
-                let l1_1 = node_hash(hashes[2], hashes[3]);
-                let root = node_hash(l1_0, l1_1);
-
+                let (root, entries) = build_tree(4);
                 let idx = (leaf_idx % 4) as usize;
-                let hash = hashes[idx];
-                let proof = match idx {
-                    0 => vec![hashes[1], l1_1],
-                    1 => vec![hashes[0], l1_1],
-                    2 => vec![hashes[3], l1_0],
-                    _ => vec![hashes[2], l1_0],
-                };
+                let (hash, proof, index) = &entries[idx];
 
                 // Verify valid first
-                prop_assert!(verify_merkle_proof(hash, &proof, idx as u32, root));
+                prop_assert!(verify_merkle_proof(*hash, proof, *index, root));
 
                 // Tamper the root
                 let mut bad_root = root;
                 bad_root[tamper_byte_idx] ^= 1 << tamper_bit;
-                prop_assert!(!verify_merkle_proof(hash, &proof, idx as u32, bad_root));
+                prop_assert!(!verify_merkle_proof(*hash, proof, *index, bad_root));
+            }
+
+            /// Invariant: any tampered proof sibling causes verification to fail
+            #[test]
+            fn tampered_sibling_always_fails(
+                leaf_idx in 0u32..4u32,
+                sibling_idx in 0usize..2usize, // 4-leaf tree has 2-level proof
+                tamper_byte_idx in 0usize..32usize,
+                tamper_bit in 0u8..8u8,
+            ) {
+                let (root, entries) = build_tree(4);
+                let idx = (leaf_idx % 4) as usize;
+                let (hash, proof, index) = &entries[idx];
+
+                prop_assert!(proof.len() > sibling_idx, "proof has {} siblings, tried index {}", proof.len(), sibling_idx);
+
+                // Verify valid first
+                prop_assert!(verify_merkle_proof(*hash, proof, *index, root));
+
+                // Tamper a sibling
+                let mut bad_proof = proof.clone();
+                bad_proof[sibling_idx][tamper_byte_idx] ^= 1 << tamper_bit;
+                prop_assert!(!verify_merkle_proof(*hash, &bad_proof, *index, root));
             }
 
             /// Invariant: single-leaf tree — leaf hash IS the root
@@ -202,6 +261,57 @@ mod tests {
             #[test]
             fn proof_len_bounded(leaf_count in 0u32..u32::MAX) {
                 prop_assert!(max_proof_len_for_leaf_count(leaf_count) <= MAX_MERKLE_PROOF_LEN);
+            }
+
+            /// Invariant: verification works for non-power-of-2 tree sizes
+            #[test]
+            fn verify_non_power_of_two_tree(leaf_count in 2u32..33u32, leaf_idx in 0u32..32u32) {
+                let n = leaf_count as usize;
+                let (root, entries) = build_tree(n);
+                let idx = (leaf_idx as usize) % n;
+                let (hash, proof, index) = &entries[idx];
+
+                // Verify the correct leaf
+                prop_assert!(verify_merkle_proof(*hash, proof, *index, root),
+                    "valid proof failed for leaf {} in {}-leaf tree", idx, n);
+
+                // Verify a wrong leaf fails
+                let wrong_idx = ((idx + 1) % n) as u32;
+                let (wrong_hash, _, _) = &entries[wrong_idx as usize];
+                prop_assert!(!verify_merkle_proof(*wrong_hash, proof, *index, root),
+                    "wrong leaf should fail verification in {}-leaf tree", n);
+            }
+
+            /// Invariant: wrong leaf index fails verification
+            #[test]
+            fn wrong_index_fails(leaf_count in 2u32..17u32, idx_delta in 1u32..16u32) {
+                let n = leaf_count as usize;
+                let (root, entries) = build_tree(n);
+                let idx = 0usize;
+                let (hash, proof, _index) = &entries[idx];
+
+                let wrong_index = (idx_delta as usize) % n;
+                if wrong_index != idx {
+                    prop_assert!(!verify_merkle_proof(*hash, proof, wrong_index as u32, root),
+                        "wrong index should fail: hash[0] with index {} in {}-leaf tree", wrong_index, n);
+                }
+            }
+
+            /// Invariant: larger trees (16, 32, 64 leaves) verify correctly
+            #[test]
+            fn verify_large_tree(exp in 4u32..7u32, leaf_idx in 0u32..63u32) {
+                let n = 2u32.pow(exp) as usize;
+                let (root, entries) = build_tree(n);
+                let idx = (leaf_idx as usize) % n;
+                let (hash, proof, index) = &entries[idx];
+
+                prop_assert!(verify_merkle_proof(*hash, proof, *index, root),
+                    "valid proof failed for leaf {} in {}-leaf tree", idx, n);
+
+                // Proof length should equal exp
+                prop_assert_eq!(proof.len(), exp as usize,
+                    "expected proof len {} for 2^{}={} leaves, got {}",
+                    exp, exp, n, proof.len());
             }
         }
     }

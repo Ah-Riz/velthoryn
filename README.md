@@ -45,10 +45,9 @@ velthoryn/
 - Clock-dependent cases: `tests/vesting.clock.spec.ts` via **solana-bankrun** (T17–T20, T25, T47, T55–T64, EXPLOIT 4)
 - Sealevel-attacks gap tests: `tests/sealevel-attacks-gap.spec.ts` via **solana-bankrun** (4 tests: duplicate accounts #6, PDA sharing #8, close-reinit #9)
 - LiteSVM PoC: `tests/vesting-litesvm.spec.ts` via **LiteSVM** (5 tests: boot, mint, time-travel, program loading, simulation)
-- Mollusk CU benchmark: `programs/vesting/tests/compute_units.rs` via **Mollusk** (1 test: CU consumption measurement)
-- Mollusk instruction tests: `programs/vesting/tests/instructions.rs` via **Mollusk** (14 tests: create_campaign_native happy + 3 errors, get_vested_amount 6 scenarios, pause/unpause 3 auth checks)
-- Mollusk CU benchmarks: `programs/vesting/tests/benchmarks.rs` via **Mollusk** (9 benchmarks: get_vested_amount 7 release types, create_campaign_native 2 configs)
-- proptest property tests: `programs/vesting/src/math/` via **proptest** (10 tests: schedule 6 invariants, merkle 4 invariants)
+- Mollusk instruction tests: 7 domain-specific test files via **Mollusk** (72 active + 18 ignored): `instructions.rs` (14), `stream.rs` (7), `admin.rs` (18+6), `cancel.rs` (5+9), `claim.rs` (16), `cleanup.rs` (2+3), `lifecycle.rs` (8)
+- Mollusk CU benchmarks: `programs/vesting/tests/benchmarks.rs` via **Mollusk** (2 tests: get_vested_amount 7 scenarios, create_campaign_native 2 configs)
+- proptest property tests: `programs/vesting/src/math/` via **proptest** (20 tests: schedule 11 invariants, merkle 7 invariants + 10 unit tests)
 
 See [`docs/STREAM_MODEL.md`](docs/STREAM_MODEL.md) (tutorial `Stream` PDA vs campaign model) and [`docs/ERROR_MAP.md`](docs/ERROR_MAP.md).
 
@@ -117,7 +116,8 @@ Clock-dependent tests (11) use `solana-bankrun` inside the full suite; they are 
 
 For Rust-level CU benchmarks via Mollusk:
 ```bash
-BPF_OUT_DIR=target/deploy cargo test --manifest-path programs/vesting/Cargo.toml --test compute_units -- --show-output
+BPF_OUT_DIR=target/deploy cargo test --manifest-path programs/vesting/Cargo.toml -- --show-output
+# Expected: 103 passed, 18 ignored
 ```
 
 ## Frontend (apps/web)
