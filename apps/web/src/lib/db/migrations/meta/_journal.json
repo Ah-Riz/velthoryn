@@ -50,6 +50,20 @@
       "when": 1778500004000,
       "tag": "0007_instant_refund_events",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1778500005000,
+      "tag": "0008_instant_refund_rls",
+      "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1778500006000,
+      "tag": "0009_enable_event_rls",
+      "breakpoints": true
     }
   ]
 }
