@@ -2,11 +2,14 @@
 
 ## Test Suite Overview
 
-**~680+ tests total** — green on local CI reproduction (May 2026).
+**~695+ tests total** — green on local CI reproduction (June 2026).
 
-- On-chain (Anchor): **118 passing**, 2 pending across 10+ files (`pnpm test:localnet`)
+- On-chain (Anchor): **127+ passing** across 15 files (`pnpm test:localnet`)
 - Web (Vitest): **553 passing**, 13 skipped (devnet integration; Postgres required)
 - Trident fuzz: smoke test in CI (`trident-tests/fuzz_vesting`)
+- Rust unit tests: **31** (math/merkle + math/schedule proptests + inline)
+- Mollusk instruction tests: **72 active** across 7 test files (18 ignored — Mollusk limitations)
+- Mollusk CU benchmarks: **2** measurements across 2 test functions
 
 | Test File | Tests | Purpose |
 |-----------|-------|---------|
@@ -19,6 +22,17 @@
 | `tests/vesting-native-sol.spec.ts` | 12 | Native SOL vesting lifecycle tests (create, withdraw, claim, cancel, fund, withdraw_unvested + error guards) |
 | `tests/security.spec.ts` | 11 | Security exploit tests (EXPLOIT 1–11) |
 | `tests/golden_vector.spec.ts` | 1 | Cross-language hash verification |
+| `tests/sealevel-attacks-gap.spec.ts` | 4 | Security gap tests from [coral-xyz/sealevel-attacks](https://github.com/coral-xyz/sealevel-attacks) analysis |
+| `tests/vesting-litesvm.spec.ts` | 5 | LiteSVM PoC — boot, mint, time-travel, program loading |
+| `programs/vesting/tests/test_helpers.rs` | — | Shared Mollusk helpers — account builders, error constants, Merkle tree, ix data |
+| `programs/vesting/tests/instructions.rs` | 14 | Mollusk — create_campaign_native, get_vested_amount, pause/unpause |
+| `programs/vesting/tests/stream.rs` | 7 | Mollusk — create_stream_native (happy, cliff, cancellable, zero amount, errors) |
+| `programs/vesting/tests/admin.rs` | 18 (+6 ign.) | Mollusk — set_milestone, update_root, fund_campaign_native, cancel_campaign, instant_refund |
+| `programs/vesting/tests/cancel.rs` | 5 (+9 ign.) | Mollusk — cancel_campaign, cancel_stream (native SOL) |
+| `programs/vesting/tests/claim.rs` | 16 | Mollusk — claim (happy, partial, over-claim, wrong-proof, wrong-beneficiary, cancelled, paused, milestone) |
+| `programs/vesting/tests/cleanup.rs` | 2 (+3 ign.) | Mollusk — withdraw_unvested, close_claim_record |
+| `programs/vesting/tests/lifecycle.rs` | 8 | Mollusk — multi-instruction lifecycle sequences (create→pause→unpause, create→cancel→withdraw) |
+| `programs/vesting/tests/benchmarks.rs` | 2 | Mollusk CU benchmarks — get_vested_amount (7 scenarios) + create_campaign_native (2 configs) |
 
 ## Running Tests
 
@@ -84,6 +98,120 @@ Uses `solana-bankrun` for deterministic testing. No external validator needed. T
 | cancel by non-creator fails | `Unauthorized` authority guard |
 | fund beyond total_supply fails | `OverFunded` guard |
 
+### Sealevel-Attacks Gap Tests (bankrun)
+
+```bash
+ANCHOR_TEST_GLOB='tests/sealevel-attacks-gap.spec.ts' anchor test --skip-build
+# Expected: 4/4 PASS (~400ms)
+```
+
+Security tests inspired by [coral-xyz/sealevel-attacks](https://github.com/coral-xyz/sealevel-attacks), covering attack categories that are mitigated by Anchor but had no explicit proof:
+
+| Test | Attack Category (sealevel-attacks) | What it proves |
+|------|-------------------------------------|----------------|
+| SA-1a | #6 Duplicate Mutable Accounts | `cancel_stream` rejects same ATA for beneficiary + creator |
+| SA-1b | #6 Duplicate Mutable Accounts | `cancel_stream` rejects swapped ATAs (creator ATA in beneficiary slot) |
+| SA-2 | #8 PDA Sharing | Cross-tree VaultAuthority misuse blocked by `has_one` constraint |
+| SA-3 | #9 Closing Accounts | Closed `ClaimRecord` cannot be reinitialized (Anchor discriminator guard) |
+
+### LiteSVM Tests
+
+```bash
+ANCHOR_TEST_GLOB='tests/vesting-litesvm.spec.ts' anchor test --skip-build
+# Expected: 5/5 PASS (~110ms)
+```
+
+Proof-of-concept using [LiteSVM](https://github.com/LiteSVM/litesvm) as an alternative to `solana-bankrun`. LiteSVM provides an in-process Solana VM with faster execution, reliable clock time-travel (`setClock`), arbitrary account state injection (`setAccount`), and transaction simulation without committing state. Uses `litesvm@0.8.0` + `anchor-litesvm@0.2.1`.
+
+| Test | What it verifies |
+|------|-----------------|
+| Boot + airdrop | LiteSVM boots and funds accounts with SOL |
+| SPL mint creation | Token mint via raw transaction construction |
+| Clock time-travel | `svm.setClock()` warps the Clock sysvar |
+| Program .so loading | Loads `vesting.so` and verifies executable account |
+| Simulation | Confirms Clock sysvar state after warp |
+
+### proptest — Property-Based Tests (Rust)
+
+```bash
+cargo test --manifest-path programs/vesting/Cargo.toml --lib -- proptest
+# Expected: 20 passed
+```
+
+[proptest](https://crates.io/crates/proptest) generates arbitrary inputs to automatically find edge cases. Tests are in `src/math/schedule.rs` (11 proptests + 5 unit tests) and `src/math/merkle.rs` (7 proptests + 7 unit tests).
+
+| Test | Invariant Verified |
+|------|--------------------|
+| `vested_never_exceeds_amount` | vested ≤ amount for any (amount, cliff, end, now) |
+| `cliff_all_or_nothing` | Cliff returns exactly 0 or full amount |
+| `linear_monotonic` | Linear vesting never decreases over time |
+| `cancel_clamps_to_cancel_time` | Cancel freezes vesting at cancel timestamp |
+| `zero_before_cliff` | All release types return 0 before cliff |
+| `linear_midpoint_approx_half` | Midpoint ≈ half with integer rounding tolerance |
+| `start_before_cliff_same_as_start_eq_cliff` | start_time < cliff_time doesn't affect vesting |
+| `vested_never_exceeds_extreme_amount` | vested ≤ amount even at u64::MAX |
+| `vested_bounded_wide_range` | vested bounded for extreme cliff/end ranges |
+| `cancel_clamp_never_exceeds_uncancelled` | get_vested_amount with cancel ≤ vested at cancel time |
+| `tampered_root_always_fails` | Any bit-flip in root breaks Merkle proof |
+| `tampered_proof_always_fails` | Any bit-flip in proof breaks verification |
+| `single_leaf_root_equals_hash` | Leaf hash = root for 1-leaf tree |
+| `proof_len_for_powers_of_two` | max_proof_len = log₂(n) for powers of 2 |
+| `proof_len_bounded` | Never exceeds MAX_MERKLE_PROOF_LEN |
+| `verify_non_power_of_two_tree` | Verification works for non-power-of-2 tree sizes |
+| `verify_large_tree` | Verification works for trees up to 64 leaves |
+| `sibling_tampering_detected` | Flipping sibling bits always fails |
+
+### Mollusk Instruction Tests (Rust)
+
+```bash
+# Run all Mollusk tests:
+BPF_OUT_DIR=../../target/deploy cargo test --manifest-path programs/vesting/Cargo.toml --test instructions --test stream --test admin --test cancel --test claim --test cleanup --test lifecycle -- --show-output
+# Expected: 72 passed, 18 ignored
+
+# Individual suites:
+BPF_OUT_DIR=../../target/deploy cargo test --manifest-path programs/vesting/Cargo.toml --test instructions -- --show-output  # 14
+BPF_OUT_DIR=../../target/deploy cargo test --manifest-path programs/vesting/Cargo.toml --test stream -- --show-output      # 7
+BPF_OUT_DIR=../../target/deploy cargo test --manifest-path programs/vesting/Cargo.toml --test admin -- --show-output       # 18 active + 6 ignored
+BPF_OUT_DIR=../../target/deploy cargo test --manifest-path programs/vesting/Cargo.toml --test cancel -- --show-output      # 5 active + 9 ignored
+BPF_OUT_DIR=../../target/deploy cargo test --manifest-path programs/vesting/Cargo.toml --test claim -- --show-output       # 16
+BPF_OUT_DIR=../../target/deploy cargo test --manifest-path programs/vesting/Cargo.toml --test cleanup -- --show-output     # 2 active + 3 ignored
+BPF_OUT_DIR=../../target/deploy cargo test --manifest-path programs/vesting/Cargo.toml --test lifecycle -- --show-output   # 8
+```
+
+Instruction-level tests using [Mollusk](https://github.com/anza-xyz/mollusk) to execute Anchor instructions directly against the SVM — no validator, no network. Tests are organized by instruction domain across 7 test files with shared helpers in `test_helpers.rs` (938 lines). Covers 13/18 instruction handlers (72%); remaining 5 use `init_if_needed` or optional SPL accounts that Mollusk 0.13 cannot resolve.
+
+| Test File | Active | Ignored | Instructions Covered |
+|-----------|--------|---------|---------------------|
+| `instructions.rs` | 14 | 0 | create_campaign_native, get_vested_amount, pause/unpause |
+| `stream.rs` | 7 | 0 | create_stream_native |
+| `admin.rs` | 18 | 6 | set_milestone_released, update_root, fund_campaign_native, cancel_campaign, instant_refund |
+| `cancel.rs` | 5 | 9 | cancel_campaign, cancel_stream |
+| `claim.rs` | 16 | 0 | claim (SPL + native SOL) |
+| `cleanup.rs` | 2 | 3 | withdraw_unvested, close_claim_record |
+| `lifecycle.rs` | 8 | 0 | Multi-instruction state transitions |
+
+### Mollusk CU Benchmarks (Rust)
+
+```bash
+BPF_OUT_DIR=../../target/deploy cargo test --manifest-path programs/vesting/Cargo.toml --test benchmarks -- --show-output
+# Expected: 2 passed (9 benchmark scenarios total)
+```
+
+[Mollusk](https://github.com/anza-xyz/mollusk) is a lightweight SVM test harness from Anza. It loads the compiled `.so` binary directly and executes instructions without AccountsDB/Bank overhead — the fastest possible unit test for Solana programs. Reports compute units consumed per instruction.
+
+| Benchmark | Compute Units |
+|-----------|---------------|
+| `get_vested_amount` — 7 release-type scenarios | 615–916 |
+| `create_campaign_native` — 2 leaf counts | 9,372–9,378 |
+
+```bash
+# Full Rust test suite (unit + proptest + Mollusk):
+BPF_OUT_DIR=../../target/deploy cargo test --manifest-path programs/vesting/Cargo.toml -- --show-output
+# Expected: 103 passed, 18 ignored
+```
+
+**Sealevel-attacks applicability:** 8 of 11 attack categories from `coral-xyz/sealevel-attacks` are already mitigated by Anchor's built-in safety features (Signer type, Account discriminator, init constraint, Program type, seeds+bump, Sysvar type, owner checks, type safety). The remaining 3 (#6 duplicate accounts, #8 PDA sharing, #9 closing accounts) are now explicitly proven safe by the gap tests above.
+
 ### Devnet
 
 Program must be deployed at `G6iaigUdi2btFwUc2N65twfxwA8Ew5uKKhKJ5RJa8wvu`. Wallet needs devnet SOL (`solana airdrop 2 --url devnet`).
@@ -113,6 +241,16 @@ Tests that call `setClock` on the public RPC skip on devnet (see `skipIfClockNot
 | `helpers.ts` | `createAndFundCampaign()`, `issueClaim()`, `idlLeaf()`, `idlProof()`, `expectAnchorError()`, `validateClockAdvance()` |
 | `bankrun.ts` | `startTest()`, `warpClock()`, `bankrunNow()`, PDA helpers (bankrun variant) |
 | `time.ts` | `validatorNow()`, `createTimeHelpers()` |
+
+### Testing Frameworks
+
+| Framework | Language | Use case | Speed |
+|-----------|----------|----------|-------|
+| `solana-test-validator` + `anchor test` | TypeScript | Full integration tests, closest to mainnet | Slowest (~4m full suite) |
+| `solana-bankrun` + `anchor-bankrun` | TypeScript | Deterministic clock-dependent tests, embedded validator | Fast (~600ms per file) |
+| **LiteSVM** + `anchor-litesvm` | TypeScript | In-process VM, time-travel, arbitrary account states, simulation | Faster (~110ms per file) |
+| **Mollusk** | Rust only | CU benchmarking, per-instruction unit tests, no AccountsDB | Fastest |
+| **proptest** | Rust only | Property-based testing — generates arbitrary inputs to find edge cases | Instant |
 
 ### Writing Tests
 
