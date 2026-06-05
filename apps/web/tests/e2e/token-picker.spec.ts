@@ -143,10 +143,14 @@ test.describe("Token picker", () => {
   test("custom mint address search shows loading state", async ({ page }) => {
     const pageErrors = collectRelevantPageErrors(page);
 
-    // Intercept the Solana RPC call made by useTokenMetadata and delay it so the
-    // loading indicator is visible before the response settles.
-    await page.route("**/helius-rpc.com/**", async (route) => {
-      const body = route.request().postDataJSON() as { id: number | string };
+    // Intercept any Solana RPC getAccountInfo call regardless of endpoint URL
+    // (CI uses api.devnet.solana.com, local dev may use helius or other)
+    await page.route("**", async (route) => {
+      const req = route.request();
+      if (req.method() !== "POST") return route.continue();
+      let body: { id?: number | string; method?: string } | null = null;
+      try { body = req.postDataJSON(); } catch { return route.continue(); }
+      if (body?.method !== "getAccountInfo") return route.continue();
       // Delay long enough for the loading state to be asserted
       await new Promise((resolve) => setTimeout(resolve, 3000));
       await route.fulfill({ json: rpcNullResponse(body?.id ?? 1), status: 200 });
@@ -186,9 +190,13 @@ test.describe("Token picker", () => {
   test("custom mint resolves to token when RPC returns valid SPL mint", async ({ page }) => {
     const pageErrors = collectRelevantPageErrors(page);
 
-    // Intercept the Solana RPC call and return a valid SPL mint account with 9 decimals
-    await page.route("**/helius-rpc.com/**", async (route) => {
-      const body = route.request().postDataJSON() as { id: number | string };
+    // Intercept any Solana RPC getAccountInfo call regardless of endpoint URL
+    await page.route("**", async (route) => {
+      const req = route.request();
+      if (req.method() !== "POST") return route.continue();
+      let body: { id?: number | string; method?: string } | null = null;
+      try { body = req.postDataJSON(); } catch { return route.continue(); }
+      if (body?.method !== "getAccountInfo") return route.continue();
       await route.fulfill({ json: rpcSplMintResponse(body?.id ?? 1, 9), status: 200 });
     });
 

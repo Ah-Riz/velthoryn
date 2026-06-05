@@ -48,8 +48,8 @@ test.describe("WrapSolModal — content", () => {
     await enableE2eWallet(page);
     await openWrapModal(page);
 
-    await expect(page.getByText(/sol balance/i)).toBeVisible();
-    await expect(page.getByText(/wsol balance/i)).toBeVisible();
+    await expect(page.getByText('SOL Balance', { exact: true })).toBeVisible();
+    await expect(page.getByText('wSOL Balance', { exact: true })).toBeVisible();
     expect(pageErrors).toEqual([]);
   });
 
@@ -165,7 +165,9 @@ test.describe("WrapSolModal — Max button", () => {
     await enableE2eWallet(page);
     await openWrapModal(page);
 
-    await expect(page.getByRole("button", { name: /max/i })).toBeVisible();
+    // Scope to WrapSolModal container (z-[60]) to avoid matching the form's Max button underneath
+    const wrapModal = page.locator('div[class*="z-[60]"]');
+    await expect(wrapModal.getByRole("button", { name: /max/i })).toBeVisible();
     expect(pageErrors).toEqual([]);
   });
 });
