@@ -18,7 +18,7 @@ import {
   indexCampaign,
   saveStreamScheduleLocal,
 } from "@/lib/stream/persist";
-import { createAuthHeader } from "@/lib/api/client-auth";
+
 import { buildWrapSolInstructions, isNativeSol, solToLamports } from "@/lib/sol/auto-wrap";
 
 export interface CreateStreamParams {
@@ -45,7 +45,7 @@ export interface CreateStreamResult {
 
 export function useCreateStream() {
   const program = useVestingProgram();
-  const { publicKey, sendTransaction, signMessage } = useWallet();
+  const { publicKey, sendTransaction } = useWallet();
   const { connection } = useConnection();
 
   const createStream = useCallback(
@@ -163,10 +163,6 @@ export function useCreateStream() {
       let indexWarning: string | null = null;
 
       try {
-        const authorization = signMessage
-          ? await createAuthHeader({ publicKey, signMessage })
-          : undefined;
-
         await indexCampaign(
           buildCreateStreamIndexPayload({
             treeAddress,
@@ -184,7 +180,6 @@ export function useCreateStream() {
             cancelAuthority: params.cancellable ? publicKey.toBase58() : null,
             pauseAuthority: publicKey.toBase58(),
           }),
-          authorization ? { authorization } : undefined,
         );
       } catch (error) {
         indexWarning =

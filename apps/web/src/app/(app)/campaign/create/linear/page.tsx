@@ -53,6 +53,10 @@ function newStream(): StreamEntry {
   return { id: crypto.randomUUID(), recipient: "", amount: "", startTime: "", cliffTime: "", endTime: "" };
 }
 
+function waitForLoadingPaint() {
+  return new Promise<void>((resolve) => setTimeout(resolve, 250));
+}
+
 export default function LinearCreatePage() {
   const { publicKey } = useWallet();
   const { createStream, formatVestingError: formatStreamError } = useCreateStream();
@@ -117,12 +121,16 @@ export default function LinearCreatePage() {
     setMintDecimals(decimals);
     setUseAutoWrap(autoWrap ?? false);
     if (mode === "bulk" && csvText.trim()) {
-      const result = parseBulkCsv(csvText, decimals, 1);
-      setCsvResult(result);
-      if (result.issues.length === 0 && result.rows.length > 0) {
-        setTxState({ type: "bulk-ready", prepared: prepareBulkCampaign(result.rows) });
+      if (csvResult?.issues.length === 0 && csvResult.rows.length > 0) {
+        setTxState({ type: "bulk-ready", prepared: prepareBulkCampaign(csvResult.rows) });
       } else {
-        setTxState({ type: "idle" });
+        const result = parseBulkCsv(csvText, decimals, 1);
+        setCsvResult(result);
+        if (result.issues.length === 0 && result.rows.length > 0) {
+          setTxState({ type: "bulk-ready", prepared: prepareBulkCampaign(result.rows) });
+        } else {
+          setTxState({ type: "idle" });
+        }
       }
     }
   }
@@ -194,6 +202,7 @@ export default function LinearCreatePage() {
 
     if (streams.length > 1) {
       setTxState({ type: "loading", label: `Creating campaign for ${streams.length} recipients...` });
+      await waitForLoadingPaint();
       try {
         const prepared = prepareBulkCampaign(buildManualCampaignRows());
         const created = await createCampaign({
@@ -242,6 +251,7 @@ export default function LinearCreatePage() {
     }
 
     setTxState({ type: "loading", label: `Creating ${streams.length} linear stream(s)...` });
+    await waitForLoadingPaint();
     const results: CreateStreamResult[] = [];
 
     try {
@@ -445,7 +455,7 @@ export default function LinearCreatePage() {
           </div>
 
           {/* Manual Mode: Stream Cards */}
-          {mode === "single" && mintAddress && (
+          {mode === "single" && (
             <>
               {streams.map((stream, i) => (
                 <div key={stream.id} className={`${CARD} space-y-4 p-5`}>
@@ -519,20 +529,6 @@ export default function LinearCreatePage() {
                     hint="Defaults to now if empty"
                   />
 
-                  {/* Cliff Time */}
-                  <Field
-                    label="Cliff Time (optional)"
-                    input={
-                      <input
-                        type="datetime-local"
-                        value={stream.cliffTime}
-                        onChange={(e) => updateStream(stream.id, "cliffTime", e.target.value)}
-                        className={INPUT}
-                      />
-                    }
-                    hint="No tokens vest before this date. Defaults to start time if empty."
-                  />
-
                   {/* End Time */}
                   <Field
                     label="End Time (Full Unlock)"
@@ -558,6 +554,20 @@ export default function LinearCreatePage() {
                     }
                     error={formErrors[`end_${i}`]}
                   />
+
+                  {/* Cliff Time */}
+                  <Field
+                    label="Cliff Time (optional)"
+                    input={
+                      <input
+                        type="datetime-local"
+                        value={stream.cliffTime}
+                        onChange={(e) => updateStream(stream.id, "cliffTime", e.target.value)}
+                        className={INPUT}
+                      />
+                    }
+                    hint="No tokens vest before this date. Defaults to start time if empty."
+                  />
                 </div>
               ))}
 
@@ -573,7 +583,7 @@ export default function LinearCreatePage() {
           )}
 
           {/* CSV Mode */}
-          {mode === "bulk" && mintAddress && (
+          {mode === "bulk" && (
             <BulkCsvSection
               mintAddress={mintAddress}
               onMintAddressChange={(v) => setMintAddress(v)}

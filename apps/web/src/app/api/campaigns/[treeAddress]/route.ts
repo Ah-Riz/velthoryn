@@ -150,6 +150,8 @@ async function getCampaignByAddressHandler(
     totalSupply: campaign.totalSupply,
     totalClaimed: campaign.totalClaimed,
     cancellable: campaign.cancellable,
+    cancelAuthority: campaign.cancelAuthority,
+    pauseAuthority: campaign.pauseAuthority,
     paused: campaign.paused,
     cancelledAt: campaign.cancelledAt,
     minCliffTime: campaign.minCliffTime,

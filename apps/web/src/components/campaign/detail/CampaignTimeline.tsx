@@ -51,6 +51,7 @@ const EVENT_CONFIG: Record<
   withdrawn: { icon: "↑", color: "text-amber-400", label: "Unvested Withdrawn" },
   milestone_released: { icon: "◆", color: "text-purple-400", label: "Milestone Released" },
   stream_cancelled: { icon: "⚡", color: "text-orange-400", label: "Stream Settled" },
+  instant_refunded: { icon: "↩", color: "text-rose-400", label: "Instant Refund" },
 };
 
 function eventDescription(event: TimelineEvent, decimals: number | null): string {
@@ -85,6 +86,11 @@ function eventDescription(event: TimelineEvent, decimals: number | null): string
       const toBeneficiary = data.amountToBeneficiary as string | undefined;
       const toCreator = data.amountToCreator as string | undefined;
       return `Stream settled${toBeneficiary ? ` — ${formatAmount(toBeneficiary, decimals)} to recipient` : ""}${toCreator ? `, ${formatAmount(toCreator, decimals)} to creator` : ""}`;
+    }
+    case "instant_refunded": {
+      const refundedTo = data.refundedTo as string | undefined;
+      const amount = data.amount as string | undefined;
+      return `Instant refund${amount ? ` of ${formatAmount(amount, decimals)}` : ""}${refundedTo ? ` to ${truncateAddress(refundedTo)}` : ""}`;
     }
     default:
       return type;

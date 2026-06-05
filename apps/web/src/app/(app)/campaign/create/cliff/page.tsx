@@ -52,6 +52,10 @@ function newStream(): StreamEntry {
   return { id: crypto.randomUUID(), recipient: "", amount: "", cliffTime: "", startTime: "" };
 }
 
+function waitForLoadingPaint() {
+  return new Promise<void>((resolve) => setTimeout(resolve, 250));
+}
+
 export default function CliffCreatePage() {
   const { publicKey } = useWallet();
   const { createStream, formatVestingError: formatStreamError } = useCreateStream();
@@ -111,17 +115,34 @@ export default function CliffCreatePage() {
     refreshPendingFundings();
   }, [refreshPendingFundings]);
 
+  useEffect(() => {
+    const pending = txState.type === "loading" || txState.type === "error";
+    if (pending) {
+      document.body.dataset.vestingTxPending = "true";
+    } else {
+      delete document.body.dataset.vestingTxPending;
+    }
+
+    return () => {
+      delete document.body.dataset.vestingTxPending;
+    };
+  }, [txState.type]);
+
   function handleTokenSelect(mint: string, decimals: number, autoWrap?: boolean) {
     setMintAddress(mint);
     setMintDecimals(decimals);
     setUseAutoWrap(autoWrap ?? false);
     if (mode === "bulk" && csvText.trim()) {
-      const result = parseBulkCsv(csvText, decimals, 0);
-      setCsvResult(result);
-      if (result.issues.length === 0 && result.rows.length > 0) {
-        setTxState({ type: "bulk-ready", prepared: prepareBulkCampaign(result.rows) });
+      if (csvResult?.issues.length === 0 && csvResult.rows.length > 0) {
+        setTxState({ type: "bulk-ready", prepared: prepareBulkCampaign(csvResult.rows) });
       } else {
-        setTxState({ type: "idle" });
+        const result = parseBulkCsv(csvText, decimals, 0);
+        setCsvResult(result);
+        if (result.issues.length === 0 && result.rows.length > 0) {
+          setTxState({ type: "bulk-ready", prepared: prepareBulkCampaign(result.rows) });
+        } else {
+          setTxState({ type: "idle" });
+        }
       }
     }
   }
@@ -142,8 +163,10 @@ export default function CliffCreatePage() {
 
   function buildManualCampaignRows(): BulkCsvRow[] {
     return streams.map((stream, index) => {
-      const startUnix = stream.startTime ? datetimeLocalToUnix(stream.startTime) : Math.floor(Date.now() / 1000);
       const cliffUnix = datetimeLocalToUnix(stream.cliffTime);
+      const startUnix = stream.startTime
+        ? datetimeLocalToUnix(stream.startTime)
+        : Math.min(Math.floor(Date.now() / 1000), cliffUnix);
       return {
         rowNumber: index + 1,
         beneficiary: stream.recipient.trim(),
@@ -175,8 +198,10 @@ export default function CliffCreatePage() {
       const amtErr = validateAmountWithDecimals(s.amount, effectiveMintDecimals);
       if (amtErr) errors[`amount_${i}`] = amtErr;
       if (!s.cliffTime) errors[`cliff_${i}`] = "Cliff date is required.";
-      const startUnix = s.startTime ? datetimeLocalToUnix(s.startTime) : Math.floor(Date.now() / 1000);
       const cliffUnix = s.cliffTime ? datetimeLocalToUnix(s.cliffTime) : 0;
+      const startUnix = s.startTime
+        ? datetimeLocalToUnix(s.startTime)
+        : Math.min(Math.floor(Date.now() / 1000), cliffUnix);
       const schedErr = s.cliffTime ? validateSchedule(startUnix, cliffUnix, cliffUnix, 0) : null;
       if (schedErr) errors[`cliff_${i}`] = schedErr;
     }
@@ -192,6 +217,7 @@ export default function CliffCreatePage() {
 
     if (streams.length > 1) {
       setTxState({ type: "loading", label: `Creating campaign for ${streams.length} recipients...` });
+      await waitForLoadingPaint();
       try {
         const prepared = prepareBulkCampaign(buildManualCampaignRows());
         const created = await createCampaign({
@@ -240,14 +266,17 @@ export default function CliffCreatePage() {
     }
 
     setTxState({ type: "loading", label: `Creating ${streams.length} cliff stream(s)...` });
+    await waitForLoadingPaint();
     const results: CreateStreamResult[] = [];
 
     try {
       for (let i = 0; i < streams.length; i++) {
         setTxState({ type: "loading", label: `Creating stream ${i + 1} of ${streams.length}...` });
         const s = streams[i];
-        const startUnix = s.startTime ? datetimeLocalToUnix(s.startTime) : Math.floor(Date.now() / 1000);
         const cliffUnix = datetimeLocalToUnix(s.cliffTime);
+        const startUnix = s.startTime
+          ? datetimeLocalToUnix(s.startTime)
+          : Math.min(Math.floor(Date.now() / 1000), cliffUnix);
         const cid = String(baseCampaignId * 100 + i);
 
         const result = await createStream({
@@ -446,7 +475,7 @@ export default function CliffCreatePage() {
           </div>
 
           {/* Manual Mode: Stream Cards */}
-          {mode === "single" && mintAddress && (
+          {mode === "single" && (
             <>
               {streams.map((stream, i) => (
                 <div key={stream.id} className={`${CARD} space-y-4 p-5`}>
@@ -506,20 +535,6 @@ export default function CliffCreatePage() {
                     error={formErrors[`recipient_${i}`]}
                   />
 
-                  {/* Start Time */}
-                  <Field
-                    label="Start Time (optional)"
-                    input={
-                      <input
-                        type="datetime-local"
-                        value={stream.startTime}
-                        onChange={(e) => updateStream(stream.id, "startTime", e.target.value)}
-                        className={INPUT}
-                      />
-                    }
-                    hint="Defaults to now if empty"
-                  />
-
                   {/* Cliff Date */}
                   <Field
                     label="Cliff Date (Full Unlock)"
@@ -545,6 +560,20 @@ export default function CliffCreatePage() {
                     }
                     error={formErrors[`cliff_${i}`]}
                   />
+
+                  {/* Start Time */}
+                  <Field
+                    label="Start Time (optional)"
+                    input={
+                      <input
+                        type="datetime-local"
+                        value={stream.startTime}
+                        onChange={(e) => updateStream(stream.id, "startTime", e.target.value)}
+                        className={INPUT}
+                      />
+                    }
+                    hint="Defaults to now if empty"
+                  />
                 </div>
               ))}
 
@@ -560,7 +589,7 @@ export default function CliffCreatePage() {
           )}
 
           {/* CSV Mode */}
-          {mode === "bulk" && mintAddress && (
+          {mode === "bulk" && (
             <BulkCsvSection
               mintAddress={mintAddress}
               onMintAddressChange={(v) => setMintAddress(v)}

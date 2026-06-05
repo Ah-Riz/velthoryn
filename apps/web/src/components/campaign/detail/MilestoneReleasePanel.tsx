@@ -4,6 +4,7 @@ import { useState, useMemo } from "react";
 import { PublicKey, Transaction } from "@solana/web3.js";
 import { type Program } from "@coral-xyz/anchor";
 import { useWallet, useConnection } from "@solana/wallet-adapter-react";
+import { useQueryClient } from "@tanstack/react-query";
 import { isMilestoneTriggered } from "@/lib/vesting/milestone";
 import { formatVestingError } from "@/lib/anchor/errors";
 
@@ -16,7 +17,7 @@ type Props = {
   milestoneReleasedFlags: Uint8Array;
   leafCount: number;
   canRelease: boolean;
-  onSuccess: () => void;
+  onSuccess: (idx: number) => void;
   toast: (msg: string, type?: "success" | "error" | "info") => void;
 };
 
@@ -32,6 +33,7 @@ export function MilestoneReleasePanel({
 }: Props) {
   const { sendTransaction } = useWallet();
   const { connection } = useConnection();
+  const queryClient = useQueryClient();
   const [loadingIdx, setLoadingIdx] = useState<number | null>(null);
   const [page, setPage] = useState(0);
   const count = Math.min(leafCount, 256);
@@ -65,8 +67,17 @@ export function MilestoneReleasePanel({
       const tx = new Transaction().add(ix);
       const sig = await sendTransaction(tx, connection);
       await connection.confirmTransaction(sig, "confirmed");
+
+      fetch("/api/events/sync", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ signature: sig }),
+      })
+        .then(() => queryClient.invalidateQueries({ queryKey: ["timeline", treePubkey.toBase58()] }))
+        .catch(() => {});
+
       toast(`Milestone #${idx} released.`, "success");
-      onSuccess();
+      onSuccess(idx);
     } catch (err: unknown) {
       if (err instanceof Error && /User rejected|Connection rejected/i.test(err.message)) return;
       toast(formatVestingError(err), "error");

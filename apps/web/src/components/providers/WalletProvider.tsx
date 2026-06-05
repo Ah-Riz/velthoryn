@@ -93,8 +93,13 @@ function buildMockContext(): WalletContextState {
             transaction.sign([keypair]);
             return connection.sendRawTransaction(transaction.serialize(), options);
           }
-          (transaction as Transaction).partialSign(keypair);
-          const raw = (transaction as Transaction).serialize();
+          const tx = transaction as Transaction;
+          tx.feePayer ??= keypair.publicKey;
+          if (!tx.recentBlockhash) {
+            tx.recentBlockhash = (await connection.getLatestBlockhash()).blockhash;
+          }
+          tx.partialSign(keypair);
+          const raw = tx.serialize();
           return connection.sendRawTransaction(raw, options);
         }
       : async () => { throw new Error("E2E mock wallet cannot send transactions."); },

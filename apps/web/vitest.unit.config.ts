@@ -11,6 +11,7 @@ export default defineConfig({
       "tests/math/**/*.test.ts",
       "tests/merkle/**/*.test.ts",
       "tests/anchor/**/*.test.ts",
+      "tests/week7/**/*.test.ts",
     ],
     exclude: [
       "tests/lib/db-*.test.ts",

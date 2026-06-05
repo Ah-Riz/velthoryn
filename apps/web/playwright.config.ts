@@ -4,10 +4,12 @@ const baseURL = process.env.PLAYWRIGHT_BASE_URL ?? "http://127.0.0.1:3100";
 const webServer = process.env.PLAYWRIGHT_BASE_URL
   ? undefined
   : {
-      command: "NEXT_PUBLIC_E2E_MOCK_WALLET=true pnpm exec next dev -H 127.0.0.1 -p 3100",
+      command: process.env.CI
+        ? "pnpm build && pnpm start -p 3100 -H 127.0.0.1"
+        : "NEXT_PUBLIC_E2E_MOCK_WALLET=true pnpm exec next dev -H 127.0.0.1 -p 3100",
       url: baseURL,
       reuseExistingServer: !process.env.CI,
-      timeout: 180_000,
+      timeout: 240_000,
     };
 
 export default defineConfig({
