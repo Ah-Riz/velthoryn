@@ -17,7 +17,7 @@ import { formatVestingError } from "@/lib/anchor/errors";
 import { isNativeSol, isWrappedSol } from "@/lib/sol/auto-wrap";
 import { formatCountdown } from "@/lib/vesting/display";
 import { isMilestoneTriggered } from "@/lib/vesting/milestone";
-import { createAuthHeader } from "@/lib/api/client-auth";
+
 
 interface ProofLeaf {
   leafIndex: number;
@@ -46,6 +46,7 @@ type Props = {
   mintDecimals: number | null;
   paused: boolean;
   milestoneReleasedFlags: Uint8Array;
+  cancelledAt?: bigint | null;
   isCreator?: boolean;
   onSuccess: () => void;
   toast: (msg: string, type?: "success" | "error" | "info") => void;
@@ -198,11 +199,12 @@ export function ClaimWithProofButton({
   mintDecimals,
   paused,
   milestoneReleasedFlags,
+  cancelledAt,
   isCreator,
   onSuccess,
   toast,
 }: Props) {
-  const { sendTransaction, signTransaction, signMessage, publicKey: walletPublicKey } = useWallet();
+  const { sendTransaction, signTransaction } = useWallet();
   const queryClient = useQueryClient();
   const [loading, setLoading] = useState(false);
   const [selectedIdx, setSelectedIdx] = useState(0);
@@ -284,8 +286,11 @@ export function ClaimWithProofButton({
     },
     [],
   );
+  const effectiveNowUnix = cancelledAt !== null && cancelledAt !== undefined
+    ? Math.min(nowUnix, Number(cancelledAt))
+    : nowUnix;
   const leafClaimableAmounts = leaves.map((entry, index) => {
-    const vestedNow = vestedForLeaf(entry.leaf, nowUnix, milestoneReleasedFlags);
+    const vestedNow = vestedForLeaf(entry.leaf, effectiveNowUnix, milestoneReleasedFlags);
     const claimedForLeaf = leafClaimedTotals[index] ?? 0n;
     return vestedNow > claimedForLeaf ? vestedNow - claimedForLeaf : 0n;
   });
@@ -535,22 +540,11 @@ export function ClaimWithProofButton({
         queryKey: ["beneficiaryCampaigns"],
       });
       const syncClaim = async (retries = 5) => {
-        let authorization: string | undefined;
-        if (walletPublicKey && signMessage) {
-          try {
-            authorization = await createAuthHeader({ publicKey: walletPublicKey, signMessage });
-          } catch {
-            // Wallet signing unavailable — skip sync
-            return;
-          }
-        }
         for (let i = 0; i < retries; i++) {
           try {
-            const headers: Record<string, string> = { "Content-Type": "application/json" };
-            if (authorization) headers.authorization = authorization;
             const res = await fetch(`/api/claims/sync`, {
               method: "POST",
-              headers,
+              headers: { "Content-Type": "application/json" },
               body: JSON.stringify({ signature: sig }),
             });
             if (res.ok) {

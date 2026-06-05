@@ -1,16 +1,13 @@
 "use client";
 
 import { useEffect, useRef } from "react";
-import { useWallet } from "@solana/wallet-adapter-react";
 import {
   indexCampaign,
   listPendingCampaignIndexesLocal,
 } from "@/lib/stream/persist";
-import { createAuthHeader } from "@/lib/api/client-auth";
 
 export function PendingCampaignIndexer() {
   const runningRef = useRef(false);
-  const { publicKey, signMessage } = useWallet();
 
   useEffect(() => {
     let cancelled = false;
@@ -21,26 +18,12 @@ export function PendingCampaignIndexer() {
       const pending = listPendingCampaignIndexesLocal();
       if (pending.length === 0) return;
 
-      // Build auth headers once per flush (if wallet is connected with signing)
-      let authorization: string | undefined;
-      if (publicKey && signMessage) {
-        try {
-          authorization = await createAuthHeader({ publicKey, signMessage });
-        } catch {
-          // Wallet may not be ready; proceed without auth and retry later
-          return;
-        }
-      }
-
       runningRef.current = true;
       try {
         for (const payload of pending) {
           if (cancelled) break;
           try {
-            await indexCampaign(
-              payload,
-              authorization ? { authorization } : undefined,
-            );
+            await indexCampaign(payload);
           } catch {
             // keep pending payload for a later retry
           }
@@ -71,7 +54,7 @@ export function PendingCampaignIndexer() {
       window.removeEventListener("online", handleOnline);
       window.removeEventListener("focus", handleFocus);
     };
-  }, [publicKey, signMessage]);
+  }, []);
 
   return null;
 }

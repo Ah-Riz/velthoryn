@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { PublicKey } from "@solana/web3.js";
 import { type Program } from "@coral-xyz/anchor";
+import { useQueryClient } from "@tanstack/react-query";
 
 type Props = {
   program: Program;
@@ -26,6 +27,7 @@ export function PauseToggleButton({
   toast,
 }: Props) {
   const [loading, setLoading] = useState(false);
+  const queryClient = useQueryClient();
 
   if (!isPauseAuthority || cancelledAt !== null) return null;
 
@@ -36,12 +38,20 @@ export function PauseToggleButton({
         ? program.methods.unpauseCampaign()
         : program.methods.pauseCampaign();
 
-      await method
+      const sig = await method
         .accounts({
           pauseAuthority: publicKey,
           vestingTree: treePubkey,
         })
         .rpc({ commitment: "confirmed" });
+
+      fetch("/api/events/sync", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ signature: sig }),
+      })
+        .then(() => queryClient.invalidateQueries({ queryKey: ["timeline", treePubkey.toBase58()] }))
+        .catch(() => {});
 
       toast(paused ? "Campaign resumed." : "Campaign paused.", "success");
       onSuccess();

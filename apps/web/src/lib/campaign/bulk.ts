@@ -455,6 +455,7 @@ export function buildCreateCampaignIndexPayload(params: {
     merkleRoot: params.prepared.merkleRoot,
     leafCount: params.prepared.leafCount,
     totalSupply: params.prepared.totalSupply,
+    minCliffTime: params.prepared.minCliffTime,
     cancellable: params.cancellable,
     cancelAuthority: params.cancelAuthority,
     pauseAuthority: params.pauseAuthority,

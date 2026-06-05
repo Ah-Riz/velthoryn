@@ -17,6 +17,7 @@ export interface StreamSchedule {
 const LOCAL_PREFIX = "velthoryn:stream:";
 const PENDING_INDEX_PREFIX = "velthoryn:pending-index:";
 const PENDING_FUND_PREFIX = "velthoryn:pending-fund:";
+const STREAM_SETTLED_PREFIX = "velthoryn:stream-settled:";
 
 export interface StoredLocalStreamSchedule {
   treeAddress: string;
@@ -184,6 +185,7 @@ export interface CampaignIndexPayload {
   merkleRoot: string;
   leafCount: number;
   totalSupply: string;
+  minCliffTime?: string;
   cancellable: boolean;
   cancelAuthority: string | null;
   pauseAuthority: string | null;
@@ -348,6 +350,7 @@ export function buildCreateStreamIndexPayload(params: {
     merkleRoot,
     leafCount: 1,
     totalSupply: params.amount,
+    minCliffTime: String(params.cliffTime),
     cancellable: params.cancellable,
     cancelAuthority: params.cancelAuthority,
     pauseAuthority: params.pauseAuthority ?? null,
@@ -370,7 +373,6 @@ export function buildCreateStreamIndexPayload(params: {
 
 export async function indexCampaign(
   payload: CampaignIndexPayload,
-  authHeaders?: Record<string, string>,
 ): Promise<void> {
   savePendingCampaignIndexLocal(payload);
 
@@ -403,7 +405,6 @@ export async function indexCampaign(
     headers: {
       "Content-Type": "application/json",
       "x-request-id": requestId,
-      ...authHeaders,
     },
     body: JSON.stringify(payload),
   });
@@ -429,7 +430,24 @@ export async function indexCampaign(
 
 export async function indexStreamCampaign(
   payload: CreateStreamIndexPayload,
-  authHeaders?: Record<string, string>,
 ): Promise<void> {
-  await indexCampaign(payload, authHeaders);
+  await indexCampaign(payload);
+}
+
+export function markStreamSettledLocal(treeAddress: string): void {
+  if (typeof window === "undefined") return;
+  try {
+    localStorage.setItem(`${STREAM_SETTLED_PREFIX}${treeAddress}`, "1");
+  } catch {
+    // quota / private mode
+  }
+}
+
+export function isStreamSettledLocal(treeAddress: string): boolean {
+  if (typeof window === "undefined") return false;
+  try {
+    return localStorage.getItem(`${STREAM_SETTLED_PREFIX}${treeAddress}`) === "1";
+  } catch {
+    return false;
+  }
 }
