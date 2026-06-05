@@ -51,6 +51,7 @@ design.md
 # IDE / OS
 .idea/
 .cursor/
+.agents/
 .vscode/*
 !.vscode/extensions.json
 !.vscode/settings.json

@@ -282,7 +282,10 @@ export function parseBulkCsv(
     }
 
     const startTime = parseTimestamp(startTimeRaw);
-    const cliffTime = parseTimestamp(cliffTimeRaw);
+    let cliffTime = parseTimestamp(cliffTimeRaw);
+    if (releaseType === 1 && (!cliffTimeRaw.trim() || cliffTimeRaw.trim() === "0")) {
+      cliffTime = startTime;
+    }
     const endTime = parseTimestamp(endTimeRaw);
     const scheduleError = validateSchedule(
       startTime,
@@ -455,6 +458,7 @@ export function buildCreateCampaignIndexPayload(params: {
     merkleRoot: params.prepared.merkleRoot,
     leafCount: params.prepared.leafCount,
     totalSupply: params.prepared.totalSupply,
+    minCliffTime: params.prepared.minCliffTime,
     cancellable: params.cancellable,
     cancelAuthority: params.cancelAuthority,
     pauseAuthority: params.pauseAuthority,

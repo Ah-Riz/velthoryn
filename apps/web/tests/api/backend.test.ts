@@ -53,11 +53,11 @@ import { indexAllEvents } from "@/lib/indexer/event-indexer";
 
 import { resetDb } from "../helpers/db";
 import {
-  CREATOR,
   MINT,
   BENEFICIARY,
   OTHER_BENEFICIARY,
   EMPTY_SIBLING,
+  TEST_CREATOR_KEYPAIR,
   makeLeaf,
   makeCampaignBody,
   makeTwoLeafCampaignBody,
@@ -374,14 +374,15 @@ describe("POST /api/campaigns", () => {
       },
     ]);
 
+    const creator = TEST_CREATOR_KEYPAIR.publicKey.toBase58();
     const body = buildCreateCampaignIndexPayload({
       treeAddress: uniqueTreeAddress(),
-      creator: CREATOR,
+      creator,
       mint: MINT,
       campaignId: Math.floor(Math.random() * 9_000_000_000_000) + 1_000_000_000_000,
       cancellable: true,
-      cancelAuthority: CREATOR,
-      pauseAuthority: CREATOR,
+      cancelAuthority: creator,
+      pauseAuthority: creator,
       createdAt: Math.floor(Date.now() / 1000),
       prepared,
     });
@@ -496,15 +497,16 @@ describe("GET /api/campaigns", () => {
   it("filters by creator", async () => {
     await createCampaignViaPost({ treeAddress: uniqueTreeAddress() });
 
+    const creator = TEST_CREATOR_KEYPAIR.publicKey.toBase58();
     const req = new NextRequest(
-      makeUrl("/api/campaigns", { creator: CREATOR }),
+      makeUrl("/api/campaigns", { creator }),
     );
     const res = await getCampaigns(req);
     const json = await res.json();
 
     expect(res.status).toBe(200);
     expect(json.total).toBeGreaterThanOrEqual(1);
-    expect(json.campaigns.every((c: { creator: string }) => c.creator === CREATOR)).toBe(true);
+    expect(json.campaigns.every((c: { creator: string }) => c.creator === creator)).toBe(true);
 
     const emptyReq = new NextRequest(
       makeUrl("/api/campaigns", { creator: "33333333333333333333333333333333" }),

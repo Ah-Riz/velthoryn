@@ -14,7 +14,7 @@ import {
 } from "@/lib/api/auth-middleware";
 import { checkBodySize, getBodyLimitBytes } from "@/lib/api/body-limit";
 import { PayloadTooLargeError } from "@/lib/api/errors";
-import { makeCampaignBody, makeUrl } from "../helpers/requests";
+import { makeCampaignBody, makeLeaf, computeSingleLeafRoot, makeUrl } from "../helpers/requests";
 import { createAuthHeader } from "../helpers/wallet-auth";
 
 describe("security controls", () => {
@@ -24,18 +24,19 @@ describe("security controls", () => {
     vi.unstubAllEnvs();
   });
 
-  it("accepts unauthenticated POST /api/campaigns (no auth gate)", async () => {
+  it("accepts POST /api/campaigns without wallet auth (creator constraint is on-chain)", async () => {
+    const leaf = makeLeaf();
+    const merkleRoot = computeSingleLeafRoot(leaf);
     const req = new NextRequest(makeUrl("/api/campaigns"), {
       method: "POST",
-      body: JSON.stringify(makeCampaignBody()),
+      body: JSON.stringify(makeCampaignBody({ merkleRoot, leaves: [leaf] })),
       headers: { "content-type": "application/json" },
     });
 
     const res = await postCampaigns(req);
-    // Route no longer requires auth — request proceeds to validation/insert.
-    // Valid payload returns 201 (created) or 200 (duplicate); invalid returns 400.
-    expect([200, 201, 400]).toContain(res.status);
-    expect(res.status).not.toBe(401);
+    // Auth removed from indexing route — on-chain program enforces creator constraint.
+    // Valid payload without auth header returns 201.
+    expect(res.status).toBe(201);
   });
 
   it("accepts valid wallet signature", async () => {

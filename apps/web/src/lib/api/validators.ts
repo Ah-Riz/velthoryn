@@ -58,6 +58,7 @@ export const createCampaignRequestSchema = z.object({
     .regex(/^[0-9a-fA-F]{64}$/, "merkleRoot must be a 64-char hex string"),
   leafCount: z.number().int().min(1),
   totalSupply: z.string().min(1),
+  minCliffTime: z.string().optional(),
   cancellable: z.boolean().default(false),
   cancelAuthority: z.string().nullable().default(null),
   pauseAuthority: z.string().nullable().default(null),

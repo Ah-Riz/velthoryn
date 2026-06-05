@@ -5,6 +5,7 @@ import { PublicKey, SystemProgram, Transaction } from "@solana/web3.js";
 import { type Program } from "@coral-xyz/anchor";
 import { TOKEN_PROGRAM_ID, getAssociatedTokenAddressSync } from "@solana/spl-token";
 import { useWallet, useConnection } from "@solana/wallet-adapter-react";
+import { useQueryClient } from "@tanstack/react-query";
 import { getGracePeriodState } from "@/lib/vesting/display";
 import { isNativeSol } from "@/lib/sol/auto-wrap";
 
@@ -37,6 +38,7 @@ export function WithdrawUnvestedButton({
 }: Props) {
   const { sendTransaction } = useWallet();
   const { connection } = useConnection();
+  const queryClient = useQueryClient();
   const [loading, setLoading] = useState(false);
   const [confirmOpen, setConfirmOpen] = useState(false);
 
@@ -47,6 +49,7 @@ export function WithdrawUnvestedButton({
   async function handleWithdraw() {
     setLoading(true);
     try {
+      let withdrawSig: string;
       if (isNativeSol(mint)) {
         const ix = await program.methods
           .withdrawUnvested()
@@ -57,7 +60,7 @@ export function WithdrawUnvestedButton({
           })
           .instruction();
         const tx = new Transaction().add(ix);
-        await sendTransaction(tx, connection);
+        withdrawSig = await sendTransaction(tx, connection);
       } else {
         const creatorAta = getAssociatedTokenAddressSync(mint, publicKey);
 
@@ -74,8 +77,16 @@ export function WithdrawUnvestedButton({
           })
           .instruction();
         const tx = new Transaction().add(ix);
-        await sendTransaction(tx, connection);
+        withdrawSig = await sendTransaction(tx, connection);
       }
+
+      fetch("/api/events/sync", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ signature: withdrawSig }),
+      })
+        .then(() => queryClient.invalidateQueries({ queryKey: ["timeline", treePubkey.toBase58()] }))
+        .catch(() => {});
 
       toast("Unvested tokens withdrawn.", "success");
       setConfirmOpen(false);
@@ -111,7 +122,8 @@ export function WithdrawUnvestedButton({
     <>
       <button
         onClick={() => setConfirmOpen(true)}
-        className="w-full rounded-xl border border-amber-500/20 py-2.5 text-[13px] font-medium text-amber-400 transition hover:border-amber-500/40 hover:bg-amber-500/5"
+        disabled={confirmOpen}
+        className="w-full rounded-xl border border-amber-500/20 py-2.5 text-[13px] font-medium text-amber-400 transition hover:border-amber-500/40 hover:bg-amber-500/5 disabled:cursor-not-allowed disabled:opacity-50"
       >
         Withdraw Unvested Tokens
       </button>

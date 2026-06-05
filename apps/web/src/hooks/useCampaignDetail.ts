@@ -41,6 +41,8 @@ interface CampaignDetail {
   totalSupply: number;
   totalClaimed: number;
   cancellable: boolean;
+  cancelAuthority: string | null;
+  pauseAuthority: string | null;
   paused: boolean;
   cancelledAt: number | null;
   minCliffTime: number | null;

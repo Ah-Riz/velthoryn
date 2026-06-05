@@ -60,7 +60,7 @@ function SidebarContent({ onNavClick }: { onNavClick?: () => void }) {
         </span>
       </div>
 
-      <nav className="flex-1 overflow-y-auto px-3 py-4">
+      <nav data-sidebar-nav className="flex-1 overflow-y-auto px-3 py-4">
         <ul className="space-y-1">
           {NAV_ITEMS.map((item) => {
             const isActive = mounted && (

@@ -10,7 +10,8 @@ export interface TimelineEvent {
     | "root_updated"
     | "withdrawn"
     | "milestone_released"
-    | "stream_cancelled";
+    | "stream_cancelled"
+    | "instant_refunded";
   blockTime: string;
   signature: string;
   data: Record<string, unknown>;

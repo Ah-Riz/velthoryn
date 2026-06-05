@@ -50,6 +50,10 @@ function newMilestone(): MilestoneEntry {
   return { id: crypto.randomUUID(), amount: "", unlockTime: "" };
 }
 
+function waitForLoadingPaint() {
+  return new Promise<void>((resolve) => setTimeout(resolve, 250));
+}
+
 function toWalletApprovalMessage(error: unknown, fallback: (err: unknown) => string) {
   const formatted = fallback(error);
   return formatted === "Transaction cancelled in wallet."
@@ -225,12 +229,16 @@ export default function MilestoneCreatePage() {
     setMintDecimals(decimals);
     setUseAutoWrap(autoWrap ?? false);
     if (mode === "bulk" && csvText.trim()) {
-      const result = parseBulkCsv(csvText, decimals, 2);
-      setCsvResult(result);
-      if (result.issues.length === 0 && result.rows.length > 0) {
-        setTxState({ type: "bulk-ready", prepared: prepareBulkCampaign(result.rows) });
+      if (csvResult?.issues.length === 0 && csvResult.rows.length > 0) {
+        setTxState({ type: "bulk-ready", prepared: prepareBulkCampaign(csvResult.rows) });
       } else {
-        setTxState({ type: "idle" });
+        const result = parseBulkCsv(csvText, decimals, 2);
+        setCsvResult(result);
+        if (result.issues.length === 0 && result.rows.length > 0) {
+          setTxState({ type: "bulk-ready", prepared: prepareBulkCampaign(result.rows) });
+        } else {
+          setTxState({ type: "idle" });
+        }
       }
     }
   }
@@ -285,6 +293,7 @@ export default function MilestoneCreatePage() {
     // 2+ milestones → single campaign with N leaves
     if (milestones.length > 1) {
       setTxState({ type: "loading", label: `Creating campaign with ${milestones.length} milestones...` });
+      await waitForLoadingPaint();
       try {
         const prepared = prepareBulkCampaign(buildMilestoneRows());
 
@@ -336,6 +345,7 @@ export default function MilestoneCreatePage() {
 
     // 1 milestone → single stream
     setTxState({ type: "loading", label: "Creating milestone stream..." });
+    await waitForLoadingPaint();
     try {
       const now = Math.floor(Date.now() / 1000);
       const m = milestones[0];
@@ -458,7 +468,7 @@ export default function MilestoneCreatePage() {
           </div>
 
           {/* Milestone Cards (Manual Mode) */}
-          {mode === "single" && mintAddress && (
+          {mode === "single" && (
             <>
               {milestones.map((milestone, i) => (
                 <div key={milestone.id} className={`${CARD} space-y-4 p-5`}>
@@ -542,7 +552,7 @@ export default function MilestoneCreatePage() {
           )}
 
           {/* CSV Mode */}
-          {mode === "bulk" && mintAddress && (
+          {mode === "bulk" && (
             <BulkCsvSection
               mintAddress={mintAddress}
               onMintAddressChange={(v) => setMintAddress(v)}

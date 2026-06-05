@@ -7,8 +7,10 @@ import { createCampaignRequestSchema } from "@/lib/api/validators";
 import { verifyAllLeaves } from "@/lib/merkle/verify";
 import { ValidationError } from "@/lib/api/errors";
 import { withRoute } from "@/lib/api/route-wrapper";
+
 import { getRequestId } from "@/lib/api/request-id";
 import { logger } from "@/lib/api/logger";
+
 
 function u64BigInt(value: string | number): bigint {
   return BigInt(value);
@@ -82,6 +84,7 @@ async function postCampaignsHandler(request: NextRequest) {
         merkleRoot: data.merkleRoot,
         leafCount: data.leafCount,
         totalSupply: u64BigInt(data.totalSupply),
+        minCliffTime: data.minCliffTime ? u64BigInt(data.minCliffTime) : null,
         cancellable: data.cancellable,
         cancelAuthority: data.cancelAuthority,
         pauseAuthority: data.pauseAuthority,

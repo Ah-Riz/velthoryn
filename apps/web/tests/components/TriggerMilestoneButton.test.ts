@@ -2,8 +2,14 @@
 import { describe, it, expect, afterEach } from "vitest";
 import { render, screen, cleanup } from "@testing-library/react";
 import { createElement } from "react";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MilestoneStatusBadge } from "@/components/campaign/detail/MilestoneStatusBadge";
 import { TriggerMilestoneButton } from "@/components/campaign/detail/TriggerMilestoneButton";
+
+function withQueryClient(element: React.ReactElement) {
+  const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  return createElement(QueryClientProvider, { client: qc }, element);
+}
 
 function renderBadge(overrides = {}) {
   const props = {
@@ -67,17 +73,17 @@ describe("TriggerMilestoneButton", () => {
   };
 
   it("renders nothing when canRelease is false", () => {
-    const { container } = render(createElement(TriggerMilestoneButton, { ...baseProps, canRelease: false }));
+    const { container } = render(withQueryClient(createElement(TriggerMilestoneButton, { ...baseProps, canRelease: false })));
     expect(container.innerHTML).toBe("");
   });
 
   it("shows release button when canRelease and not released", () => {
-    render(createElement(TriggerMilestoneButton, baseProps));
+    render(withQueryClient(createElement(TriggerMilestoneButton, baseProps)));
     expect(screen.getByText(/Release Milestone #0/)).toBeTruthy();
   });
 
   it("renders nothing when alreadyReleased", () => {
-    const { container } = render(createElement(TriggerMilestoneButton, { ...baseProps, alreadyReleased: true }));
+    const { container } = render(withQueryClient(createElement(TriggerMilestoneButton, { ...baseProps, alreadyReleased: true })));
     expect(container.innerHTML).toBe("");
   });
 });

@@ -146,3 +146,57 @@ jobs:
 
       - name: Next.js build
         run: cd apps/web && pnpm build
+
+  playwright-e2e:
+    name: Playwright E2E
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_USER: ci
+          POSTGRES_PASSWORD: ci
+          POSTGRES_DB: ci
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    env:
+      DATABASE_URL: "postgresql://ci:ci@127.0.0.1:5432/ci"
+      ADMIN_API_KEY: "ci-test-key"
+      NEXT_PUBLIC_RPC_ENDPOINT: "https://api.devnet.solana.com"
+      NEXT_PUBLIC_E2E_MOCK_WALLET: "true"
+      CI: "true"
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: "pnpm"
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: Install Playwright browsers
+        run: cd apps/web && pnpm exec playwright install --with-deps chromium
+
+      - name: Apply DB migrations
+        run: cd apps/web && pnpm db:migrate
+
+      - name: Run Playwright E2E
+        run: cd apps/web && pnpm exec playwright test
+
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: playwright-traces
+          path: apps/web/test-results/
+          retention-days: 7

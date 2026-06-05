@@ -18,6 +18,7 @@ import { isNativeSol, isWrappedSol } from "@/lib/sol/auto-wrap";
 import { formatCountdown } from "@/lib/vesting/display";
 import { isMilestoneTriggered } from "@/lib/vesting/milestone";
 
+
 interface ProofLeaf {
   leafIndex: number;
   beneficiary: string;
@@ -45,6 +46,7 @@ type Props = {
   mintDecimals: number | null;
   paused: boolean;
   milestoneReleasedFlags: Uint8Array;
+  cancelledAt?: bigint | null;
   isCreator?: boolean;
   onSuccess: () => void;
   toast: (msg: string, type?: "success" | "error" | "info") => void;
@@ -197,6 +199,7 @@ export function ClaimWithProofButton({
   mintDecimals,
   paused,
   milestoneReleasedFlags,
+  cancelledAt,
   isCreator,
   onSuccess,
   toast,
@@ -283,8 +286,11 @@ export function ClaimWithProofButton({
     },
     [],
   );
+  const effectiveNowUnix = cancelledAt !== null && cancelledAt !== undefined
+    ? Math.min(nowUnix, Number(cancelledAt))
+    : nowUnix;
   const leafClaimableAmounts = leaves.map((entry, index) => {
-    const vestedNow = vestedForLeaf(entry.leaf, nowUnix, milestoneReleasedFlags);
+    const vestedNow = vestedForLeaf(entry.leaf, effectiveNowUnix, milestoneReleasedFlags);
     const claimedForLeaf = leafClaimedTotals[index] ?? 0n;
     return vestedNow > claimedForLeaf ? vestedNow - claimedForLeaf : 0n;
   });

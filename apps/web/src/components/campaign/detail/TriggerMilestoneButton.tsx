@@ -4,6 +4,7 @@ import { useState } from "react";
 import { PublicKey, Transaction } from "@solana/web3.js";
 import { type Program } from "@coral-xyz/anchor";
 import { useWallet, useConnection } from "@solana/wallet-adapter-react";
+import { useQueryClient } from "@tanstack/react-query";
 import { formatVestingError } from "@/lib/anchor/errors";
 
 type Props = {
@@ -29,6 +30,7 @@ export function TriggerMilestoneButton({
 }: Props) {
   const { sendTransaction } = useWallet();
   const { connection } = useConnection();
+  const queryClient = useQueryClient();
   const [loading, setLoading] = useState(false);
 
   if (!canRelease) return null;
@@ -48,6 +50,14 @@ export function TriggerMilestoneButton({
       const tx = new Transaction().add(ix);
       const sig = await sendTransaction(tx, connection);
       await connection.confirmTransaction(sig, "confirmed");
+
+      fetch("/api/events/sync", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ signature: sig }),
+      })
+        .then(() => queryClient.invalidateQueries({ queryKey: ["timeline", treePubkey.toBase58()] }))
+        .catch(() => {});
 
       toast(`Milestone #${milestoneIdx} released.`, "success");
       onSuccess();

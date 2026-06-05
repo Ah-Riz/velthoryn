@@ -38,11 +38,16 @@ velthoryn/
 
 **F1-F4 roadmap complete:** F1 Bulk Send (server-side Merkle build, CSV import), F2 Dashboard Transparency (event timeline, vesting progress, auto-sync cron), F3 Clawback (cancel campaign/stream, withdraw unvested, milestone release), F4 Production Hardening (Sentry monitoring, API versioning, vesting simulation, schedule templates). 11 new API routes, 6 event tables, 8 bug fixes from code review.
 
-**Test results: 118 SC tests PASS** (`pnpm test:localnet`, 2 pending); **553 web Vitest PASS** (13 skipped devnet integration; API routes use Postgres in CI)
+**Test results: 127+ SC tests PASS** (`pnpm test:localnet`); **553 web Vitest PASS** (13 skipped devnet integration; API routes use Postgres in CI)
 **BE–SC Merkle pipeline verified end-to-end**: 3-leaf campaigns (Cliff/Linear/Milestone) through prepare → POST (all leaves verified) → GET proof → verify. RLS on all Supabase tables. **Bootcamp acceptance: 8/8** — see [`docs/BE-SC-MERKLE-ACCEPTANCE-STATUS.md`](docs/BE-SC-MERKLE-ACCEPTANCE-STATUS.md).
 - Devnet (`pnpm test:devnet`): **93 passing, 9 pending** (T64–T68 bankrun-only; cancel logic covered by T64b–T64d)
 - Native SOL tests: `tests/vesting-native-sol.spec.ts` via **solana-bankrun** (12 tests covering full SOL lifecycle)
 - Clock-dependent cases: `tests/vesting.clock.spec.ts` via **solana-bankrun** (T17–T20, T25, T47, T55–T64, EXPLOIT 4)
+- Sealevel-attacks gap tests: `tests/sealevel-attacks-gap.spec.ts` via **solana-bankrun** (4 tests: duplicate accounts #6, PDA sharing #8, close-reinit #9)
+- LiteSVM PoC: `tests/vesting-litesvm.spec.ts` via **LiteSVM** (5 tests: boot, mint, time-travel, program loading, simulation)
+- Mollusk instruction tests: 7 domain-specific test files via **Mollusk** (72 active + 18 ignored): `instructions.rs` (14), `stream.rs` (7), `admin.rs` (18+6), `cancel.rs` (5+9), `claim.rs` (16), `cleanup.rs` (2+3), `lifecycle.rs` (8)
+- Mollusk CU benchmarks: `programs/vesting/tests/benchmarks.rs` via **Mollusk** (2 tests: get_vested_amount 7 scenarios, create_campaign_native 2 configs)
+- proptest property tests: `programs/vesting/src/math/` via **proptest** (20 tests: schedule 11 invariants, merkle 7 invariants + 10 unit tests)
 
 See [`docs/STREAM_MODEL.md`](docs/STREAM_MODEL.md) (tutorial `Stream` PDA vs campaign model) and [`docs/ERROR_MAP.md`](docs/ERROR_MAP.md).
 
@@ -99,15 +104,21 @@ pnpm install
 solana-keygen new -o target/deploy/vesting-keypair.json --no-bip39-passphrase
 ```
 
-> The program ID is already hardcoded in `Anchor.toml` and `programs/vesting/src/lib.rs` (`G6iaigUdi2btFwUc2N65twfxwA8Ew5uKKhKJ5RJa8wvu`). The keypair file is only needed locally to sign a redeploy — for normal build and test it isn't used.
+> The program ID is hardcoded in `Anchor.toml` and `programs/vesting/src/lib.rs` (`G6iaigUdi2btFwUc2N65twfxwA8Ew5uKKhKJ5RJa8wvu`). To run the integration tests locally you need the matching program keypair — see [`docs/LOCAL_DEV.md`](docs/LOCAL_DEV.md) for the full explanation and workarounds. CI runs the full suite on every push using the `PROGRAM_KEYPAIR_JSON` secret.
 
 ```bash
 anchor build           # produces target/idl/vesting.json + target/types/vesting.ts
-pnpm test:localnet     # persistent validator — 118 passing, 2 pending (~4m)
+pnpm test:localnet     # persistent validator — 127+ passing (~4m)
 pnpm test:devnet       # against devnet RPC (deployed program + funded wallet)
 ```
 
-Clock-dependent tests (11) use `solana-bankrun` inside the full suite; they are included in `pnpm test:localnet` and do not need a separate run.
+Clock-dependent tests (11) use `solana-bankrun` inside the full suite; they are included in `pnpm test:localnet` and do not need a separate run. Sealevel-attacks gap tests (4) and LiteSVM PoC (5) are also included in the full suite.
+
+For Rust-level CU benchmarks via Mollusk:
+```bash
+BPF_OUT_DIR=target/deploy cargo test --manifest-path programs/vesting/Cargo.toml -- --show-output
+# Expected: 103 passed, 18 ignored
+```
 
 ## Frontend (apps/web)
 
@@ -186,7 +197,7 @@ solana program deploy target/deploy/vesting.so --program-id G6iaigUdi2btFwUc2N65
 
 | Workflow | What it runs |
 |----------|----------------|
-| [`ci.yml`](.github/workflows/ci.yml) | `anchor build` + IDL drift check + native SOL tests (bankrun) + `pnpm test:localnet` (118 SC tests) |
+| [`ci.yml`](.github/workflows/ci.yml) | `anchor build` + IDL drift check + native SOL tests (bankrun) + `pnpm test:localnet` (127+ SC tests) + sealevel-attacks gap tests (bankrun) + LiteSVM PoC |
 | [`lint.yml`](.github/workflows/lint.yml) | `cargo clippy`, Next.js lint, **Vitest + build** (Postgres 15 service + `pnpm db:migrate`) |
 | [`web-ci.yml`](.github/workflows/web-ci.yml) | 3 parallel jobs: merkle parity, E2E pipeline (Postgres + dev server + `test-be-merkle-pipeline.ts`), web build + Vitest (Postgres) |
 

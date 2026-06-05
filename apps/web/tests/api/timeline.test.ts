@@ -11,6 +11,7 @@ import {
   seedWithdrawEvent,
   seedRootUpdateEvent,
   seedStreamCancelEvent,
+  seedInstantRefundEvent,
 } from "../helpers/fixtures";
 import { makeUrl } from "../helpers/requests";
 import { resetRateLimitForTests } from "@/lib/api/rate-limit";
@@ -173,6 +174,7 @@ describe("GET /api/campaigns/:treeAddress/timeline", () => {
     await seedCancelEvent(campaignId, { blockTime: 1700050000, signature: uniqueSig("cancel") });
     await seedMilestoneEvent(campaignId, { blockTime: 1700060000, signature: uniqueSig("milestone") });
     await seedStreamCancelEvent(campaignId, { blockTime: 1700070000, signature: uniqueSig("stream") });
+    await seedInstantRefundEvent(campaignId, { blockTime: 1700080000, signature: uniqueSig("irefund") });
 
     const req = makeTimelineRequest(treeAddress);
     const res = await GET(req, makeContext(treeAddress) as never);
@@ -182,12 +184,13 @@ describe("GET /api/campaigns/:treeAddress/timeline", () => {
     };
 
     expect(res.status).toBe(200);
-    expect(json.total).toBe(7);
-    expect(json.events).toHaveLength(7);
+    expect(json.total).toBe(8);
+    expect(json.events).toHaveLength(8);
 
     // Verify DESC order by block_time
     const types = json.events.map((e) => e.type);
     expect(types).toEqual([
+      "instant_refunded",
       "stream_cancelled",
       "milestone_released",
       "cancelled",
@@ -290,5 +293,38 @@ describe("GET /api/campaigns/:treeAddress/timeline", () => {
     // Should be the two latest events (DESC order): 1700014000 and 1700013000
     expect(json.events[0]!.blockTime).toBe("1700014000");
     expect(json.events[1]!.blockTime).toBe("1700013000");
+  });
+
+  it("returns instant_refunded events with correct data shape (200)", async () => {
+    const { treeAddress, campaignId } = await seedCampaign();
+
+    await seedInstantRefundEvent(campaignId, {
+      cancelledAt: 1700080000,
+      refundedTo: "Creator1111111111111111111111111111111111",
+      amount: 500000,
+      blockTime: 1700080000,
+      signature: uniqueSig("irefund"),
+    });
+
+    const req = makeTimelineRequest(treeAddress);
+    const res = await GET(req, makeContext(treeAddress) as never);
+    const json = (await res.json()) as {
+      events: Array<{
+        type: string;
+        blockTime: string;
+        signature: string;
+        data: Record<string, unknown>;
+      }>;
+      total: number;
+    };
+
+    expect(res.status).toBe(200);
+    expect(json.total).toBe(1);
+    expect(json.events).toHaveLength(1);
+    expect(json.events[0]!.type).toBe("instant_refunded");
+    expect(json.events[0]!.blockTime).toBe("1700080000");
+    expect(json.events[0]!.data.cancelledAt).toBe("1700080000");
+    expect(json.events[0]!.data.refundedTo).toBe("Creator1111111111111111111111111111111111");
+    expect(json.events[0]!.data.amount).toBe("500000");
   });
 });
