@@ -158,6 +158,66 @@ Created `docs/WEEK7_FE_COVERAGE_REPORT.md`:
 
 ---
 
+### 8. E2E Test Suite — Mock Wallet (UI flows, runs in CI)
+
+**Problem:** Unit tests verify logic, but no Playwright E2E tests covered complete user-facing flows: creating streams, viewing campaign detail, claiming, cancelling, funding recovery, token picker, SOL wrapping, close claim record, vesting charts.
+
+**Solution:** Added 15 Playwright spec files covering all non-admin pages and flows using `NEXT_PUBLIC_E2E_MOCK_WALLET=true` (no real transactions). Tests run in CI against Next.js production build on devnet.
+
+#### New E2E spec files
+
+| File | Tests | What it covers |
+|------|-------|---------------|
+| `wrap-sol.spec.ts` | 15 | WrapSolModal — open from token picker, tabs, input, Max, submit state, close |
+| `vesting-ui-components.spec.ts` | 10 | VestingChart (progress bars), CampaignTimeline (ACTIVITY feed), MilestoneCarouselCard |
+| `close-claim-record.spec.ts` | 4 | CloseClaimRecordButton visibility: fully claimed ✓, post-grace ✓, active/partial ✗ |
+| `allocations.spec.ts` | 6 | Allocations page: table renders, search, pagination, empty state |
+| `user-journey.spec.ts` | 12 | Create cliff/linear/milestone loading state, pause/unpause/cancel confirm flows |
+| `token-picker.spec.ts` (added) | 6 | Filter by symbol, escape key, custom mint loading/error/resolve states |
+| `campaign-actions.spec.ts` | 8 | Pause, unpause, cancel, instant refund — button visibility + loading states |
+| `campaign-detail.spec.ts` | 9 | Vesting stats, claim button, funding recovery, recipient table |
+| Others (existing + extended) | 12 | Dashboard, navigation, CSV validation, error messages, responsive |
+
+**Total mock E2E: ~82 tests across 15 spec files — all green in CI.**
+
+#### Key engineering decisions
+
+- RPC route intercept uses method-based filter (`body.method === "getAccountInfo"`) — endpoint-agnostic, works for helius, devnet, or any Solana RPC. Fixed 2 CI failures where tests used `**/helius-rpc.com/**` that never fired in CI.
+- Exact text match (`{ exact: true }`) for "SOL Balance" / "wSOL Balance" — avoids strict mode violation when regex also matched description `<p>`.
+- Modal scoping via `div[class*="z-[60]"]` for WrapSolModal buttons — prevents false match from underlying form's Max button through overlay.
+
+---
+
+### 9. E2E Real Signing Tests (local validator, 32 tests)
+
+**Problem:** Mock wallet tests can't verify on-chain correctness — actual token transfers, Merkle proof verification, rent reclaim, milestone release. Need real signing to prove the product actually works end-to-end on devnet/localnet.
+
+**Solution:** Created 8 signing test files in `tests/e2e/signing/`. Each uses `injectSigningWallet()` to inject a test keypair into localStorage and a real `solana-test-validator` connection. Tests skip gracefully (`test.skip`) when no local validator is running — CI shows them as skipped (not failing).
+
+#### Signing test files
+
+| File | Tests | Full flow tested |
+|------|-------|-----------------|
+| `create-and-claim.spec.ts` | 4 | SOL cliff create → claim → verify balance |
+| `claim-flow.spec.ts` | 5 | Fund wallet → create self-cliff → wait 15s → claim → verify stats |
+| `multi-create.spec.ts` | 4 | Linear stream create → dashboard → milestone create → dashboard |
+| `campaign-actions-signing.spec.ts` | 6 | 2-recipient campaign → pause → unpause → cancel; + instant refund |
+| `cancel-stream.spec.ts` | 3 | Create self-cliff → verify cancel button → cancel via dialog |
+| `milestone-release.spec.ts` | 3 | Create milestone (cliff=now+10s, self-beneficiary) → wait 15s → release Milestone #0 |
+| `close-claim-record.spec.ts` | 6 | Claim → verify Close Record button → close → verify rent reclaimed |
+| `wrap-sol-signing.spec.ts` | 2 | Wrap 0.01 SOL → wSOL; unwrap wSOL → SOL |
+| `root-rotation.spec.ts` | 3 | Create 2-recipient campaign → add recipient in UI → submit root rotation |
+
+**Total: 32 real-signing E2E tests covering all critical on-chain flows.**
+
+#### Patterns invented for signing tests
+
+- **Self-as-beneficiary**: recipient = signing keypair pubkey — proof lookup automatically matches own key for claim tests.
+- **treeAddress capture**: extract from "Open stream" / "View campaign" href regex `/\/campaign\/([A-Za-z0-9]+)/`.
+- **Skip-if-no-validator**: `test.skip(true, "Local validator not running")` in `beforeAll` if port 8899 unreachable — CI shows `-` not `✘`.
+
+---
+
 ## How Lana and I split the work
 
 | Area | Owner | Deliverables |
@@ -169,6 +229,8 @@ Created `docs/WEEK7_FE_COVERAGE_REPORT.md`:
 | **FE integration tests (41 tests)** | **Geral** | `week7-fe-integration.test.ts` |
 | **FE edge case tests (54 tests)** | **Geral** | `week7-fe-edge-cases.test.ts` |
 | **FE security tests (65 tests)** | **Geral** | `week7-fe-security.test.ts` |
+| **E2E mock wallet (82 tests, 15 spec files)** | **Geral** | `wrap-sol.spec.ts`, `vesting-ui-components.spec.ts`, `close-claim-record.spec.ts`, `allocations.spec.ts`, `user-journey.spec.ts`, etc. |
+| **E2E real signing (32 tests, 8 spec files)** | **Geral** | `claim-flow.spec.ts`, `campaign-actions-signing.spec.ts`, `cancel-stream.spec.ts`, `milestone-release.spec.ts`, `close-claim-record.spec.ts`, `root-rotation.spec.ts`, etc. |
 | **FE security checklist (56 checks)** | **Geral** | `WEEK7_FE_SECURITY_CHECKLIST.md` |
 | **FE issue log** | **Geral** | `WEEK7_FE_ISSUE_LOG.md` |
 | **FE coverage report** | **Geral** | `WEEK7_FE_COVERAGE_REPORT.md` |
@@ -201,12 +263,32 @@ Created `docs/WEEK7_FE_COVERAGE_REPORT.md`:
 
 ## Files changed/created this week
 
-### New files
+### New files — Unit tests
 - `apps/web/tests/week7/week7-fe-integration.test.ts` — 41 integration tests
 - `apps/web/tests/week7/week7-fe-edge-cases.test.ts` — 54 edge case tests
 - `apps/web/tests/week7/week7-fe-security.test.ts` — 65 security tests
 - `apps/web/tests/week7/week7-fe-coverage-boost.test.ts` — 106 coverage boost tests
 - `apps/web/tests/week7/week7-fe-coverage-boost-2.test.ts` — 38 additional coverage tests
+
+### New files — E2E (mock wallet, CI)
+- `apps/web/tests/e2e/wrap-sol.spec.ts` — 15 WrapSolModal tests
+- `apps/web/tests/e2e/vesting-ui-components.spec.ts` — 10 UI component tests (VestingChart, CampaignTimeline, MilestoneCarouselCard)
+- `apps/web/tests/e2e/close-claim-record.spec.ts` — 4 CloseClaimRecordButton visibility tests
+- `apps/web/tests/e2e/allocations.spec.ts` — 6 allocations page tests
+- `apps/web/tests/e2e/user-journey.spec.ts` — 12 full user journey loading state tests
+- (+ campaign-actions.spec.ts, campaign-detail.spec.ts, dashboard.spec.ts, csv-validation.spec.ts, and others)
+
+### New files — E2E (real signing, local validator)
+- `apps/web/tests/e2e/signing/claim-flow.spec.ts` — 5 tests: fund → create → wait → claim → verify
+- `apps/web/tests/e2e/signing/campaign-actions-signing.spec.ts` — 6 tests: pause/unpause/cancel, instant refund
+- `apps/web/tests/e2e/signing/cancel-stream.spec.ts` — 3 tests: create → verify → cancel
+- `apps/web/tests/e2e/signing/milestone-release.spec.ts` — 3 tests: create → wait → release
+- `apps/web/tests/e2e/signing/close-claim-record.spec.ts` — 6 tests: claim → close → rent reclaimed
+- `apps/web/tests/e2e/signing/wrap-sol-signing.spec.ts` — 2 tests: wrap SOL, unwrap wSOL
+- `apps/web/tests/e2e/signing/root-rotation.spec.ts` — 3 tests: create → add recipient → rotate root
+- `apps/web/tests/e2e/signing/multi-create.spec.ts` — 4 tests: linear + milestone stream creation
+
+### New files — Docs
 - `docs/WEEK7_FE_SECURITY_CHECKLIST.md` — 56-check security checklist + sealevel cross-ref
 - `docs/WEEK7_SECURITY_CHECKLIST_GDOC.md` — Combined SC+FE checklist for Google Doc submission
 - `docs/WEEK7_FE_ISSUE_LOG.md` — 5 issues documented
@@ -214,5 +296,9 @@ Created `docs/WEEK7_FE_COVERAGE_REPORT.md`:
 - `weekly-report-mancer/week7/Geral.md` — This report
 
 ### Modified files
+- `apps/web/tests/e2e/token-picker.spec.ts` — Added 6 new tests; fixed RPC mock to be endpoint-agnostic
+- `apps/web/tests/e2e/wrap-sol.spec.ts` — Fixed strict mode violations (exact text match, modal scoping)
+- `apps/web/src/app/(app)/campaign/[id]/page.tsx` — Fixed TypeScript `withTimeout<any>` inference error
 - `apps/web/vitest.unit.config.ts` — Added `tests/week7/**/*.test.ts` to include pattern
 - `package.json` — Added `@vitest/coverage-v8` dev dependency
+- `.github/workflows/web-ci.yml` — Added Playwright E2E CI job

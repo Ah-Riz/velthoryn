@@ -3,7 +3,7 @@
 **Team:** Team 7 (Mancer × Superteam)  
 **Product:** Velthoryn Token Vesting (Solana)  
 **Program ID:** `G6iaigUdi2btFwUc2N65twfxwA8Ew5uKKhKJ5RJa8wvu`  
-**Date:** 2026-06-02  
+**Date:** 2026-06-05  
 **Reviewers:** Geral (FE), Lana (SC/BE)  
 **Reference:** [coral-xyz/sealevel-attacks](https://github.com/coral-xyz/sealevel-attacks)
 
@@ -243,7 +243,9 @@ Reference: [coral-xyz/sealevel-attacks](https://github.com/coral-xyz/sealevel-at
 | `week7-fe-integration.test.ts` | 41 | Geral |
 | `week7-fe-edge-cases.test.ts` | 54 | Geral |
 | `week7-fe-security.test.ts` | 65 | Geral |
-| **Total** | **225** | |
+| E2E mock wallet (15 spec files, all flows) | 82 | Geral |
+| E2E real signing (8 spec files, claim/cancel/milestone/wrap/root rotation) | 32 | Geral |
+| **Total** | **339** | |
 
 ---
 
