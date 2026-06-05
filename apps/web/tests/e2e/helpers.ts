@@ -102,3 +102,51 @@ export function csv(rows: string[]) {
     ...rows,
   ].join("\n");
 }
+
+export async function injectStreamSchedule(
+  page: Page,
+  treeAddress: string,
+  schedule: {
+    releaseType: number;
+    startTime: number;
+    cliffTime: number;
+    endTime: number;
+    milestoneIdx?: number;
+    beneficiary?: string;
+    amount?: string;
+  },
+) {
+  await page.addInitScript((data: { key: string; value: string }) => {
+    window.localStorage.setItem(data.key, data.value);
+  }, {
+    key: `velthoryn:stream:${treeAddress}`,
+    value: JSON.stringify({ schedule: { milestoneIdx: 0, ...schedule } }),
+  });
+}
+
+export async function mockProofApi(
+  page: Page,
+  treeAddress: string,
+  leaves: Array<{
+    leafIndex: number;
+    beneficiary: string;
+    amount: number;
+    releaseType: number;
+    startTime: number;
+    cliffTime: number;
+    endTime: number;
+    milestoneIdx: number;
+  }>,
+) {
+  await page.route(`/api/campaigns/${treeAddress}/proof*`, async (route) => {
+    await route.fulfill({
+      json: {
+        leaves: leaves.map((leaf) => ({
+          leaf,
+          proof: [Array.from({ length: 32 }, () => 0)],
+        })),
+      },
+      status: 200,
+    });
+  });
+}
