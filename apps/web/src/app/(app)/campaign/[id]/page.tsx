@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import { useEffect, useState, useCallback, use, useMemo, useRef } from "react";
 import { useWallet, useConnection } from "@solana/wallet-adapter-react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -107,6 +106,9 @@ type UrlScheduleLoadResult = {
   milestoneUi: MilestoneUiMeta;
 };
 
+const ONCHAIN_TREE_FETCH_TIMEOUT_MS = 8000;
+const ONCHAIN_TREE_FETCH_TIMEOUT_MESSAGE = "Timed out fetching vesting tree";
+
 function buildIndexedFallbackTreeState(detail: {
   creator: string;
   mint: string;
@@ -149,6 +151,24 @@ function buildIndexedFallbackTreeState(detail: {
     };
   } catch {
     return null;
+  }
+}
+
+async function withTimeout<T>(
+  operation: Promise<T>,
+  timeoutMs: number,
+  message: string,
+): Promise<T> {
+  let timeoutId: ReturnType<typeof setTimeout> | undefined;
+  try {
+    return await Promise.race([
+      operation,
+      new Promise<T>((_, reject) => {
+        timeoutId = setTimeout(() => reject(new Error(message)), timeoutMs);
+      }),
+    ]);
+  } finally {
+    if (timeoutId) clearTimeout(timeoutId);
   }
 }
 
@@ -374,7 +394,11 @@ export default function CampaignPage({ params }: { params: Promise<{ id: string 
     const run = (async () => {
       try {
         const treePubkey = new PublicKey(treeAddress);
-        const account = await (program.account as any).vestingTree.fetch(treePubkey);
+        const account = await withTimeout(
+          (program.account as any).vestingTree.fetch(treePubkey),
+          ONCHAIN_TREE_FETCH_TIMEOUT_MS,
+          ONCHAIN_TREE_FETCH_TIMEOUT_MESSAGE,
+        );
         lastMissingTreeAddressRef.current = null;
         setTreeState({
           creator: account.creator,
@@ -404,7 +428,10 @@ export default function CampaignPage({ params }: { params: Promise<{ id: string 
         void queryClient.invalidateQueries({ queryKey: ["beneficiaryCampaigns"] });
       } catch (err: unknown) {
         const rawMessage = err instanceof Error ? err.message : String(err);
-        if (rawMessage.includes("Account does not exist or has no data")) {
+        if (
+          rawMessage.includes("Account does not exist or has no data") ||
+          rawMessage.includes(ONCHAIN_TREE_FETCH_TIMEOUT_MESSAGE)
+        ) {
           if (lastMissingTreeAddressRef.current !== treeAddress) {
             console.warn("[CampaignPage] Ignoring non-fatal account fetch error:", rawMessage);
             lastMissingTreeAddressRef.current = treeAddress;
@@ -1406,6 +1433,7 @@ export default function CampaignPage({ params }: { params: Promise<{ id: string 
     }
 
     setTxStatus({ type: "loading" });
+    await waitForLoadingPaint();
 
     try {
       const treePubkey = new PublicKey(treeAddress);
@@ -2187,12 +2215,12 @@ export default function CampaignPage({ params }: { params: Promise<{ id: string 
                       <p className="mt-2 text-[13px] text-white">v{rootVersions[0]?.version ?? 1} · {treeState.leafCount} leaves</p>
                     </div>
                   </div>
-                  <Link
+                  <a
                     href={`/campaign/${treeAddress}/allocations`}
                     className="mt-4 inline-flex w-full items-center justify-center rounded-xl border border-white/[0.08] bg-white px-4 py-3 text-[13px] font-medium text-[#0d1117] transition hover:opacity-90"
                   >
                     Open Allocation Editor
-                  </Link>
+                  </a>
                 </div>
               )}
             </div>
