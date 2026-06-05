@@ -14,7 +14,7 @@ import {
 } from "@/lib/api/auth-middleware";
 import { checkBodySize, getBodyLimitBytes } from "@/lib/api/body-limit";
 import { PayloadTooLargeError } from "@/lib/api/errors";
-import { makeCampaignBody, makeUrl } from "../helpers/requests";
+import { makeCampaignBody, makeLeaf, computeSingleLeafRoot, makeUrl } from "../helpers/requests";
 import { createAuthHeader } from "../helpers/wallet-auth";
 
 describe("security controls", () => {
@@ -24,16 +24,19 @@ describe("security controls", () => {
     vi.unstubAllEnvs();
   });
 
-  it("rejects unauthenticated POST /api/campaigns (auth required)", async () => {
+  it("accepts POST /api/campaigns without wallet auth (creator constraint is on-chain)", async () => {
+    const leaf = makeLeaf();
+    const merkleRoot = computeSingleLeafRoot(leaf);
     const req = new NextRequest(makeUrl("/api/campaigns"), {
       method: "POST",
-      body: JSON.stringify(makeCampaignBody()),
+      body: JSON.stringify(makeCampaignBody({ merkleRoot, leaves: [leaf] })),
       headers: { "content-type": "application/json" },
     });
 
     const res = await postCampaigns(req);
-    // Route now requires wallet auth — unauthenticated request returns 401.
-    expect(res.status).toBe(401);
+    // Auth removed from indexing route — on-chain program enforces creator constraint.
+    // Valid payload without auth header returns 201.
+    expect(res.status).toBe(201);
   });
 
   it("accepts valid wallet signature", async () => {

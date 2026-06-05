@@ -2,7 +2,13 @@
 import { describe, it, expect, afterEach } from "vitest";
 import { render, screen, cleanup } from "@testing-library/react";
 import { createElement } from "react";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MilestoneReleasePanel } from "@/components/campaign/detail/MilestoneReleasePanel";
+
+function withQueryClient(element: React.ReactElement) {
+  const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  return createElement(QueryClientProvider, { client: qc }, element);
+}
 
 function renderPanel(overrides = {}) {
   const props = {
@@ -16,7 +22,7 @@ function renderPanel(overrides = {}) {
     toast: () => {},
     ...overrides,
   };
-  return render(createElement(MilestoneReleasePanel, props));
+  return render(withQueryClient(createElement(MilestoneReleasePanel, props)));
 }
 
 describe("MilestoneReleasePanel", () => {
