@@ -121,6 +121,8 @@ function buildIndexedFallbackTreeState(detail: {
   instantRefunded?: boolean;
   createdAt: number;
   leafCount: number;
+  cancelAuthority?: string | null;
+  pauseAuthority?: string | null;
 }): TreeState | null {
   try {
     const merkleRoot = detail.merkleRoot.match(/.{1,2}/g)?.map((byte) => parseInt(byte, 16)) ?? new Array(32).fill(0);
@@ -134,10 +136,10 @@ function buildIndexedFallbackTreeState(detail: {
       totalSupply: new BN(String(detail.totalSupply)),
       totalClaimed: new BN(String(detail.totalClaimed)),
       cancellable: detail.cancellable,
-      cancelAuthority: null,
+      cancelAuthority: detail.cancelAuthority ? new PublicKey(detail.cancelAuthority) : null,
       cancelledAt: detail.cancelledAt !== null ? new BN(detail.cancelledAt) : null,
       paused: detail.paused,
-      pauseAuthority: null,
+      pauseAuthority: detail.pauseAuthority ? new PublicKey(detail.pauseAuthority) : null,
       createdAt: new BN(detail.createdAt),
       leafCount: detail.leafCount,
       milestoneReleasedFlags: new Uint8Array(32),

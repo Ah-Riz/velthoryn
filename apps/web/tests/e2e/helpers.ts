@@ -5,6 +5,57 @@ export const recipientWallet = "3coyVxLQYHdQ6MNQRRdm2KuCABJopxPfo9XuQeosUmf3";
 export const secondWallet = "11111111111111111111111111111111";
 export const nativeSolMint = "11111111111111111111111111111111";
 
+export function buildMockCampaignDetail(
+  treeAddress: string,
+  overrides: Record<string, unknown> = {},
+) {
+  const now = Math.floor(Date.now() / 1000);
+  return {
+    treeAddress,
+    creator: creatorWallet,
+    mint: nativeSolMint,
+    campaignId: 999_999,
+    merkleRoot: "a".repeat(64),
+    leafCount: 1,
+    totalSupply: "1000000000",
+    totalClaimed: "0",
+    cancellable: true,
+    cancelAuthority: creatorWallet,
+    pauseAuthority: creatorWallet,
+    paused: false,
+    cancelledAt: null,
+    minCliffTime: null,
+    instantRefunded: false,
+    instantRefundEligible: false,
+    createdAt: now - 86400 * 7,
+    metadata: null,
+    hasMilestoneLeaves: false,
+    gracePeriod: null,
+    analytics: { uniqueClaimers: 0, claimCount: 0, percentClaimed: 0, rootVersionCount: 1 },
+    rootVersions: [{ id: 1, version: 1, merkleRoot: "a".repeat(64), leafCount: 1, createdAt: now, ipfsCid: null }],
+    recipients: [{ beneficiary: creatorWallet, allocation: "1000000000", leafCount: 1, claimedAmount: "0" }],
+    ...overrides,
+  };
+}
+
+/** Mock /api/campaigns/:treeAddress and its sub-routes for E2E tests. */
+export async function mockCampaignApi(
+  page: Page,
+  treeAddress: string,
+  overrides: Record<string, unknown> = {},
+) {
+  const detail = buildMockCampaignDetail(treeAddress, overrides);
+  await page.route(`/api/campaigns/${treeAddress}`, async (route) => {
+    await route.fulfill({ json: detail, status: 200 });
+  });
+  await page.route(`/api/campaigns/${treeAddress}/timeline*`, async (route) => {
+    await route.fulfill({ json: { events: [] }, status: 200 });
+  });
+  await page.route(`/api/campaigns/${treeAddress}/status*`, async (route) => {
+    await route.fulfill({ json: { funded: true, remaining: "0" }, status: 200 });
+  });
+}
+
 export async function enableE2eWallet(page: Page) {
   await page.addInitScript(() => {
     window.localStorage.setItem("velthoryn:e2e-wallet", "1");
