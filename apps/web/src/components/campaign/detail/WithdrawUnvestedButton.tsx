@@ -122,7 +122,8 @@ export function WithdrawUnvestedButton({
     <>
       <button
         onClick={() => setConfirmOpen(true)}
-        className="w-full rounded-xl border border-amber-500/20 py-2.5 text-[13px] font-medium text-amber-400 transition hover:border-amber-500/40 hover:bg-amber-500/5"
+        disabled={confirmOpen}
+        className="w-full rounded-xl border border-amber-500/20 py-2.5 text-[13px] font-medium text-amber-400 transition hover:border-amber-500/40 hover:bg-amber-500/5 disabled:cursor-not-allowed disabled:opacity-50"
       >
         Withdraw Unvested Tokens
       </button>

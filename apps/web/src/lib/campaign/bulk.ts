@@ -282,7 +282,10 @@ export function parseBulkCsv(
     }
 
     const startTime = parseTimestamp(startTimeRaw);
-    const cliffTime = parseTimestamp(cliffTimeRaw);
+    let cliffTime = parseTimestamp(cliffTimeRaw);
+    if (releaseType === 1 && (!cliffTimeRaw.trim() || cliffTimeRaw.trim() === "0")) {
+      cliffTime = startTime;
+    }
     const endTime = parseTimestamp(endTimeRaw);
     const scheduleError = validateSchedule(
       startTime,

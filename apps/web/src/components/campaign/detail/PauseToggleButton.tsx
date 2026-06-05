@@ -16,6 +16,10 @@ type Props = {
   toast: (msg: string, type?: "success" | "error" | "info") => void;
 };
 
+function waitForLoadingPaint() {
+  return new Promise<void>((resolve) => setTimeout(resolve, 250));
+}
+
 export function PauseToggleButton({
   program,
   publicKey,
@@ -33,6 +37,7 @@ export function PauseToggleButton({
 
   async function handleToggle() {
     setLoading(true);
+    await waitForLoadingPaint();
     try {
       const method = paused
         ? program.methods.unpauseCampaign()

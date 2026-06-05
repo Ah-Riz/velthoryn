@@ -231,6 +231,10 @@ function truncateAddress(addr: string, chars = 6): string {
   return `${addr.slice(0, chars)}...${addr.slice(-chars)}`;
 }
 
+function waitForLoadingPaint() {
+  return new Promise<void>((resolve) => setTimeout(resolve, 250));
+}
+
 /* ------------------------------------------------------------------ */
 /*  Page component                                                    */
 /* ------------------------------------------------------------------ */
@@ -1062,6 +1066,7 @@ export default function CampaignPage({ params }: { params: Promise<{ id: string 
   async function handleCancel() {
     if (!program || !publicKey || !treeState) return;
     setCancelLoading(true);
+    await waitForLoadingPaint();
     try {
       const treePubkey = new PublicKey(treeAddress);
 
@@ -1133,6 +1138,7 @@ export default function CampaignPage({ params }: { params: Promise<{ id: string 
     const resolvedBeneficiary = expectedBeneficiary ?? (manualBeneficiary || null);
     if (!program || !publicKey || !treeState || !resolvedBeneficiary) return;
     setCancelLoading(true);
+    await waitForLoadingPaint();
     try {
       const treePubkey = new PublicKey(treeAddress);
       const beneficiary = new PublicKey(resolvedBeneficiary);
@@ -1279,6 +1285,7 @@ export default function CampaignPage({ params }: { params: Promise<{ id: string 
   async function handleInstantRefund() {
     if (!program || !publicKey || !treeState) return;
     setInstantRefundLoading(true);
+    await waitForLoadingPaint();
     try {
       const treePubkey = new PublicKey(treeAddress);
       const native = isNativeSol(treeState.mint);
@@ -2127,7 +2134,7 @@ export default function CampaignPage({ params }: { params: Promise<{ id: string 
                   onClick={() => setCancelOpen(true)}
                   className="w-full rounded-xl border border-red-500/20 px-4 py-3 text-[13px] font-medium text-red-400 transition hover:border-red-500/40 hover:bg-red-500/5"
                 >
-                  Cancel Stream
+                  {isSingleLeaf ? "Cancel Stream" : "Cancel Campaign"}
                 </button>
               )}
 

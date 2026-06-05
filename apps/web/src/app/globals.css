@@ -18,6 +18,10 @@ body {
   font-family: Arial, Helvetica, sans-serif;
 }
 
+body[data-vesting-tx-pending="true"] [data-sidebar-nav] {
+  visibility: hidden;
+}
+
 @keyframes slideIn {
   from {
     opacity: 0;

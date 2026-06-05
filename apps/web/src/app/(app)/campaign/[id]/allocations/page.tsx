@@ -94,10 +94,18 @@ export default function CampaignAllocationsPage({
     beneficiary: string; amount: string; releaseType: number;
     startTime: string; cliffTime: string; endTime: string; milestoneIdx: number;
   }>>([]);
+  const [leavesFetched, setLeavesFetched] = useState(false);
 
   useEffect(() => {
-    if (!detail?.recipients?.length) return;
-    // Fetch proof data for each recipient to get schedule info
+    let cancelled = false;
+    setFullLeaves([]);
+    setLeavesFetched(false);
+
+    if (!detail?.recipients?.length) {
+      setLeavesFetched(true);
+      return;
+    }
+
     async function fetchLeaves() {
       try {
         const allLeaves: typeof fullLeaves = [];
@@ -117,10 +125,16 @@ export default function CampaignAllocationsPage({
             });
           }
         }
-        setFullLeaves(allLeaves);
+        if (!cancelled) setFullLeaves(allLeaves);
       } catch { /* ignore */ }
+      finally {
+        if (!cancelled) setLeavesFetched(true);
+      }
     }
     void fetchLeaves();
+    return () => {
+      cancelled = true;
+    };
   }, [detail?.recipients, treeAddress]);
 
   const canRotate = canRotateRoot({
@@ -136,7 +150,7 @@ export default function CampaignAllocationsPage({
     : detail?.merkleRoot ?? "";
 
   // Build initial rows from full leaf data (with schedule) or fallback to aggregated recipients
-  const leavesLoading = detail?.recipients?.length && fullLeaves.length === 0;
+  const leavesLoading = detail?.recipients?.length && !leavesFetched;
   const initialRows: RecipientRow[] = fullLeaves.length > 0
     ? fullLeaves.map((l, i) => ({
         id: `leaf-${i}`,
@@ -153,6 +167,7 @@ export default function CampaignAllocationsPage({
   async function handleSubmit(rows: RecipientRow[]) {
     if (!detail || !publicKey) return;
 
+    const submittingStartedAt = Date.now();
     setSubmitting(true);
     try {
       // Step 1: Call prepare API to build new Merkle tree
@@ -231,6 +246,10 @@ export default function CampaignAllocationsPage({
       if (err instanceof Error && /User rejected|Connection rejected/i.test(err.message)) return;
       toast(formatVestingError(err), "error");
     } finally {
+      const elapsed = Date.now() - submittingStartedAt;
+      if (elapsed < 250) {
+        await new Promise((resolve) => setTimeout(resolve, 250 - elapsed));
+      }
       setSubmitting(false);
     }
   }
