@@ -56,14 +56,34 @@ export default function CampaignAllocationsPage({
         cancelAuthority: account.cancelAuthority ?? null,
         cancelledAt: account.cancelledAt ?? null,
       });
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to load campaign state.");
+    } catch {
+      // On-chain fetch failed — will attempt fallback to indexed API data below.
+      setTreeState(null);
+      setError(null);
     } finally {
       setLoading(false);
     }
   }, [program, treeAddress]);
 
   useEffect(() => { void fetchTree(); }, [fetchTree]);
+
+  // Fallback: when on-chain fetch fails, reconstruct tree state from indexed API data.
+  useEffect(() => {
+    if (loading || treeState) return;
+    const d = campaignDetailQuery.data;
+    if (!d) return;
+    try {
+      setTreeState({
+        merkleRoot: d.merkleRoot.match(/.{1,2}/g)?.map((b) => parseInt(b, 16)) ?? new Array(32).fill(0),
+        leafCount: d.leafCount,
+        cancellable: d.cancellable,
+        cancelAuthority: d.cancelAuthority ? new PublicKey(d.cancelAuthority) : null,
+        cancelledAt: d.cancelledAt !== null ? new BN(d.cancelledAt) : null,
+      });
+    } catch {
+      setError("Failed to load campaign state.");
+    }
+  }, [loading, treeState, campaignDetailQuery.data]);
 
   const detail = campaignDetailQuery.data;
   const { mintDecimals } = useMintInfo(detail?.mint ?? "");
