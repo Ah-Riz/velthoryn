@@ -1,6 +1,6 @@
-# Status Report -- Lana (Week 8)
+# Status Report — Week 8
 
-**Scope:** BE-DB-SC-Merkle (backend API, Postgres/indexer, Solana program, Merkle client). Frontend UI is out of scope unless noted as a dependency on Geral.
+**Scope:** Full stack — Solana program, Backend API/DB, Merkle pipeline, Frontend UI.
 
 **This week:** Root rotation integration bug fix (full-stack) + bug audit (L1/P0 sweep) + end-to-end BE verification + performance profiling (CU budgets, transaction costs, Merkle scale) + known issues documentation + CI hardening (Mollusk claim tests, cargo audit ignores, clippy fixes) + mainnet readiness docs (CU_BUDGET, MAINNET_CHECKLIST, multisig runbook).
 
@@ -60,6 +60,14 @@
 | DB schema updated -- `min_cliff_time NOT NULL` column | `apps/web/src/lib/db/schema.ts` -- migration `0010_add_min_cliff_time.sql` |
 | BE route persists `minCliffTime` + returns 409 on conflict | `apps/web/app/api/campaigns/[treeAddress]/root-versions/route.ts` |
 | Integration guide written | `docs/ROOT_ROTATION_GUIDE.md` -- step-by-step for FE integration |
+
+### Frontend
+
+<!-- Geral: add your working items here (FE tests, E2E, UI features, etc.) -->
+
+| Item | Evidence |
+|------|----------|
+| _Add items_ | _Add evidence_ |
 
 ---
 
@@ -182,7 +190,12 @@ Was the critical bug this week. The FE hook `useUpdateRoot.ts` was calling `upda
 ### Test Infrastructure
 Unit tests are healthy (540+ Vitest, 31 Rust unit+proptest, 72 Mollusk). Integration tests are affected by the DB migration snapshot gap (missing snapshots for 0002-0010). This is a tooling issue, not a code issue. Once fixed, the full integration suite should run cleanly.
 
-### Overall
+### Frontend
+
+<!-- Geral: add your honest assessment of FE readiness here -->
+
+_Overall_
+V1 is stable and ready for external audit. The two blockers for mainnet are (1) external audit completion and (2) Mollusk 0.14 upgrade to validate the 6 estimated CU measurements. All code-level work is either done or has a clear path forward.
 V1 is stable and ready for external audit. The two blockers for mainnet are (1) external audit completion and (2) Mollusk 0.14 upgrade to validate the 6 estimated CU measurements. All code-level work is either done or has a clear path forward.
 
 ---
@@ -215,7 +228,15 @@ V1 is stable and ready for external audit. The two blockers for mainnet are (1) 
 | `docs/ROOT_ROTATION_GUIDE.md` | Comprehensive root rotation integration guide (on-chain instruction, authority gates, step-by-step, edge cases, bug fix for FE) |
 | `weekly-report-mancer/week8/KNOWN_ISSUES.md` | Bug audit findings: 8 fixed, 11 documented, 2 deferred |
 | `weekly-report-mancer/week8/PERFORMANCE_REPORT.md` | Performance profiling results: CU budgets, transaction costs, Merkle scale, API latency targets |
-| `weekly-report-mancer/week8/STATUS_REPORT_LANA.md` | This file |
+| `weekly-report-mancer/week8/STATUS_REPORT.md` | This file |
+
+### Frontend
+
+<!-- Geral: add your created/modified files here -->
+
+| File | Change |
+|------|--------|
+| _Add files_ | _Add changes_ |
 
 ### CI Fixes (committed)
 
