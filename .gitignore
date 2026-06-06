@@ -64,4 +64,8 @@ Thumbs.db
 apps/web/test-results/
 .mcp.json
 
+# Private working docs
+weekly-report-mancer/week8/TASKS.md
+weekly-report-mancer/week8/STATUS_REPORT_LANA.md
+
 
