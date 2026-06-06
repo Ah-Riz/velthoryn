@@ -62,6 +62,7 @@ async function seedCampaign(overrides: Record<string, unknown> = {}): Promise<{
     campaignId,
     merkleRoot: "a".repeat(64),
     leafCount: 1,
+    minCliffTime: 0n,
     version: 1,
     createdAt: now,
   }).returning({ id: rootVersions.id });

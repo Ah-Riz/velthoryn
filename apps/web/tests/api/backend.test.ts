@@ -256,6 +256,7 @@ describe("Zod Validators", () => {
     const validBody = {
       merkleRoot: "a".repeat(64),
       leafCount: 2,
+      minCliffTime: 1700000000,
       leaves: [makeLeaf(), makeLeaf({ leafIndex: 1 })],
     };
 
@@ -755,7 +756,7 @@ describe("POST /api/campaigns/[treeAddress]/root-versions", () => {
     const treeAddress = uniqueTreeAddress();
     await createCampaignViaPost({ treeAddress });
 
-    const body = makeMultiLeafCampaignBody(3);
+    const body = makeMultiLeafCampaignBody(3, { minCliffTime: 1700000000 });
 
     const req = await makeAuthenticatedPostRequest(
       `/api/campaigns/${treeAddress}/root-versions`,
@@ -776,6 +777,7 @@ describe("POST /api/campaigns/[treeAddress]/root-versions", () => {
     const body = {
       merkleRoot: computeSingleLeafRoot(leaf),
       leafCount: 1,
+      minCliffTime: 1700000000,
       leaves: [{ ...leaf, proof: [] }],
     };
 
@@ -1235,6 +1237,7 @@ describe("Merkle proof verification (indirect)", () => {
       {
         merkleRoot: body.merkleRoot,
         leafCount: 2,
+        minCliffTime: 1700000000,
         leaves: body.leaves,
       },
     );
