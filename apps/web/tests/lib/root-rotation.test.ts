@@ -8,6 +8,7 @@ describe("root rotation payload helpers", () => {
   const payload = {
     merkleRoot: "a".repeat(64),
     leafCount: 2,
+    minCliffTime: 1700003600,
     leaves: [
       {
         leafIndex: 0,
