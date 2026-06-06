@@ -208,6 +208,7 @@ export default function CampaignAllocationsPage({
       const prepared = await prepareRes.json() as {
         merkleRoot: string;
         leafCount: number;
+        minCliffTime: string;
         leaves: Array<{
           leafIndex: number;
           beneficiary: string;
@@ -227,6 +228,7 @@ export default function CampaignAllocationsPage({
         payload: {
           merkleRoot: prepared.merkleRoot,
           leafCount: prepared.leafCount,
+          minCliffTime: Number(prepared.minCliffTime),
           leaves: prepared.leaves,
         },
       });
