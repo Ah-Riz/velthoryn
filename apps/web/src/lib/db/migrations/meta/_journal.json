@@ -15,6 +15,20 @@
       "when": 1780720462000,
       "tag": "0001_rls_policies",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1780722600000,
+      "tag": "0006_instant_refund_campaign_fields",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1780722601000,
+      "tag": "0007_instant_refund_events",
+      "breakpoints": true
     }
   ]
 }
