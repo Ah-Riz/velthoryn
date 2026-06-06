@@ -5,8 +5,9 @@ import { db } from "@/lib/db";
 import { campaigns, rootVersions, leaves } from "@/lib/db/schema";
 import { createRootVersionRequestSchema } from "@/lib/api/validators";
 import { verifyAllLeaves } from "@/lib/merkle/verify";
-import { NotFoundError, ValidationError } from "@/lib/api/errors";
+import { ConflictError, ForbiddenError, NotFoundError, ValidationError } from "@/lib/api/errors";
 import { withRoute } from "@/lib/api/route-wrapper";
+import { getAuthenticatedWallet } from "@/lib/api/auth-middleware";
 
 function u64BigInt(value: string | number): bigint {
   return BigInt(value);
@@ -35,13 +36,18 @@ async function postRootVersionHandler(
   }
 
   const [campaign] = await db
-    .select({ id: campaigns.id })
+    .select({ id: campaigns.id, cancelAuthority: campaigns.cancelAuthority })
     .from(campaigns)
     .where(eq(campaigns.treeAddress, treeAddress))
     .limit(1);
 
   if (!campaign) {
     throw new NotFoundError("Campaign");
+  }
+
+  const authWallet = getAuthenticatedWallet(request);
+  if (!campaign.cancelAuthority || authWallet !== campaign.cancelAuthority) {
+    throw new ForbiddenError("Signer is not the campaign's cancel authority");
   }
 
   const nextVersion = await db.transaction(async (tx) => {
@@ -52,17 +58,27 @@ async function postRootVersionHandler(
 
     const version = currentMax.version + 1;
 
-    const [insertedRootVersion] = await tx
-      .insert(rootVersions)
-      .values({
-        campaignId: campaign.id,
-        merkleRoot: data.merkleRoot,
-        leafCount: data.leafCount,
-        ipfsCid: data.ipfsCid ?? null,
-        version: version,
-        createdAt: u64BigInt(Math.floor(Date.now() / 1000)),
-      })
-      .returning({ id: rootVersions.id });
+    let insertedRootVersion: { id: number };
+    try {
+      [insertedRootVersion] = await tx
+        .insert(rootVersions)
+        .values({
+          campaignId: campaign.id,
+          merkleRoot: data.merkleRoot,
+          leafCount: data.leafCount,
+          minCliffTime: u64BigInt(data.minCliffTime),
+          ipfsCid: data.ipfsCid ?? null,
+          version: version,
+          createdAt: u64BigInt(Math.floor(Date.now() / 1000)),
+        })
+        .returning({ id: rootVersions.id });
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      if (msg.includes("uq_campaign_version") || msg.includes("duplicate key") || msg.includes("unique constraint")) {
+        throw new ConflictError("Version conflict — please retry");
+      }
+      throw err;
+    }
 
     const leafRows = data.leaves.map((leaf) => ({
       rootVersionId: insertedRootVersion.id,
@@ -86,6 +102,7 @@ async function postRootVersionHandler(
       .set({
         merkleRoot: data.merkleRoot,
         leafCount: data.leafCount,
+        minCliffTime: u64BigInt(data.minCliffTime),
       })
       .where(eq(campaigns.id, campaign.id));
 
@@ -97,6 +114,7 @@ async function postRootVersionHandler(
 
 export const POST = withRoute(
   {
+    auth: true,
     rateLimit: { requests: 10, window: 60 },
     bodyLimit: "root-versions",
   },

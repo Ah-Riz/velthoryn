@@ -5,8 +5,9 @@ import { db } from "@/lib/db";
 import { campaigns, rootVersions, leaves } from "@/lib/db/schema";
 import { createCampaignRequestSchema } from "@/lib/api/validators";
 import { verifyAllLeaves } from "@/lib/merkle/verify";
-import { ValidationError } from "@/lib/api/errors";
+import { ForbiddenError, ValidationError } from "@/lib/api/errors";
 import { withRoute } from "@/lib/api/route-wrapper";
+import { getAuthenticatedWallet } from "@/lib/api/auth-middleware";
 
 import { getRequestId } from "@/lib/api/request-id";
 import { logger } from "@/lib/api/logger";
@@ -34,6 +35,11 @@ async function postCampaignsHandler(request: NextRequest) {
   }
 
   const data = parsed.data;
+
+  const authWallet = getAuthenticatedWallet(request);
+  if (authWallet !== data.creator) {
+    throw new ForbiddenError("Signer does not match the campaign creator");
+  }
 
   if (data.leafCount !== data.leaves.length) {
     throw new ValidationError(
@@ -116,6 +122,7 @@ async function postCampaignsHandler(request: NextRequest) {
         campaignId,
         merkleRoot: data.merkleRoot,
         leafCount: data.leafCount,
+        minCliffTime: data.minCliffTime ? BigInt(data.minCliffTime) : 0n,
         ipfsCid: data.ipfsCid ?? null,
         version: 1,
         createdAt: u64BigInt(data.createdAt),
@@ -196,6 +203,7 @@ async function getCampaignsHandler(request: NextRequest) {
 
 export const POST = withRoute(
   {
+    auth: true,
     rateLimit: { requests: 10, window: 60 },
     bodyLimit: "campaigns",
   },

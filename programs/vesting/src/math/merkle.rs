@@ -1,6 +1,7 @@
 use anchor_lang::prelude::*;
 use solana_keccak_hasher::hashv;
 
+#[cfg(test)]
 use crate::constants::MAX_MERKLE_PROOF_LEN;
 use crate::state::VestingLeaf;
 

@@ -5,64 +5,36 @@
     {
       "idx": 0,
       "version": "7",
-      "when": 1778373116414,
-      "tag": "0000_swift_wong",
+      "when": 1780720461040,
+      "tag": "0000_tan_mac_gargan",
       "breakpoints": true
     },
     {
       "idx": 1,
       "version": "7",
-      "when": 1778373343971,
-      "tag": "0001_solid_the_call",
+      "when": 1780720462000,
+      "tag": "0001_rls_policies",
       "breakpoints": true
     },
     {
       "idx": 2,
       "version": "7",
-      "when": 1778500000000,
-      "tag": "0003_rls_policies",
+      "when": 1780722600000,
+      "tag": "0006_instant_refund_campaign_fields",
       "breakpoints": true
     },
     {
       "idx": 3,
       "version": "7",
-      "when": 1778500001000,
-      "tag": "0004_event_tables",
+      "when": 1780722601000,
+      "tag": "0007_instant_refund_events",
       "breakpoints": true
     },
     {
       "idx": 4,
       "version": "7",
-      "when": 1778500002000,
-      "tag": "0005_timeline_indexes",
-      "breakpoints": true
-    },
-    {
-      "idx": 5,
-      "version": "7",
-      "when": 1778500003000,
-      "tag": "0006_instant_refund_campaign_fields",
-      "breakpoints": true
-    },
-    {
-      "idx": 6,
-      "version": "7",
-      "when": 1778500004000,
-      "tag": "0007_instant_refund_events",
-      "breakpoints": true
-    },
-    {
-      "idx": 7,
-      "version": "7",
-      "when": 1778500005000,
-      "tag": "0008_instant_refund_rls",
-      "breakpoints": true
-    },
-    {
-      "idx": 8,
-      "version": "7",
-      "when": 1778500006000,
-      "tag": "0009_enable_event_rls",
+      "when": 1780735000000,
+      "tag": "0008_add_min_cliff_time_to_root_versions",
       "breakpoints": true
     }
   ]

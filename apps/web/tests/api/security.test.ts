@@ -14,7 +14,7 @@ import {
 } from "@/lib/api/auth-middleware";
 import { checkBodySize, getBodyLimitBytes } from "@/lib/api/body-limit";
 import { PayloadTooLargeError } from "@/lib/api/errors";
-import { makeCampaignBody, makeLeaf, computeSingleLeafRoot, makeUrl } from "../helpers/requests";
+import { makeCampaignBody, makeLeaf, computeSingleLeafRoot, makeUrl, makeAuthenticatedPostRequest } from "../helpers/requests";
 import { createAuthHeader } from "../helpers/wallet-auth";
 
 describe("security controls", () => {
@@ -24,18 +24,14 @@ describe("security controls", () => {
     vi.unstubAllEnvs();
   });
 
-  it("accepts POST /api/campaigns without wallet auth (creator constraint is on-chain)", async () => {
+  it("accepts POST /api/campaigns with valid wallet auth", async () => {
     const leaf = makeLeaf();
     const merkleRoot = computeSingleLeafRoot(leaf);
-    const req = new NextRequest(makeUrl("/api/campaigns"), {
-      method: "POST",
-      body: JSON.stringify(makeCampaignBody({ merkleRoot, leaves: [leaf] })),
-      headers: { "content-type": "application/json" },
-    });
+    const req = await makeAuthenticatedPostRequest("/api/campaigns", makeCampaignBody({ treeAddress: Keypair.generate().publicKey.toBase58(), merkleRoot, leaves: [leaf] }));
 
     const res = await postCampaigns(req);
     // Auth removed from indexing route — on-chain program enforces creator constraint.
-    // Valid payload without auth header returns 201.
+    // Valid payload with auth header returns 201.
     expect(res.status).toBe(201);
   });
 

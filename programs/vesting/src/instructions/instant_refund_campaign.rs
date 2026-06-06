@@ -114,10 +114,7 @@ pub fn handler(ctx: Context<InstantRefundCampaign>) -> Result<()> {
             .as_ref()
             .ok_or(VestingError::MintMismatch)?;
 
-        let bump = ctx
-            .bumps
-            .vault_authority
-            .expect("bump must exist when vault_authority is Some");
+        let bump = ctx.bumps.vault_authority.ok_or(VestingError::WrongVault)?;
         let signer_seeds: &[&[&[u8]]] = &[&[b"vault_authority", tree_key.as_ref(), &[bump]]];
 
         let cpi_accounts = Transfer {

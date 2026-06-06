@@ -15,29 +15,31 @@ use test_helpers::*;
 // ---------------------------------------------------------------------------
 
 /// Build the full 10-account `AccountMeta` list for a native SOL `claim` instruction.
-/// Optional accounts use `Pubkey::default()` (zero key) to indicate `None`.
-/// These zero-keyed accounts must NOT be included in the Mollusk accounts list,
-/// because Anchor treats missing accounts for `Option<T>` fields as `None`.
+/// Optional accounts use the program ID as pubkey — Anchor 1.0 treats any account
+/// whose key equals the program ID as `None` for `Option<T>` fields (see
+/// anchor-lang/src/accounts/option.rs: `if accounts[0].key == program_id`).
 fn claim_ix_accounts(beneficiary: Pubkey, tree_pda: Pubkey, cr_pda: Pubkey) -> Vec<AccountMeta> {
+    let pid = program_id();
     vec![
         AccountMeta::new(beneficiary, true),
         AccountMeta::new(tree_pda, false),
         AccountMeta::new(cr_pda, false),
-        // Positions 4-9: optional accounts — zero pubkey means None in Anchor
-        AccountMeta::new_readonly(Pubkey::default(), false), // vault_authority
-        AccountMeta::new_readonly(Pubkey::default(), false), // vault
-        AccountMeta::new_readonly(Pubkey::default(), false), // beneficiary_ata
-        AccountMeta::new_readonly(Pubkey::default(), false), // mint
-        AccountMeta::new_readonly(Pubkey::default(), false), // token_program
-        AccountMeta::new_readonly(Pubkey::default(), false), // associated_token_program
-        // Position 10: system_program (required, non-optional)
+        // Positions 3-8: optional accounts — program ID signals None to Anchor
+        AccountMeta::new_readonly(pid, false), // vault_authority = None
+        AccountMeta::new_readonly(pid, false), // vault = None
+        AccountMeta::new_readonly(pid, false), // beneficiary_ata = None
+        AccountMeta::new_readonly(pid, false), // mint = None
+        AccountMeta::new_readonly(pid, false), // token_program = None
+        AccountMeta::new_readonly(pid, false), // associated_token_program = None
+        // Position 9: system_program (required, non-optional)
         AccountMeta::new_readonly(system_program_id(), false),
     ]
 }
 
 /// Build the Mollusk accounts list for a native SOL claim.
-/// Only includes the 4 real accounts; zero-keyed optional accounts are omitted
-/// so Anchor treats them as None.
+/// Only the 4 real accounts are needed — the program ID used for optional
+/// slots in `claim_ix_accounts` is resolved automatically by Mollusk from
+/// its program fallback accounts.
 fn claim_mollusk_accounts(
     beneficiary: Pubkey,
     beneficiary_lamports: u64,
@@ -117,7 +119,7 @@ mod tests {
             .merkle_root(root)
             .leaf_count(3)
             .total_supply(1_800)
-            .funded_lamports(1_800 + 500_000)
+            .funded_lamports(1_800 + 5_000_000)
             .build();
 
         let (cr_pda, cr_account) = ClaimRecordConfig::new(beneficiary, tree_pda)
@@ -208,7 +210,7 @@ mod tests {
             .merkle_root(root)
             .leaf_count(3)
             .total_supply(1_800)
-            .funded_lamports(1_800 + 500_000)
+            .funded_lamports(1_800 + 5_000_000)
             .build();
 
         let (cr_pda, cr_account) = ClaimRecordConfig::new(beneficiary, tree_pda)
@@ -292,7 +294,7 @@ mod tests {
             .merkle_root(root)
             .leaf_count(3)
             .total_supply(1_800)
-            .funded_lamports(1_800 + 500_000)
+            .funded_lamports(1_800 + 5_000_000)
             .build();
 
         let (cr_pda, cr_account) = ClaimRecordConfig::new(beneficiary, tree_pda)
@@ -372,7 +374,7 @@ mod tests {
             .merkle_root(root)
             .leaf_count(3)
             .total_supply(1_800)
-            .funded_lamports(1_800 + 500_000)
+            .funded_lamports(1_800 + 5_000_000)
             .build();
 
         // CR PDA derived for impostor (the signer), not the leaf's beneficiary
@@ -445,7 +447,7 @@ mod tests {
             .merkle_root(bad_root)
             .leaf_count(3)
             .total_supply(1_800)
-            .funded_lamports(1_800 + 500_000)
+            .funded_lamports(1_800 + 5_000_000)
             .build();
 
         let (cr_pda, cr_account) = ClaimRecordConfig::new(beneficiary, tree_pda)
@@ -518,7 +520,7 @@ mod tests {
             .merkle_root(root)
             .leaf_count(3)
             .total_supply(1_800)
-            .funded_lamports(1_800 + 500_000)
+            .funded_lamports(1_800 + 5_000_000)
             .build();
 
         let (cr_pda, cr_account) = ClaimRecordConfig::new(beneficiary, tree_pda)
@@ -587,7 +589,7 @@ mod tests {
             .merkle_root(root)
             .leaf_count(3)
             .total_supply(1_800)
-            .funded_lamports(1_800 + 500_000)
+            .funded_lamports(1_800 + 5_000_000)
             .build();
 
         let (cr_pda, cr_account) = ClaimRecordConfig::new(beneficiary, tree_pda)
@@ -656,7 +658,7 @@ mod tests {
             .merkle_root(root)
             .leaf_count(3)
             .total_supply(1_800)
-            .funded_lamports(1_800 + 500_000)
+            .funded_lamports(1_800 + 5_000_000)
             .build();
 
         let (cr_pda, cr_account) = ClaimRecordConfig::new(beneficiary, tree_pda)
@@ -724,7 +726,7 @@ mod tests {
             .merkle_root(root)
             .leaf_count(3)
             .total_supply(1_800)
-            .funded_lamports(1_800 + 500_000)
+            .funded_lamports(1_800 + 5_000_000)
             .build();
 
         let (cr_pda, cr_account) = ClaimRecordConfig::new(beneficiary, tree_pda)
@@ -802,7 +804,7 @@ mod tests {
             .total_supply(1_800)
             .paused(true)
             .cancelled_at(None)
-            .funded_lamports(1_800 + 500_000)
+            .funded_lamports(1_800 + 5_000_000)
             .build();
 
         let (cr_pda, cr_account) = ClaimRecordConfig::new(beneficiary, tree_pda)
@@ -872,7 +874,7 @@ mod tests {
             .leaf_count(3)
             .total_supply(1_800)
             .instant_refunded(true)
-            .funded_lamports(1_800 + 500_000)
+            .funded_lamports(1_800 + 5_000_000)
             .build();
 
         let (cr_pda, cr_account) = ClaimRecordConfig::new(beneficiary, tree_pda)
@@ -940,7 +942,7 @@ mod tests {
             .merkle_root(root)
             .leaf_count(3)
             .total_supply(1_800)
-            .funded_lamports(1_800 + 500_000)
+            .funded_lamports(1_800 + 5_000_000)
             .build();
 
         let (cr_pda, cr_account) = ClaimRecordConfig::new(beneficiary, tree_pda)
@@ -1013,7 +1015,7 @@ mod tests {
             .merkle_root(root)
             .leaf_count(3)
             .total_supply(1_800)
-            .funded_lamports(1_800 + 500_000)
+            .funded_lamports(1_800 + 5_000_000)
             .build();
 
         let (cr_pda, cr_account) = ClaimRecordConfig::new(beneficiary, tree_pda)
@@ -1086,7 +1088,7 @@ mod tests {
             .leaf_count(3)
             .total_supply(1_800)
             .milestone_released_flags(flags)
-            .funded_lamports(1_800 + 500_000)
+            .funded_lamports(1_800 + 5_000_000)
             .build();
 
         let (cr_pda, cr_account) = ClaimRecordConfig::new(beneficiary, tree_pda)
@@ -1170,7 +1172,7 @@ mod tests {
             .total_supply(1_800)
             .paused(true)
             .cancelled_at(Some(1_500_000))
-            .funded_lamports(1_800 + 500_000)
+            .funded_lamports(1_800 + 5_000_000)
             .build();
 
         let (cr_pda, cr_account) = ClaimRecordConfig::new(beneficiary, tree_pda)
