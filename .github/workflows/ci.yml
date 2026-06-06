@@ -141,10 +141,10 @@ jobs:
           cargo test --test benchmarks -- --nocapture
           cargo test --test stream -- --nocapture
           cargo test --test lifecycle -- --nocapture
-          cargo test --test admin -- --nocapture --skip
-          cargo test --test cancel -- --nocapture --skip
+          cargo test --test admin -- --nocapture
+          cargo test --test cancel -- --nocapture
           cargo test --test claim -- --nocapture
-          cargo test --test cleanup -- --nocapture --skip
+          cargo test --test cleanup -- --nocapture
 
       - name: Native SOL vesting tests (bankrun)
         env:
