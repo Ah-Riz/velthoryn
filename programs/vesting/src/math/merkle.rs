@@ -1,6 +1,7 @@
 use anchor_lang::prelude::*;
 use solana_keccak_hasher::hashv;
 
+use crate::constants::MAX_MERKLE_PROOF_LEN;
 use crate::state::VestingLeaf;
 
 pub const LEAF_PREFIX: u8 = 0x00;
