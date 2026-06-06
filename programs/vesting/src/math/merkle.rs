@@ -1,7 +1,6 @@
 use anchor_lang::prelude::*;
 use solana_keccak_hasher::hashv;
 
-use crate::constants::MAX_MERKLE_PROOF_LEN;
 use crate::state::VestingLeaf;
 
 pub const LEAF_PREFIX: u8 = 0x00;
@@ -128,6 +127,7 @@ mod tests {
 
     mod proptest_tests {
         use super::*;
+        use crate::constants::MAX_MERKLE_PROOF_LEN;
         use proptest::prop_assert;
         use proptest::prop_assert_eq;
 

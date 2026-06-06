@@ -107,8 +107,7 @@ mod tests {
         expect_error(&result, ERR_MILESTONE_ALREADY_RELEASED, "milestone 0 already released");
     }
 
-    // Mollusk 0.13 doesn't enforce instant_refunded guard — handler succeeds
-    // instead of returning InstantRefundedCampaign. Needs local validator.
+    // IGNORED: Mollusk 0.13.x limitation — does not enforce Anchor's `instant_refunded @ true` custom guard constraint. Tests set_milestone_released on instant-refunded campaign. Unblock when Mollusk supports custom guard enforcement.
     #[test]
     #[ignore]
     fn test_set_milestone_released_instant_refunded() {
@@ -575,7 +574,7 @@ mod tests {
         expect_error(&result, ERR_ZERO_AMOUNT, "amount=0");
     }
 
-    // Mollusk 0.13 Optional<T> account resolution limitation
+    // IGNORED: Mollusk 0.13.x limitation — Optional<T> account resolution. Cannot pass None accounts for Anchor Option<T> fields. Tests fund_campaign_native over-funded error. Unblock when Mollusk supports Optional<T> resolution.
     #[ignore]
     #[test]
     fn test_fund_campaign_native_over_funded() {
@@ -852,7 +851,7 @@ mod tests {
         (ix, accounts)
     }
 
-    // Mollusk 0.13 Optional<T> account resolution limitation
+    // IGNORED: Mollusk 0.13.x limitation — Optional<T> account resolution. Cannot pass None accounts for Anchor Option<T> fields. Tests instant_refund happy path. Unblock when Mollusk supports Optional<T> resolution.
     #[ignore]
     #[test]
     fn test_instant_refund_happy() {
@@ -915,7 +914,7 @@ mod tests {
         );
     }
 
-    // Mollusk 0.13 Optional<T> account resolution limitation
+    // IGNORED: Mollusk 0.13.x limitation — Optional<T> account resolution. Cannot pass None accounts for Anchor Option<T> fields. Tests instant_refund error: not cancellable. Unblock when Mollusk supports Optional<T> resolution.
     #[ignore]
     #[test]
     fn test_instant_refund_not_cancellable() {
@@ -941,7 +940,7 @@ mod tests {
         expect_error(&result, ERR_NOT_CANCELLABLE, "not cancellable");
     }
 
-    // Mollusk 0.13 Optional<T> account resolution limitation
+    // IGNORED: Mollusk 0.13.x limitation — Optional<T> account resolution. Cannot pass None accounts for Anchor Option<T> fields. Tests instant_refund error: leaf_count=1. Unblock when Mollusk supports Optional<T> resolution.
     #[ignore]
     #[test]
     fn test_instant_refund_not_multi_leaf() {
@@ -968,7 +967,7 @@ mod tests {
         expect_error(&result, ERR_NOT_MULTI_LEAF_CAMPAIGN, "leaf_count=1");
     }
 
-    // Mollusk 0.13 Optional<T> account resolution limitation
+    // IGNORED: Mollusk 0.13.x limitation — Optional<T> account resolution. Cannot pass None accounts for Anchor Option<T> fields. Tests instant_refund error: milestone already released. Unblock when Mollusk supports Optional<T> resolution.
     #[ignore]
     #[test]
     fn test_instant_refund_milestone_released() {

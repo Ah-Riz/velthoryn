@@ -49,9 +49,7 @@ jobs:
           cargo clippy --workspace --
           -D warnings
           -A unexpected_cfgs
-          -A unused_imports
           -A ambiguous_glob_reexports
-          -A clippy::diverging_sub_expression
 
       - uses: pnpm/action-setup@v4
 

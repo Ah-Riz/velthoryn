@@ -232,7 +232,7 @@ mod tests {
     // cancel_stream — native SOL tests
     // =====================================================================
 
-    // Mollusk 0.13 doesn't support Anchor's init_if_needed for PDA accounts
+    // IGNORED: Mollusk 0.13.x limitation — does not support Anchor's `init_if_needed` for PDA accounts. Tests cancel_stream happy path (50% vesting split). Unblock when Mollusk supports `init_if_needed`.
     #[ignore]
     #[test]
     fn test_cancel_stream_happy() {
@@ -340,7 +340,7 @@ mod tests {
         assert_eq!(tree_data.total_claimed, 500, "total_claimed = vested portion");
     }
 
-    // Mollusk 0.13 doesn't support Anchor's init_if_needed for PDA accounts
+    // IGNORED: Mollusk 0.13.x limitation — does not support Anchor's `init_if_needed` for PDA accounts. Tests cancel_stream fully vested (100% to beneficiary). Unblock when Mollusk supports `init_if_needed`.
     #[ignore]
     #[test]
     fn test_cancel_stream_fully_vested_all_to_beneficiary() {
@@ -432,7 +432,7 @@ mod tests {
         );
     }
 
-    // Mollusk 0.13 doesn't support Anchor's init_if_needed for PDA accounts
+    // IGNORED: Mollusk 0.13.x limitation — does not support Anchor's `init_if_needed` for PDA accounts. Tests cancel_stream nothing vested (100% to creator). Unblock when Mollusk supports `init_if_needed`.
     #[ignore]
     #[test]
     fn test_cancel_stream_nothing_vested_all_to_creator() {
@@ -524,7 +524,7 @@ mod tests {
         assert_eq!(tree_data.total_claimed, 0, "nothing was vested to claim");
     }
 
-    // Mollusk 0.13 doesn't support Anchor's init_if_needed for PDA accounts
+    // IGNORED: Mollusk 0.13.x limitation — does not support Anchor's `init_if_needed` for PDA accounts. Tests cancel_stream error: leaf_count != 1. Unblock when Mollusk supports `init_if_needed`.
     #[ignore]
     #[test]
     fn test_cancel_stream_not_single_stream() {
@@ -582,7 +582,7 @@ mod tests {
         expect_error(&result, ERR_NOT_SINGLE_STREAM, "leaf_count=3");
     }
 
-    // Mollusk 0.13 doesn't support Anchor's init_if_needed for PDA accounts
+    // IGNORED: Mollusk 0.13.x limitation — does not support Anchor's `init_if_needed` for PDA accounts. Tests cancel_stream error: cancellable=false. Unblock when Mollusk supports `init_if_needed`.
     #[ignore]
     #[test]
     fn test_cancel_stream_not_cancellable() {
@@ -652,7 +652,7 @@ mod tests {
         expect_error(&result, ERR_NOT_CANCELLABLE, "cancellable=false");
     }
 
-    // Mollusk 0.13 doesn't support Anchor's init_if_needed for PDA accounts
+    // IGNORED: Mollusk 0.13.x limitation — does not support Anchor's `init_if_needed` for PDA accounts. Tests cancel_stream error: already cancelled. Unblock when Mollusk supports `init_if_needed`.
     #[ignore]
     #[test]
     fn test_cancel_stream_already_cancelled() {
@@ -723,7 +723,7 @@ mod tests {
         expect_error(&result, ERR_ALREADY_CANCELLED, "already cancelled");
     }
 
-    // Mollusk 0.13 doesn't support Anchor's init_if_needed for PDA accounts
+    // IGNORED: Mollusk 0.13.x limitation — does not support Anchor's `init_if_needed` for PDA accounts. Tests cancel_stream error: wrong signer. Unblock when Mollusk supports `init_if_needed`.
     #[ignore]
     #[test]
     fn test_cancel_stream_unauthorized() {
@@ -796,7 +796,7 @@ mod tests {
         expect_error(&result, ERR_UNAUTHORIZED, "wrong creator");
     }
 
-    // Mollusk 0.13 doesn't support Anchor's init_if_needed for PDA accounts
+    // IGNORED: Mollusk 0.13.x limitation — does not support Anchor's `init_if_needed` for PDA accounts. Tests cancel_stream error: total_claimed == total_supply. Unblock when Mollusk supports `init_if_needed`.
     #[ignore]
     #[test]
     fn test_cancel_stream_fully_vested() {
@@ -867,7 +867,7 @@ mod tests {
         expect_error(&result, ERR_FULLY_VESTED, "total_claimed == total_supply");
     }
 
-    // Mollusk 0.13 doesn't support Anchor's init_if_needed for PDA accounts
+    // IGNORED: Mollusk 0.13.x limitation — does not support Anchor's `init_if_needed` for PDA accounts. Tests cancel_stream error: leaf_hash != root. Unblock when Mollusk supports `init_if_needed`.
     #[ignore]
     #[test]
     fn test_cancel_stream_invalid_proof() {
