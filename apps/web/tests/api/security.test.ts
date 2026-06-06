@@ -27,7 +27,7 @@ describe("security controls", () => {
   it("accepts POST /api/campaigns with valid wallet auth", async () => {
     const leaf = makeLeaf();
     const merkleRoot = computeSingleLeafRoot(leaf);
-    const req = await makeAuthenticatedPostRequest("/api/campaigns", makeCampaignBody({ merkleRoot, leaves: [leaf] }));
+    const req = await makeAuthenticatedPostRequest("/api/campaigns", makeCampaignBody({ treeAddress: Keypair.generate().publicKey.toBase58(), merkleRoot, leaves: [leaf] }));
 
     const res = await postCampaigns(req);
     // Auth removed from indexing route — on-chain program enforces creator constraint.

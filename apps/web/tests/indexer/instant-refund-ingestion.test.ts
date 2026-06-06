@@ -72,7 +72,7 @@ describe("event-indexer: InstantRefunded ingestion", () => {
 
     await indexEventBuffers({
       eventBuffers: [buf],
-      signature: "sig_instant_refund_1",
+      signature: `sig_instant_refund_${Date.now()}_${Math.random().toString(36).slice(2)}`,
       slot: 42,
       blockTime: 1700006000n,
     });
