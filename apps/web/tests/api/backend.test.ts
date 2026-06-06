@@ -754,7 +754,11 @@ describe("GET /api/campaigns/[treeAddress]/proof", () => {
 describe("POST /api/campaigns/[treeAddress]/root-versions", () => {
   it("creates new root version and returns 201 with version number", async () => {
     const treeAddress = uniqueTreeAddress();
-    await createCampaignViaPost({ treeAddress });
+    await createCampaignViaPost({
+      treeAddress,
+      cancellable: true,
+      cancelAuthority: TEST_CREATOR_KEYPAIR.publicKey.toBase58(),
+    });
 
     const body = makeMultiLeafCampaignBody(3, { minCliffTime: 1700000000 });
 
