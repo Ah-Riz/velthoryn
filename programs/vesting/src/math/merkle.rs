@@ -1,6 +1,7 @@
 use anchor_lang::prelude::*;
 use solana_keccak_hasher::hashv;
 
+#[cfg(test)]
 use crate::constants::MAX_MERKLE_PROOF_LEN;
 use crate::state::VestingLeaf;
 
@@ -128,7 +129,6 @@ mod tests {
 
     mod proptest_tests {
         use super::*;
-        use crate::constants::MAX_MERKLE_PROOF_LEN;
         use proptest::prop_assert;
         use proptest::prop_assert_eq;
 
