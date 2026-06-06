@@ -18,7 +18,7 @@
 | `unpause_campaign` | 5,383 | 7,000 | Toggle paused flag |
 | `close_claim_record` | 5,131 | 7,000 | Drains ClaimRecord rent |
 | `claim` (native) | ~11,500* | 15,000 | *Estimated from bankrun; Mollusk blocked by init_if_needed |
-| `withdraw` (SPL) | — | 15,000 | SPL path, estimated ~same as claim |
+| `withdraw` (SPL) | — | 20,000 | SPL path, raised from 15K to allow headroom for CPI variance |
 | `cancel_stream` | ~12,000* | 15,000 | *Estimated; Mollusk blocked by init_if_needed |
 | `instant_refund_campaign` | — | 12,000 | Mollusk blocked by Optional<T> |
 | `withdraw_unvested` | — | 10,000 | Mollusk blocked by Optional<T> |

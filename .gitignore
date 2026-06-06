@@ -63,3 +63,5 @@ Thumbs.db
 .playwright-mcp/
 apps/web/test-results/
 .mcp.json
+
+
