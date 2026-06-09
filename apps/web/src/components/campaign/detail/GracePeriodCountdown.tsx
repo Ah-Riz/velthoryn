@@ -6,13 +6,11 @@ import { getGracePeriodState } from "@/lib/vesting/display";
 type GracePeriodCountdownProps = {
   cancelledAt: bigint;
   className?: string;
-  showPrefix?: boolean;
 };
 
 export function GracePeriodCountdown({
   cancelledAt,
   className,
-  showPrefix = true,
 }: GracePeriodCountdownProps) {
   const [nowTs, setNowTs] = useState<bigint>(() => BigInt(Math.floor(Date.now() / 1000)));
 
@@ -33,7 +31,6 @@ export function GracePeriodCountdown({
       <span
         className={`text-sm font-medium ${isUrgent ? "text-red-400" : "text-amber-400"} ${className ?? ""}`}
       >
-        {showPrefix ? "Grace period: " : ""}
         {graceState.countdown} remaining
       </span>
     );

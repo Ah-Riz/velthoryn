@@ -72,7 +72,6 @@ export function CampaignStatusBanner({
             <GracePeriodCountdown
               cancelledAt={cancelledAtBigint}
               className="text-[12px]"
-              showPrefix={false}
             />
             . Recipients can still claim vested tokens.
           </p>

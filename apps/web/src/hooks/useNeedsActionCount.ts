@@ -15,6 +15,10 @@ export function useNeedsActionCount(): NeedsActionResult {
   const { publicKey } = useWallet();
   const walletAddress = publicKey?.toBase58();
 
+  // Note: We don't set our own staleTime/refetchInterval here because TanStack Query
+  // deduplicates by query key. The underlying hooks (useCampaignList with staleTime: 5_000,
+  // useBeneficiaryCampaigns) already provide fresh-enough data (≤5s stale). Adding separate
+  // staleTime would be redundant — the badge updates when the shared query cache updates.
   const senderQuery = useCampaignList(
     walletAddress ? { creator: walletAddress, limit: 100 } : undefined,
   );

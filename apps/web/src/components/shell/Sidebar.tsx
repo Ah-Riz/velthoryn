@@ -96,7 +96,7 @@ function SidebarContent({ onNavClick }: { onNavClick?: () => void }) {
                   </span>
                   {item.label}
                   {item.href === "/campaigns" && needsActionCount > 0 && !needsActionLoading && (
-                    <span className="ml-auto h-2 w-2 rounded-full bg-amber-400 animate-pulse" />
+                    <span className="ml-auto h-2 w-2 rounded-full bg-amber-400" />
                   )}
                 </Link>
               </li>

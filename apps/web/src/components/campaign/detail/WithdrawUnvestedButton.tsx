@@ -1,5 +1,7 @@
 "use client";
 
+// forwardRef added for CampaignStatusBanner integration — the banner's "Withdraw Unvested"
+// button triggers this component's click via ref. No behavioral changes to the button itself.
 import { forwardRef, useState } from "react";
 import { PublicKey, SystemProgram, Transaction } from "@solana/web3.js";
 import { type Program } from "@coral-xyz/anchor";

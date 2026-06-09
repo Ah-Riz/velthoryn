@@ -6,9 +6,28 @@ import { useWallet } from "@solana/wallet-adapter-react";
 import { useCampaignList } from "@/hooks/useCampaignList";
 import { useBeneficiaryCampaigns } from "@/hooks/useBeneficiaryCampaigns";
 import { useLocalCampaigns } from "@/hooks/useLocalCampaigns";
+import { useVestingProgressSummary } from "@/hooks/useVestingProgress";
+import { ActivityFeed } from "@/components/dashboard/ActivityFeed";
+import { GracePeriodCountdown } from "@/components/campaign/detail/GracePeriodCountdown";
 import { getRecipientStreamStatus, getSenderStreamStatus } from "@/lib/vesting/list";
+import {
+  formatCountdown,
+  getGracePeriodState,
+  getVestingTypeLabel,
+} from "@/lib/vesting/display";
+import { truncateAddress } from "@/lib/vesting/timeline-helpers";
 
-function StatCard({ label, value, sub, accent }: { label: string; value: string; sub?: string; accent?: boolean }) {
+function StatCard({
+  label,
+  value,
+  sub,
+  accent,
+}: {
+  label: string;
+  value: string;
+  sub?: string;
+  accent?: boolean;
+}) {
   return (
     <div className="rounded-2xl border border-white/[0.06] bg-white/[0.02] p-5">
       <div className="text-[11px] font-medium uppercase tracking-[0.12em] text-[#555d73]">{label}</div>
@@ -18,9 +37,22 @@ function StatCard({ label, value, sub, accent }: { label: string; value: string;
   );
 }
 
-function ActionCard({ href, title, description, icon }: { href: string; title: string; description: string; icon: React.ReactNode }) {
+function ActionCard({
+  href,
+  title,
+  description,
+  icon,
+}: {
+  href: string;
+  title: string;
+  description: string;
+  icon: React.ReactNode;
+}) {
   return (
-    <Link href={href} className="group flex items-start gap-4 rounded-2xl border border-white/[0.06] bg-white/[0.02] p-5 transition-colors hover:border-violet-500/20 hover:bg-violet-500/[0.03]">
+    <Link
+      href={href}
+      className="group flex items-start gap-4 rounded-2xl border border-white/[0.06] bg-white/[0.02] p-5 transition-colors hover:border-violet-500/20 hover:bg-violet-500/[0.03]"
+    >
       <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-violet-600/15 text-violet-400 transition-colors group-hover:bg-violet-600/25">
         {icon}
       </div>
@@ -32,6 +64,14 @@ function ActionCard({ href, title, description, icon }: { href: string; title: s
   );
 }
 
+function formatRawAmount(raw: bigint): string {
+  const n = Number(raw);
+  if (n >= 1_000_000_000) return `${(n / 1_000_000_000).toFixed(2)}B`;
+  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(2)}M`;
+  if (n >= 1_000) return `${(n / 1_000).toFixed(1)}K`;
+  return raw.toString();
+}
+
 export default function DashboardPage() {
   const { publicKey } = useWallet();
   const walletAddress = publicKey?.toBase58();
@@ -39,6 +79,8 @@ export default function DashboardPage() {
   const senderQuery = useCampaignList(walletAddress ? { creator: walletAddress, limit: 200 } : undefined);
   const recipientQuery = useBeneficiaryCampaigns(walletAddress);
   const localCampaigns = useLocalCampaigns(walletAddress);
+  const { summary: vestingSummary, isLoading: vestingLoading, campaigns: vestingCampaigns } =
+    useVestingProgressSummary(walletAddress);
 
   const senderCampaigns = useMemo(() => {
     const dbCampaigns = ((senderQuery.data?.campaigns ?? []) as Array<{
@@ -48,6 +90,7 @@ export default function DashboardPage() {
       totalSupply: number | string;
       totalClaimed: number | string;
       creator: string;
+      metadata?: { name?: string } | null;
     }>).filter((campaign) => campaign.creator === walletAddress);
     const seen = new Set(dbCampaigns.map((c) => c.treeAddress));
     const localOnly = senderQuery.error
@@ -116,9 +159,10 @@ export default function DashboardPage() {
   }, [recipientCampaigns, senderCampaigns, walletAddress]);
 
   const counts = useMemo(() => {
-    const activeCount = rows.filter(([, row]) => row.senderStatus === "Active" || row.recipientStatus === "Claimable").length;
+    const activeCount = rows.filter(
+      ([, row]) => row.senderStatus === "Active" || row.recipientStatus === "Claimable",
+    ).length;
 
-    // Total Value Locked (sender campaigns: totalSupply - totalClaimed)
     let tvl = 0n;
     for (const c of senderCampaigns) {
       const supply = BigInt(c.totalSupply?.toString() ?? "0");
@@ -126,10 +170,9 @@ export default function DashboardPage() {
       if (supply > claimed) tvl += supply - claimed;
     }
 
-    // Claimable now (recipient campaigns where status is Claimable)
     let claimableCount = 0;
     for (const [, row] of rows) {
-      if (row.recipientStatus === "Claimable") claimableCount++;
+      if (row.recipientStatus === "Claimable") claimableCount += 1;
     }
 
     return {
@@ -142,14 +185,44 @@ export default function DashboardPage() {
     };
   }, [rows, senderCampaigns]);
 
-  const isLoading = senderQuery.isLoading || recipientQuery.isLoading || localCampaigns.isLoading;
+  const nowTs = BigInt(Math.floor(Date.now() / 1000));
+
+  const needsAttention = useMemo(() => {
+    return senderCampaigns
+      .filter((c) => c.cancelledAt !== null)
+      .map((c) => ({
+        campaign: c,
+        graceState: getGracePeriodState(BigInt(c.cancelledAt!), nowTs),
+      }))
+      .filter(
+        ({ graceState }) =>
+          graceState.status === "grace_active" || graceState.status === "grace_expired",
+      );
+  }, [senderCampaigns, nowTs]);
+
+  const topVestingCampaigns = useMemo(() => {
+    return [...vestingCampaigns]
+      .sort(
+        (a, b) =>
+          Number(BigInt(b.progress.claimable) - BigInt(a.progress.claimable)),
+      )
+      .slice(0, 5);
+  }, [vestingCampaigns]);
+
+  const isLoading =
+    senderQuery.isLoading || recipientQuery.isLoading || localCampaigns.isLoading;
+
+  const claimableAmount = vestingSummary?.totalClaimable ?? 0n;
+  const claimableStreams = vestingSummary?.claimableCampaigns ?? counts.claimableCount;
 
   return (
     <div className="mx-auto max-w-5xl space-y-8">
       <div>
         <h1 className="text-2xl font-semibold tracking-tight text-white">Dashboard</h1>
         <p className="mt-1 text-[13px] text-[#8b92a5]">
-          {publicKey ? `Welcome back, ${publicKey.toBase58().slice(0, 4)}...${publicKey.toBase58().slice(-4)}` : "Connect your wallet to get started"}
+          {publicKey
+            ? `Welcome back, ${publicKey.toBase58().slice(0, 4)}...${publicKey.toBase58().slice(-4)}`
+            : "Connect your wallet to get started"}
         </p>
       </div>
 
@@ -161,47 +234,213 @@ export default function DashboardPage() {
             </svg>
           </div>
           <h2 className="mt-4 text-[15px] font-medium text-white">No wallet connected</h2>
-          <p className="mt-1 text-[13px] text-[#8b92a5]">Connect your Solana wallet using the button in the top right to view your streams.</p>
+          <p className="mt-1 text-[13px] text-[#8b92a5]">
+            Connect your Solana wallet using the button in the top right to view your streams.
+          </p>
         </div>
       ) : (
         <>
           {/* Claimable Banner */}
-          {counts.claimableCount > 0 && (
-            <Link href="/campaigns" className="flex items-center gap-3 rounded-2xl border border-emerald-500/20 bg-emerald-500/[0.05] p-5 transition hover:border-emerald-500/40">
+          {claimableStreams > 0 && (
+            <Link
+              href="/portfolio"
+              className="flex items-center gap-3 rounded-2xl border border-emerald-500/20 bg-emerald-500/[0.05] p-5 transition hover:border-emerald-500/40"
+            >
               <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-emerald-500/20 text-emerald-400">
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M22 11.08V12a10 10 0 11-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path d="M22 11.08V12a10 10 0 11-5.93-9.14" />
+                  <polyline points="22 4 12 14.01 9 11.01" />
+                </svg>
               </div>
               <div className="flex-1">
                 <p className="text-[14px] font-medium text-emerald-400">
-                  {counts.claimableCount} stream{counts.claimableCount > 1 ? "s" : ""} ready to claim!
+                  {claimableStreams} stream{claimableStreams > 1 ? "s" : ""} ready to claim!
                 </p>
-                <p className="text-[12px] text-[#8b92a5]">You have tokens available for withdrawal. Click to view.</p>
+                <p className="text-[12px] text-[#8b92a5]">
+                  {formatRawAmount(claimableAmount)} tokens available for withdrawal. Click to view.
+                </p>
               </div>
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="text-[#8b92a5]"><polyline points="9 18 15 12 9 6"/></svg>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="text-[#8b92a5]">
+                <polyline points="9 18 15 12 9 6" />
+              </svg>
             </Link>
           )}
 
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          {/* Needs Attention */}
+          {needsAttention.length > 0 && (
+            <div className="space-y-3">
+              <h2 className="text-[13px] font-medium uppercase tracking-[0.1em] text-[#555d73]">
+                Needs Attention
+              </h2>
+              {needsAttention.map(({ campaign, graceState }) => {
+                const name =
+                  campaign.metadata?.name ?? truncateAddress(campaign.treeAddress);
+                if (graceState.status === "grace_active") {
+                  return (
+                    <Link
+                      key={campaign.treeAddress}
+                      href={`/campaign/${campaign.treeAddress}`}
+                      className="flex items-center gap-3 rounded-2xl border border-amber-500/20 bg-amber-500/[0.05] p-5 transition hover:border-amber-500/40"
+                    >
+                      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-amber-500/20 text-amber-400">
+                        <span className="text-lg">⚠</span>
+                      </div>
+                      <div className="flex-1">
+                        <p className="text-[14px] font-medium text-amber-400">
+                          {name} —{" "}
+                          <GracePeriodCountdown cancelledAt={BigInt(campaign.cancelledAt!)} />
+                        </p>
+                        <p className="text-[12px] text-[#8b92a5]">
+                          Recipients can still claim vested tokens before expiry.
+                        </p>
+                      </div>
+                      <span className="text-[12px] font-medium text-amber-400">Claim Now →</span>
+                    </Link>
+                  );
+                }
+                return (
+                  <Link
+                    key={campaign.treeAddress}
+                    href={`/campaign/${campaign.treeAddress}`}
+                    className="flex items-center gap-3 rounded-2xl border border-red-500/20 bg-red-500/[0.05] p-5 transition hover:border-red-500/40"
+                  >
+                    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-red-500/20 text-red-400">
+                      <span className="text-lg">⚠</span>
+                    </div>
+                    <div className="flex-1">
+                      <p className="text-[14px] font-medium text-red-400">
+                        {name} — Grace period expired
+                      </p>
+                      <p className="text-[12px] text-[#8b92a5]">
+                        Unvested tokens can be withdrawn by the creator.
+                      </p>
+                    </div>
+                    <span className="text-[12px] font-medium text-red-400">Withdraw Unvested →</span>
+                  </Link>
+                );
+              })}
+            </div>
+          )}
+
+          {/* Summary Stats */}
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
             <StatCard label="Total Streams" value={isLoading ? "..." : String(counts.total)} sub="All campaigns" />
             <StatCard label="Active" value={isLoading ? "..." : String(counts.active)} sub="Currently vesting" accent />
+            <StatCard
+              label="TVL"
+              value={isLoading ? "..." : formatRawAmount(counts.tvl)}
+              sub="Locked value"
+            />
             <StatCard label="As Sender" value={isLoading ? "..." : String(counts.sender)} sub="Streams you created" />
             <StatCard label="As Recipient" value={isLoading ? "..." : String(counts.recipient)} sub="Streams you receive" />
+            <StatCard
+              label="Claimable Now"
+              value={vestingLoading ? "..." : formatRawAmount(claimableAmount)}
+              sub={claimableStreams > 0 ? `${claimableStreams} stream${claimableStreams > 1 ? "s" : ""} ready` : "Ready to withdraw"}
+              accent
+            />
           </div>
 
+          {/* Vesting Progress Summary */}
           <div>
-            <h2 className="mb-3 text-[13px] font-medium uppercase tracking-[0.1em] text-[#555d73]">Quick Actions</h2>
+            <div className="mb-3 flex items-center justify-between">
+              <h2 className="text-[13px] font-medium uppercase tracking-[0.1em] text-[#555d73]">
+                Vesting Progress
+              </h2>
+              {vestingCampaigns.length > 0 && (
+                <Link href="/portfolio" className="text-[12px] text-violet-400 transition hover:text-violet-300">
+                  View All →
+                </Link>
+              )}
+            </div>
+
+            {vestingLoading ? (
+              <div className="grid gap-3 sm:grid-cols-2">
+                {[...Array(2)].map((_, i) => (
+                  <div key={i} className="h-28 animate-pulse rounded-2xl border border-white/[0.06] bg-white/[0.02]" />
+                ))}
+              </div>
+            ) : topVestingCampaigns.length === 0 ? (
+              <div className="rounded-2xl border border-white/[0.06] bg-white/[0.02] p-5">
+                <p className="text-[13px] text-[#555d73]">No vesting streams yet.</p>
+              </div>
+            ) : (
+              <div className="grid gap-3 sm:grid-cols-2">
+                {topVestingCampaigns.map((campaign) => {
+                  const name =
+                    campaign.metadata?.name ?? truncateAddress(campaign.treeAddress);
+                  const vestedSoFar = BigInt(campaign.progress.vestedSoFar);
+                  const totalEntitled = BigInt(campaign.progress.totalEntitled);
+                  const claimable = BigInt(campaign.progress.claimable);
+                  const nextUnlockLabel =
+                    campaign.leaf.releaseType === 2 && !campaign.milestoneReleased
+                      ? "Milestone not released"
+                      : campaign.progress.nextUnlock
+                        ? formatCountdown(BigInt(campaign.progress.nextUnlock), nowTs)
+                        : "Complete";
+
+                  return (
+                    <Link
+                      key={`${campaign.treeAddress}-${campaign.leaf.leafIndex}`}
+                      href={`/campaign/${campaign.treeAddress}`}
+                      className="rounded-2xl border border-white/[0.06] bg-white/[0.02] p-4 transition hover:border-violet-500/20"
+                    >
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="truncate text-[14px] font-medium text-white">{name}</span>
+                        <span className="shrink-0 text-[11px] text-[#555d73]">
+                          {getVestingTypeLabel(campaign.leaf.releaseType)}
+                        </span>
+                      </div>
+                      <div className="mt-3">
+                        <div className="h-1.5 overflow-hidden rounded-full bg-white/[0.06]">
+                          <div
+                            className={`h-full rounded-full ${claimable > 0n ? "bg-emerald-500" : "bg-violet-500"}`}
+                            style={{ width: `${Math.min(100, campaign.progress.progressPercent)}%` }}
+                          />
+                        </div>
+                        <div className="mt-2 text-[11px] text-[#555d73]">
+                          {formatRawAmount(vestedSoFar)} / {formatRawAmount(totalEntitled)} vested
+                          {" · "}Next: {nextUnlockLabel}
+                        </div>
+                      </div>
+                    </Link>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+
+          {/* Recent Activity */}
+          <ActivityFeed address={walletAddress!} limit={10} />
+
+          {/* Quick Actions */}
+          <div>
+            <h2 className="mb-3 text-[13px] font-medium uppercase tracking-[0.1em] text-[#555d73]">
+              Quick Actions
+            </h2>
             <div className="grid gap-3 sm:grid-cols-2">
               <ActionCard
                 href="/campaign/create"
                 title="Create New Stream"
                 description="Set up a new vesting stream for token distribution"
-                icon={<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10" /><line x1="12" y1="8" x2="12" y2="16" /><line x1="8" y1="12" x2="16" y2="12" /></svg>}
+                icon={
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <circle cx="12" cy="12" r="10" />
+                    <line x1="12" y1="8" x2="12" y2="16" />
+                    <line x1="8" y1="12" x2="16" y2="12" />
+                  </svg>
+                }
               />
               <ActionCard
                 href="/campaigns"
                 title="View My Campaigns"
                 description="Monitor and manage your existing vesting streams"
-                icon={<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" /><polyline points="14 2 14 8 20 8" /></svg>}
+                icon={
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+                    <polyline points="14 2 14 8 20 8" />
+                  </svg>
+                }
               />
             </div>
           </div>
