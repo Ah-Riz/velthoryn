@@ -6,7 +6,8 @@ pub struct ClaimRecord {
     pub beneficiary:      Pubkey,
     pub tree:             Pubkey,
     pub claimed_amount:   u64,
-    /// Total entitled from the Merkle leaf. Set once at first claim.
+    /// Total entitled across all claimed leaves. Set on first claim,
+    /// then accumulated for each subsequent milestone claim.
     /// Used by close_claim_record to verify full vesting without trusting
     /// a caller-supplied value.
     ///

@@ -2097,7 +2097,7 @@ export default function CampaignPage({ params }: { params: Promise<{ id: string 
                   publicKey={publicKey}
                   treePubkey={new PublicKey(treeAddress)}
                   milestoneReleasedFlags={treeState.milestoneReleasedFlags}
-                  leafCount={treeState.leafCount}
+                  milestoneIndices={campaignDetailQuery.data?.milestoneIndices ?? []}
                   canRelease={canShowReleaseMilestone}
                   onSuccess={(idx: number) => {
                     setTreeState((prev) => {

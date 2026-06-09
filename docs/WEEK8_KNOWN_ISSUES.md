@@ -6,8 +6,8 @@
 
 | Category | Count |
 |----------|-------|
-| Fixed | 8 |
-| Documented (known limitations) | 11 |
+| Fixed | 15 |
+| Documented (known limitations) | 12 |
 | Deferred to Week 9+ | 2 |
 
 ---
@@ -24,6 +24,13 @@
 | 6 | `root_versions` table missing `minCliffTime` column | DB | **Fixed** | Migration 0010 added `min_cliff_time bigint NOT NULL DEFAULT 0`. |
 | 7 | ROOT_ROTATION_GUIDE had wrong PDA seeds | Docs | **Fixed** | Corrected to `["tree", creator, mint, campaignId]`. |
 | 8 | Guide incorrectly said SameRoot succeeds on-chain | Docs | **Fixed** | Corrected to say transaction reverts with `SameRoot`. |
+| 22 | Out-of-order milestone claiming marks unclaimed milestones as "fully claimed" in UI | FE | **Fixed** | `ClaimWithProofButton.tsx` — milestone leaves now use on-chain `milestoneBitmap` instead of greedy `claimedAmount` allocation for `leafFullyClaimed` and `leafClaimableAmounts`. |
+| 23 | `StreamExpired` blocks claims on leaf B after claiming leaf A (larger amount) | SC | **Fixed** | `claim.rs` — removed `fully_claimed` sub-condition that compared cumulative `claimed_amount` against individual `leaf.amount`. StreamExpired now only fires when `effective_now >= end_time`. |
+| 24 | `total_entitled` only reflects first leaf amount, never accumulated | SC | **Fixed** | `claim.rs` — `total_entitled` now accumulated for each milestone claim via `checked_add`. Bitmap prevents double-counting. `close_claim_record` check semantically correct for multi-milestone. |
+| 25 | No upper-bound validation on `milestoneIdx` (>255 silently truncated by `writeUInt8`) | BE | **Fixed** | `validators.ts` — added `.max(255)` to all 3 milestoneIdx Zod schemas. |
+| 26 | Duplicate `(beneficiary, milestoneIdx)` pairs make second leaf permanently unclaimable | BE | **Fixed** | `prepare/route.ts` — added validation that rejects duplicate milestone assignments with 400 error. |
+| 27 | VestingProgress API reports milestone tokens as claimable before release | BE | **Fixed** | `vesting-progress/route.ts` — LEFT JOIN with `milestone_events`, zeroes `claimable` for unreleased milestones. |
+| 28 | MilestoneReleasePanel shows phantom buttons for non-milestone leaves (used `leafCount`) | FE | **Fixed** | Panel now accepts `milestoneIndices` (derived from actual leaves in API) instead of `leafCount`. |
 
 ---
 
@@ -42,6 +49,7 @@
 | 17 | `leaf_count > 1` check only enforced in frontend | SC/FE | Documented | On-chain `update_root` has no leaf count check. Frontend gate prevents single-leaf rotation. |
 | 18 | `create_stream` hardcodes `min_cliff_time = 0` | SC | Documented | Safe -- `instant_refund_campaign` requires `leaf_count > 1`, excluding streams. |
 | 19 | Native SOL withdraw drains PDA below rent-exempt | SC | Documented | Intentional -- after grace period, campaign is over. PDA not reused. |
+| 29 | Cumulative `claimed_amount` undercounts claimable for multi-leaf non-milestone campaigns | SC | Documented | `claim.rs` uses `vested(leaf) - cr.claimed_amount` for cliff/linear. If one beneficiary has multiple cliff/linear leaves, `claimed_amount` is cumulative and can undercount later leaves. Common case unaffected (single leaf per beneficiary, or milestones which bypass subtraction). Fix requires per-leaf tracking — breaking on-chain change. |
 
 ---
 

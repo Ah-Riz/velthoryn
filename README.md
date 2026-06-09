@@ -36,6 +36,8 @@ velthoryn/
 
 **Instant refund (B1):** Creator-only immediate refund for **unstarted multi-leaf** campaigns (`now < min_cliff_time`, no milestones released). Single-leaf campaigns still use `cancel_stream`; started campaigns use `cancel_campaign` (7-day grace). BE exposes `instantRefundEligible` and `POST .../instant-refund` tx builder — see [`docs/BACKEND_API.md`](docs/BACKEND_API.md).
 
+**Week 9 QA sweep:** 7 bugs found and fixed across SC/BE/FE layers. Key fixes: (1) out-of-order milestone claiming bug in frontend — greedy `claimedAmount` allocation replaced with on-chain `milestoneBitmap` lookup; (2) `StreamExpired` early-return blocked multi-leaf claims; (3) `total_entitled` now accumulates across milestone claims; (4–5) backend validation added for `milestoneIdx` bounds (0–255) and duplicate `(beneficiary, milestoneIdx)` pairs; (6–7) VestingProgress API checks milestone release flags, MilestoneReleasePanel uses actual milestone indices from leaves. See [`docs/WEEK8_KNOWN_ISSUES.md`](docs/WEEK8_KNOWN_ISSUES.md).
+
 **F1-F4 roadmap complete:** F1 Bulk Send (server-side Merkle build, CSV import), F2 Dashboard Transparency (event timeline, vesting progress, auto-sync cron), F3 Clawback (cancel campaign/stream, withdraw unvested, milestone release), F4 Production Hardening (Sentry monitoring, API versioning, vesting simulation, schedule templates). 11 new API routes, 6 event tables, 8 bug fixes from code review.
 
 **Test results: 127+ SC tests PASS** (`pnpm test:localnet`); **553 web Vitest PASS** (13 skipped devnet integration; API routes use Postgres in CI)
