@@ -8,6 +8,7 @@ import { useCampaignList } from "@/hooks/useCampaignList";
 import { useBeneficiaryCampaigns } from "@/hooks/useBeneficiaryCampaigns";
 import { useLocalCampaigns } from "@/hooks/useLocalCampaigns";
 import { CampaignRow } from "@/components/campaign/list/CampaignRow";
+import { GracePeriodCountdown } from "@/components/campaign/detail/GracePeriodCountdown";
 import { EmptyState } from "@/components/campaign/list/EmptyState";
 import {
   getRecipientClaimableAmount,
@@ -19,7 +20,7 @@ import {
 } from "@/lib/vesting/list";
 import { POPULAR_TOKENS } from "@/lib/constants/popular-tokens";
 
-type TabKey = "all" | "recipient" | "sender";
+type TabKey = "all" | "recipient" | "sender" | "action";
 
 type SenderCampaign = {
   treeAddress: string;
@@ -86,6 +87,7 @@ const TABS: Array<{ key: TabKey; label: string }> = [
   { key: "all", label: "All" },
   { key: "recipient", label: "As Recipient" },
   { key: "sender", label: "As Sender" },
+  { key: "action", label: "Needs Action" },
 ];
 
 function formatDate(ts: number) {
@@ -358,9 +360,34 @@ export default function CampaignsPage() {
     return [...map.values()].sort((a, b) => b.createdAt - a.createdAt);
   }, [recipientCampaigns, senderCampaigns, walletAddress]);
 
+  const actionCount = useMemo(() => {
+    let n = 0;
+    for (const row of rows) {
+      if (row.role === "sender" || row.role === "both") {
+        const senderMatch = senderCampaigns.find((c) => c.treeAddress === row.treeAddress);
+        if (senderMatch && senderMatch.cancelledAt !== null) {
+          n++;
+          continue;
+        }
+      }
+      if (row.status === "Claimable") {
+        n++;
+      }
+    }
+    return n;
+  }, [rows, senderCampaigns]);
+
   const filteredRows = rows.filter((row) => {
     if (activeTab === "recipient" && row.role === "sender") return false;
     if (activeTab === "sender" && row.role === "recipient") return false;
+    if (activeTab === "action") {
+      if (row.role === "sender" || row.role === "both") {
+        const senderMatch = senderCampaigns.find((c) => c.treeAddress === row.treeAddress);
+        if (senderMatch && senderMatch.cancelledAt !== null) return true;
+      }
+      if (row.status === "Claimable") return true;
+      return false;
+    }
 
     const q = search.trim().toLowerCase();
     if (!q) return true;
@@ -382,8 +409,9 @@ export default function CampaignsPage() {
       all: rows.length,
       recipient: rows.filter((row) => row.role === "recipient" || row.role === "both").length,
       sender: rows.filter((row) => row.role === "sender" || row.role === "both").length,
+      action: actionCount,
     }),
-    [rows],
+    [rows, actionCount],
   );
 
   const hasLocalRows =
@@ -461,6 +489,11 @@ export default function CampaignsPage() {
                       }`}
                     >
                       {tab.label} ({tabCounts[tab.key]})
+                      {tab.key === "action" && !active && actionCount > 0 && (
+                        <span className="ml-1.5 inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-amber-500/20 px-1 text-[10px] font-medium text-amber-400">
+                          {actionCount}
+                        </span>
+                      )}
                     </button>
                   );
                 })}
@@ -493,12 +526,35 @@ export default function CampaignsPage() {
               {error}
             </div>
           ) : filteredRows.length === 0 ? (
-            <EmptyState
-              title="No streams found"
-              body="Try a different tab or search term."
-              actionHref="/campaign/create"
-              actionLabel="Create stream"
-            />
+            activeTab === "action" ? (
+              <div className="rounded-2xl border border-white/[0.06] bg-white/[0.02] px-8 py-16 text-center">
+                <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-emerald-500/15">
+                  <svg
+                    width="24"
+                    height="24"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    className="text-emerald-400"
+                  >
+                    <path d="M22 11.08V12a10 10 0 11-5.93-9.14" />
+                    <polyline points="22 4 12 14.01 9 11.01" />
+                  </svg>
+                </div>
+                <h2 className="text-[16px] font-semibold text-white">All caught up</h2>
+                <p className="mt-2 text-[13px] text-[#8b92a5]">
+                  No campaigns need attention right now.
+                </p>
+              </div>
+            ) : (
+              <EmptyState
+                title="No streams found"
+                body="Try a different tab or search term."
+                actionHref="/campaign/create"
+                actionLabel="Create stream"
+              />
+            )
           ) : (
             <div className="space-y-4">
               {filteredRows.map((row) => {
@@ -514,6 +570,17 @@ export default function CampaignsPage() {
                   row.secondaryAmountRaw !== undefined && decimals !== undefined
                     ? formatWithDecimals(row.secondaryAmountRaw, decimals)
                     : null;
+                const senderMatch =
+                  activeTab === "action" && (row.role === "sender" || row.role === "both")
+                    ? senderCampaigns.find((c) => c.treeAddress === row.treeAddress)
+                    : undefined;
+                const actionNote =
+                  senderMatch?.cancelledAt != null ? (
+                    <GracePeriodCountdown
+                      cancelledAt={BigInt(senderMatch.cancelledAt)}
+                      className="text-[12px]"
+                    />
+                  ) : undefined;
 
                 return (
                   <CampaignRow
@@ -534,6 +601,7 @@ export default function CampaignsPage() {
                     nextLabel={row.nextLabel}
                     nextValue={row.nextValue}
                     createdAtLabel={formatDate(row.createdAt)}
+                    actionNote={actionNote}
                   />
                 );
               })}

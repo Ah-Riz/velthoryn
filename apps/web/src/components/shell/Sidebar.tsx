@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
+import { useNeedsActionCount } from "@/hooks/useNeedsActionCount";
 
 const NAV_ITEMS = [
   {
@@ -14,6 +15,16 @@ const NAV_ITEMS = [
         <rect x="14" y="3" width="7" height="7" rx="1" />
         <rect x="3" y="14" width="7" height="7" rx="1" />
         <rect x="14" y="14" width="7" height="7" rx="1" />
+      </svg>
+    ),
+  },
+  {
+    href: "/portfolio",
+    label: "Portfolio",
+    icon: (
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <rect x="2" y="7" width="20" height="14" rx="2" ry="2" />
+        <path d="M16 7V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v2" />
       </svg>
     ),
   },
@@ -45,6 +56,7 @@ const NAV_ITEMS = [
 function SidebarContent({ onNavClick }: { onNavClick?: () => void }) {
   const pathname = usePathname();
   const [mounted, setMounted] = useState(false);
+  const { count: needsActionCount, isLoading: needsActionLoading } = useNeedsActionCount();
 
   useEffect(() => {
     setMounted(true);
@@ -83,6 +95,9 @@ function SidebarContent({ onNavClick }: { onNavClick?: () => void }) {
                     {item.icon}
                   </span>
                   {item.label}
+                  {item.href === "/campaigns" && needsActionCount > 0 && !needsActionLoading && (
+                    <span className="ml-auto h-2 w-2 rounded-full bg-amber-400 animate-pulse" />
+                  )}
                 </Link>
               </li>
             );

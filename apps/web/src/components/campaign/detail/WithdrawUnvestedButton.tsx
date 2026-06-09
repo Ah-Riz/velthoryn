@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { forwardRef, useState } from "react";
 import { PublicKey, SystemProgram, Transaction } from "@solana/web3.js";
 import { type Program } from "@coral-xyz/anchor";
 import { TOKEN_PROGRAM_ID, getAssociatedTokenAddressSync } from "@solana/spl-token";
@@ -23,19 +23,22 @@ type Props = {
   toast: (msg: string, type?: "success" | "error" | "info") => void;
 };
 
-export function WithdrawUnvestedButton({
-  program,
-  publicKey,
-  treePubkey,
-  mint,
-  vaultAuthority,
-  vault,
-  cancelledAt,
-  isCreator,
-  nowTs,
-  onSuccess,
-  toast,
-}: Props) {
+export const WithdrawUnvestedButton = forwardRef<HTMLButtonElement, Props>(function WithdrawUnvestedButton(
+  {
+    program,
+    publicKey,
+    treePubkey,
+    mint,
+    vaultAuthority,
+    vault,
+    cancelledAt,
+    isCreator,
+    nowTs,
+    onSuccess,
+    toast,
+  },
+  ref,
+) {
   const { sendTransaction } = useWallet();
   const { connection } = useConnection();
   const queryClient = useQueryClient();
@@ -121,6 +124,7 @@ export function WithdrawUnvestedButton({
   return (
     <>
       <button
+        ref={ref}
         onClick={() => setConfirmOpen(true)}
         disabled={confirmOpen}
         className="w-full rounded-xl border border-amber-500/20 py-2.5 text-[13px] font-medium text-amber-400 transition hover:border-amber-500/40 hover:bg-amber-500/5 disabled:cursor-not-allowed disabled:opacity-50"
@@ -159,4 +163,4 @@ export function WithdrawUnvestedButton({
       )}
     </>
   );
-}
+});
