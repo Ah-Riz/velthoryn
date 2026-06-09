@@ -146,10 +146,8 @@ pub fn handler(ctx: Context<Claim>, leaf: VestingLeaf, proof: Vec<[u8; 32]>) -> 
         schedule::vested(&leaf, effective_now).saturating_sub(cr.claimed_amount)
     };
 
-    if claimable == 0 && leaf.release_type != 2 {
-        if effective_now >= leaf.end_time {
-            return Err(VestingError::StreamExpired.into());
-        }
+    if claimable == 0 && leaf.release_type != 2 && effective_now >= leaf.end_time {
+        return Err(VestingError::StreamExpired.into());
     }
 
     require!(claimable > 0, VestingError::NothingToClaim);
