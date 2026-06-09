@@ -54,9 +54,9 @@ import {
 const GRACE_PERIOD_SECS = 7 * 24 * 60 * 60; // 604800
 
 const ERR = {
-  NothingToClaim: 6016,
-  InvalidProof: 6014,
-  StreamExpired: 6033,
+  NothingToClaim: 6015,
+  InvalidProof: 6013,
+  StreamExpired: 6032,
 } as const;
 
 // ---------------------------------------------------------------------------

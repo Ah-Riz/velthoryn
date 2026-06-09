@@ -61,15 +61,15 @@ export function expectAnchorError(err: unknown, code: number) {
   const haystack = msg + "\n" + logs;
   const decimal = `Error Number: ${code}`;
   const anchorName = Object.entries({
-    FullyVested: 6032,
-    StreamExpired: 6033,
-    MilestoneNotReleased: 6034,
-    MilestoneAlreadyReleased: 6035,
-    InstantRefundedCampaign: 6036,
-    CampaignAlreadyStarted: 6037,
-    NotMultiLeafCampaign: 6041,
-    NothingToClaim: 6016,
-    AlreadyCancelled: 6021,
+    FullyVested: 6031,
+    StreamExpired: 6032,
+    MilestoneNotReleased: 6033,
+    MilestoneAlreadyReleased: 6034,
+    InstantRefundedCampaign: 6035,
+    CampaignAlreadyStarted: 6036,
+    NotMultiLeafCampaign: 6040,
+    NothingToClaim: 6015,
+    AlreadyCancelled: 6020,
   }).find(([, v]) => v === code)?.[0];
 
   // Some providers redact program logs; fall back to structured Anchor error.
