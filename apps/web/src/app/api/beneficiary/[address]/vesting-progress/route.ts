@@ -29,6 +29,7 @@ type BeneficiaryCampaignRow = {
   end_time: string | number;
   milestone_idx: number;
   my_claimed: string | number;
+  milestone_released: boolean | null;
 } & Record<string, unknown>;
 
 async function getVestingProgressHandler(
@@ -62,6 +63,11 @@ async function getVestingProgressHandler(
       FROM claim_events
       WHERE beneficiary = ${address}
       GROUP BY campaign_id, beneficiary
+    ),
+    released_milestones AS (
+      SELECT campaign_id, milestone_idx
+      FROM milestone_events
+      GROUP BY campaign_id, milestone_idx
     )
     SELECT
       c.id, c.tree_address, c.creator, c.mint, c.campaign_id,
@@ -69,11 +75,13 @@ async function getVestingProgressHandler(
       c.created_at, c.metadata,
       l.leaf_index, l.amount, l.release_type,
       l.start_time, l.cliff_time, l.end_time, l.milestone_idx,
-      coalesce(mc.claimed_amount, 0)::bigint AS my_claimed
+      coalesce(mc.claimed_amount, 0)::bigint AS my_claimed,
+      (rm.milestone_idx IS NOT NULL) AS milestone_released
     FROM campaigns c
     INNER JOIN latest_rv rv ON rv.campaign_id = c.id
     INNER JOIN leaves l ON l.root_version_id = rv.id AND l.beneficiary = ${address}
     LEFT JOIN my_claims mc ON mc.campaign_id = c.id AND mc.beneficiary = ${address}
+    LEFT JOIN released_milestones rm ON rm.campaign_id = c.id AND rm.milestone_idx = l.milestone_idx
     ORDER BY c.created_at DESC
   `);
 
@@ -91,7 +99,13 @@ async function getVestingProgressHandler(
     };
 
     const vestedSoFar = getVestedAmount(schedule, cancelledAt, now);
-    const claimable = vestedSoFar > claimedSoFar ? vestedSoFar - claimedSoFar : 0n;
+    // Milestone leaves require on-chain release flag — check DB-indexed events.
+    // Without this, the API would report milestone tokens as claimable even when
+    // the creator hasn't released them yet.
+    const milestoneReleased = row.release_type !== 2 || row.milestone_released === true;
+    const claimable = milestoneReleased && vestedSoFar > claimedSoFar
+      ? vestedSoFar - claimedSoFar
+      : 0n;
 
     // progressPercent = (vestedSoFar / amount) * 100, with 2 decimal precision
     const progressPercent =
@@ -122,6 +136,7 @@ async function getVestingProgressHandler(
       },
       cancelledAt: cancelledAt !== null ? cancelledAt.toString() : null,
       paused: row.paused,
+      milestoneReleased,
     };
   });
 

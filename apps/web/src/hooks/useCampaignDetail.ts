@@ -51,6 +51,7 @@ interface CampaignDetail {
   createdAt: number;
   metadata: { name?: string; description?: string; logoUri?: string } | null;
   hasMilestoneLeaves?: boolean;
+  milestoneIndices?: number[];
   gracePeriod: GracePeriod | null;
   analytics: CampaignAnalytics;
   rootVersions: RootVersion[];

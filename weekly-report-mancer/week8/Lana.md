@@ -2,7 +2,7 @@
 
 **Scope:** BE-DB-SC-Merkle (backend API, Postgres/indexer, Solana program, Merkle client). Frontend UI is out of scope unless noted as a dependency on Geral.
 
-**This week (chronological):** Week 7 report review + backlog analysis → exploration (Mollusk tests, BE infra, security/ops) → **Mollusk 0.13.1 bump + 18 IGNORED comment standardization** → **production code quality sweep (`.expect()` → `.ok_or()`, clippy suppressions 4→2, unused import fix)** → **CU budget audit (8 new benchmarks, 12/18 handlers measured)** → **multisig setup docs + devnet test script** → **mainnet readiness checklist** → **CI hardening (Mollusk + proptest + cargo audit)**.
+**This week (chronological):** Week 7 report review + backlog analysis → exploration (Mollusk tests, BE infra, security/ops) → **Mollusk 0.13.1 bump + 18 IGNORED comment standardization** → **production code quality sweep (`.expect()` → `.ok_or()`, clippy suppressions 4→2, unused import fix)** → **CU budget audit (8 new benchmarks, 12/18 handlers measured)** → **multisig setup docs + devnet test script** → **mainnet readiness checklist** → **CI hardening (Mollusk + proptest + cargo audit)** → **Week 9 QA sweep (7 bugs found & fixed across SC/BE/FE)**.
 
 ---
 
@@ -27,6 +27,13 @@
 | **CI** | Mollusk tests in CI | `ci.yml` — runs 72 active Mollusk tests across 8 test files after anchor build |
 | **CI** | Proptest in CI | `ci.yml` — runs `cargo test --lib` (31 tests including 18 proptest properties) |
 | **CI** | Cargo audit in CI | `ci.yml` — installs and runs `cargo audit` before build |
+| **QA** | 7 bugs found & fixed | P0: out-of-order milestone claiming (FE), StreamExpired multi-leaf (SC). P1: total_entitled accumulation (SC), milestoneIdx bounds + dedup (BE). P2: VestingProgress release check, MilestoneReleasePanel indices (BE/FE) |
+| **QA** | ClaimWithProofButton milestone fix | `ClaimWithProofButton.tsx` — milestone leaves use on-chain `milestoneBitmap` instead of greedy `claimedAmount` allocation |
+| **QA** | claim.rs StreamExpired fix | `claim.rs:149` — removed `fully_claimed` sub-condition that blocked multi-leaf claims |
+| **QA** | total_entitled accumulation | `claim.rs:113-121` — accumulates across milestone claims via `checked_add` |
+| **QA** | milestoneIdx validation | `validators.ts` — `.max(255)` on all 3 Zod schemas; `prepare/route.ts` — duplicate `(beneficiary, milestoneIdx)` check |
+| **QA** | VestingProgress milestone check | `vesting-progress/route.ts` — LEFT JOIN `milestone_events`, zeroes `claimable` for unreleased milestones |
+| **QA** | MilestoneReleasePanel real indices | Panel uses `milestoneIndices` from API (derived from actual leaves) instead of `leafCount` |
 
 ### Incomplete / deferred
 
@@ -68,8 +75,9 @@
 | CI test steps | 5 (merkle, anchor build, IDL check, bankrun, localnet) | **+3** (lib/proptest, Mollusk 8-file suite, cargo audit) |
 | New docs | 0 this week | **3** (`CU_BUDGET.md`, `MAINNET_CHECKLIST.md`, `multisig-setup.md`) |
 | New scripts | 0 this week | **1** (`test-multisig-transfer.sh`) |
-| Total files changed | — | **15** (14 modified + 1 new), 752 insertions, 33 deletions |
-| Bugs found | 0 | 0 (no bugs this week — hardening sprint) |
+| Total files changed | — | **25** (24 modified + 1 new), 875 insertions, 63 deletions |
+| Bugs found | 0 | **7** (2 P0, 3 P1, 2 P2) — QA sweep with senior-dev + code-reviewer + qa agents |
+| Bugs fixed | 0 | **7** — all fixed, compiles clean, 31 Rust unit tests pass |
 | Rate limiting | Thought incomplete | **ALREADY DONE** — discovered during exploration |
 | API versioning | Thought incomplete | **ALREADY DONE** — discovered during exploration |
 
@@ -82,11 +90,14 @@
 - [ ] **SPL handler tests** — claim/withdraw SPL path, create_stream SPL, create_campaign SPL, fund_campaign SPL
 - [ ] **Formal CU budget audit** — re-measure with mainnet cluster parameters, set `compute_budget` limits
 - [ ] **External audit** — engage firm after ops budget approval
+- [ ] **Multi-leaf non-milestone tracking** — cumulative `claimed_amount` undercounts for beneficiaries with multiple cliff/linear leaves. Needs per-leaf tracking (breaking on-chain change) — see Known Issue #29 in `docs/WEEK8_KNOWN_ISSUES.md`
+- [ ] **Out-of-order milestone E2E test** — add ts-mocha test: create 3-milestone campaign, claim 0→2→1, verify all succeed
 
 ### BE — Backend API
 - [ ] **k6 load test expansion** — add prepare, proof, spike test scripts
 - [ ] **Sentry live DSN** — ops sets env var in Vercel
 - [ ] **Rate limit tuning** — adjust per-route limits based on k6 load test results
+- [ ] **MilestoneReleasePanel cache invalidation** — after milestone release, invalidate `["campaign"]` and `["beneficiaryCampaigns"]` query keys (currently only invalidates `["timeline"]`)
 
 ### FE — Frontend (Geral dependency)
 - [ ] **Native SOL create flows** — FE uses `*_native` instructions when mint = `NATIVE_SOL_MINT`

@@ -257,9 +257,9 @@ describe("week7 edge case tests (bankrun)", () => {
       .rpc();
 
     // Claim leaf B (zero amount) — proof is valid but vested = 0.
-    // Note: With amount=0, claimed_amount (0) >= amount (0) is true, so the
-    // program treats it as "fully claimed" and returns StreamExpired (6032),
-    // not NothingToClaim (6015).
+    // With amount=0 and cliff passed, vested() returns 0, claimable = 0.
+    // Since effective_now < end_time, the StreamExpired guard is skipped,
+    // and the require!(claimable > 0) returns NothingToClaim (6016).
     const beneficiaryBAta = await createBeneficiaryAta(provider, mint, beneficiaryB.publicKey);
     const [crPdaB] = await claimRecordPDA(PROGRAM_ID, treePda, beneficiaryB.publicKey);
 
@@ -279,7 +279,7 @@ describe("week7 edge case tests (bankrun)", () => {
         .rpc();
       expect.fail("should have thrown");
     } catch (e: any) {
-      expectAnchorError(e, ERR.StreamExpired);
+      expectAnchorError(e, ERR.NothingToClaim);
     }
   });
 

@@ -33,6 +33,40 @@ async function postPrepareHandler(request: NextRequest) {
 
   const data = parsed.data;
 
+  // Validate no duplicate (beneficiary, milestoneIdx) pairs for milestone leaves.
+  // A duplicate would cause the on-chain bitmap to mark the milestone claimed after
+  // the first leaf, making the second leaf permanently unclaimable.
+  const milestoneDuplicates = new Map<string, number[]>();
+  for (let i = 0; i < data.recipients.length; i++) {
+    const r = data.recipients[i];
+    if (r.releaseType === 2) {
+      const key = `${r.beneficiary}:${r.milestoneIdx}`;
+      const existing = milestoneDuplicates.get(key);
+      if (existing) {
+        existing.push(i);
+      } else {
+        milestoneDuplicates.set(key, [i]);
+      }
+    }
+  }
+  if (milestoneDuplicates.size > 0) {
+    const dupEntries: string[] = [];
+    for (const [key, indices] of milestoneDuplicates) {
+      if (indices.length > 1) {
+        dupEntries.push(
+          `beneficiary=${key.split(":")[0]}, milestoneIdx=${key.split(":")[1]} at recipient indices [${indices.join(", ")}]`,
+        );
+      }
+    }
+    if (dupEntries.length > 0) {
+      throw new ValidationError(
+        `Duplicate (beneficiary, milestoneIdx) pairs found for milestone recipients. ` +
+          `Each beneficiary can have at most one leaf per milestone index. ` +
+          `Duplicates: ${dupEntries.join("; ")}`,
+      );
+    }
+  }
+
   let recipients: CampaignRecipient[];
   try {
     recipients = data.recipients.map((r) => ({

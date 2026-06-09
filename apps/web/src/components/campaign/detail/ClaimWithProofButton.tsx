@@ -273,6 +273,13 @@ export function ClaimWithProofButton({
   const milestoneNotReleased = selectedLeaf.releaseType === 2
     && !isMilestoneTriggered(milestoneReleasedFlags, selectedLeaf.milestoneIdx);
 
+  // On-chain milestone bitmap: each bit represents whether that milestone_idx was claimed.
+  // This is the authoritative per-milestone claimed state, immune to out-of-order claiming.
+  const milestoneBitmap = claimRecordQuery.data?.milestoneBitmap
+    ? new Uint8Array(claimRecordQuery.data.milestoneBitmap)
+    : new Uint8Array(32);
+
+  // Greedy allocation of cumulative claimedAmount across leaves (only used for cliff/linear).
   const leafClaimedTotals = leaves.reduce<bigint[]>(
     (claimedTotals, entry) => {
       const alreadyAssigned = claimedTotals.reduce((sum, claimed) => sum + claimed, 0n);
@@ -290,11 +297,27 @@ export function ClaimWithProofButton({
     ? Math.min(nowUnix, Number(cancelledAt))
     : nowUnix;
   const leafClaimableAmounts = leaves.map((entry, index) => {
+    if (entry.leaf.releaseType === 2) {
+      // Milestone: use on-chain bitmap (authoritative, per-milestone-idx).
+      // Avoids the greedy allocation bug where out-of-order claiming marks
+      // intermediate milestones as "fully claimed" in the UI.
+      const alreadyClaimed = isMilestoneTriggered(milestoneBitmap, entry.leaf.milestoneIdx);
+      if (alreadyClaimed) return 0n;
+      const released = isMilestoneTriggered(milestoneReleasedFlags, entry.leaf.milestoneIdx);
+      const nowPastCliff = effectiveNowUnix >= entry.leaf.cliffTime;
+      return released && nowPastCliff ? BigInt(String(entry.leaf.amount)) : 0n;
+    }
+    // Cliff/Linear: use greedy allocation against cumulative claimedAmount.
     const vestedNow = vestedForLeaf(entry.leaf, effectiveNowUnix, milestoneReleasedFlags);
     const claimedForLeaf = leafClaimedTotals[index] ?? 0n;
     return vestedNow > claimedForLeaf ? vestedNow - claimedForLeaf : 0n;
   });
   const leafFullyClaimed = leaves.map((entry, index) => {
+    if (entry.leaf.releaseType === 2) {
+      // Milestone: check on-chain bitmap, not greedy allocation.
+      return isMilestoneTriggered(milestoneBitmap, entry.leaf.milestoneIdx);
+    }
+    // Cliff/Linear: use greedy allocation.
     const leafAmount = BigInt(String(entry.leaf.amount));
     return (leafClaimedTotals[index] ?? 0n) >= leafAmount;
   });

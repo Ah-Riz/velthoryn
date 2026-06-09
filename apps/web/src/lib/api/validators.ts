@@ -26,7 +26,7 @@ export const leafSchema = z.object({
   startTime: numericString,
   cliffTime: numericString,
   endTime: numericString,
-  milestoneIdx: z.number().int().min(0).default(0),
+  milestoneIdx: z.number().int().min(0).max(255).default(0),
   proof: z
     .array(z.array(z.number().int().min(0).max(255)).length(32))
     .max(32),
@@ -95,7 +95,7 @@ export const bulkRecipientSchema = z
     startTime: numericString,
     cliffTime: numericString,
     endTime: numericString,
-    milestoneIdx: z.number().int().min(0).default(0),
+    milestoneIdx: z.number().int().min(0).max(255).default(0),
   })
   .refine(
     (r) => {
@@ -178,7 +178,7 @@ const withdrawArgsSchema = z
     startTime: numericString,
     cliffTime: numericString,
     endTime: numericString,
-    milestoneIdx: z.number().int().min(0).default(0),
+    milestoneIdx: z.number().int().min(0).max(255).default(0),
   })
   .refine(
     (args) => {

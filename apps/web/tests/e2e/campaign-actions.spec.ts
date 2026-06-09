@@ -229,6 +229,7 @@ test.describe("Milestone Release Panel", () => {
     await mockCampaignApi(page, ADDR, {
       leafCount: 3,
       hasMilestoneLeaves: true,
+      milestoneIndices: [0, 1, 2],
       cancelledAt: null,
       recipients: [
         { beneficiary: "3coyVxLQYHdQ6MNQRRdm2KuCABJopxPfo9XuQeosUmf3", allocation: "333333333", leafCount: 1, claimedAmount: "0" },
@@ -250,6 +251,7 @@ test.describe("Milestone Release Panel", () => {
     await mockCampaignApi(page, ADDR, {
       leafCount: 3,
       hasMilestoneLeaves: true,
+      milestoneIndices: [0, 1, 2],
       cancelledAt,
       gracePeriod: { end: String(cancelledAt + 86400 * 7), remaining: "0", isExpired: true },
     });
