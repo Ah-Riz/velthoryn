@@ -123,16 +123,19 @@ export const WithdrawUnvestedButton = forwardRef<HTMLButtonElement, Props>(funct
     );
   }
 
-  return (
-    <>
-      <button
-        ref={ref}
-        onClick={() => setConfirmOpen(true)}
-        disabled={confirmOpen}
-        className="w-full rounded-xl border border-amber-500/20 py-2.5 text-[13px] font-medium text-amber-400 transition hover:border-amber-500/40 hover:bg-amber-500/5 disabled:cursor-not-allowed disabled:opacity-50"
-      >
-        Withdraw Unvested Tokens
-      </button>
+  // Grace-expired CTA lives in CampaignStatusBanner; keep a hidden trigger for ref.click().
+  if (grace.status === "grace_expired") {
+    return (
+      <>
+        <button
+          ref={ref}
+          type="button"
+          onClick={() => setConfirmOpen(true)}
+          disabled={confirmOpen}
+          className="hidden"
+          tabIndex={-1}
+          aria-hidden="true"
+        />
 
       {confirmOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
@@ -164,5 +167,8 @@ export const WithdrawUnvestedButton = forwardRef<HTMLButtonElement, Props>(funct
         </div>
       )}
     </>
-  );
+    );
+  }
+
+  return null;
 });

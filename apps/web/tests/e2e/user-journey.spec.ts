@@ -253,7 +253,7 @@ test.describe("Multi-leaf claim journey", () => {
 // ---------------------------------------------------------------------------
 
 test.describe("Withdraw Unvested journey", () => {
-  test("clicking Withdraw Unvested shows Withdrawing loading state", async ({ page }) => {
+  test("clicking Withdraw Unvested opens confirmation dialog", async ({ page }) => {
     const cancelledAt = now() - 86400 * 8;
     await enableE2eWallet(page);
     await mockCampaignApi(page, ADDR, {
@@ -263,14 +263,13 @@ test.describe("Withdraw Unvested journey", () => {
     });
     await gotoWithRetry(page, `/campaign/${ADDR}`);
 
-    const withdrawBtn = page.getByRole("button", { name: /withdraw unvested/i });
+    const withdrawBtn = page.getByRole("button", { name: /withdraw unvested tokens/i });
     await expect(withdrawBtn).toBeVisible({ timeout: 20_000 });
     await withdrawBtn.click();
 
-    // WithdrawUnvestedButton: loading state
-    await expect(
-      page.getByRole("button", { name: /withdrawing|processing|withdraw unvested/i }),
-    ).toBeDisabled({ timeout: 10_000 });
+    await expect(page.getByRole("heading", { name: "Withdraw Unvested Tokens?" })).toBeVisible({
+      timeout: 10_000,
+    });
   });
 });
 

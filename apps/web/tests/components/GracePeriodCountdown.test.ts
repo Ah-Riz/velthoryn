@@ -16,27 +16,26 @@ describe("GracePeriodCountdown", () => {
     vi.useRealTimers();
   });
 
-  it("shows grace period prefix and countdown when grace is active", () => {
+  it("shows countdown and remaining when grace is active", () => {
     const nowTs = BigInt(Math.floor(Date.now() / 1000));
     const cancelledAt = nowTs - 3n * 86400n;
 
     render(createElement(GracePeriodCountdown, { cancelledAt }));
 
-    const text = screen.getByText(/Grace period:/).textContent ?? "";
-    expect(text).toContain("Grace period:");
+    const text = screen.getByText(/remaining/).textContent ?? "";
     expect(text).toContain("remaining");
+    expect(text).not.toContain("Grace period:");
     expect(text).not.toContain("expired");
   });
 
-  it("omits prefix when showPrefix is false", () => {
+  it("uses amber styling when more than 24 hours remain", () => {
     const nowTs = BigInt(Math.floor(Date.now() / 1000));
     const cancelledAt = nowTs - 3n * 86400n;
 
-    render(createElement(GracePeriodCountdown, { cancelledAt, showPrefix: false }));
+    const { container } = render(createElement(GracePeriodCountdown, { cancelledAt }));
 
-    const text = screen.getByText(/remaining/).textContent ?? "";
-    expect(text).not.toContain("Grace period:");
-    expect(text).toContain("remaining");
+    const span = container.querySelector("span");
+    expect(span?.className).toContain("text-amber-400");
   });
 
   it("shows expired state after grace period ends", () => {
