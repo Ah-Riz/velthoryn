@@ -434,11 +434,12 @@ export default function CampaignsPage() {
 
   return (
     <div className="mx-auto max-w-6xl space-y-6 pb-12">
-      <div className="rounded-2xl border border-white/[0.08] bg-[#0d1117] p-6">
+      <div className="rounded-2xl border border-[#222838] bg-[#13161f] p-6">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
           <div>
-            <h1 className="text-[24px] font-semibold text-white">Vesting Streams</h1>
-            <p className="mt-2 max-w-3xl text-[14px] text-[#8b92a5]">
+            <div className="mb-2 font-mono text-[11px] font-medium uppercase tracking-[0.18em] text-[#7c3aed]/70">Streams</div>
+            <h1 className="text-[28px] font-semibold tracking-tight text-[#e5e7eb]">Vesting Streams</h1>
+            <p className="mt-1 font-mono text-[12px] text-[#64748b]">
               Track streams you received and streams you created.
             </p>
           </div>
@@ -448,14 +449,14 @@ export default function CampaignsPage() {
               <button
                 onClick={refreshAll}
                 disabled={isLoading}
-                className="rounded-xl border border-white/[0.08] bg-white/[0.03] px-4 py-2.5 text-[13px] text-white transition hover:bg-white/[0.05] disabled:opacity-50"
+                className="rounded-xl border border-[#222838] bg-[#161a25] px-4 py-2.5 text-[13px] text-[#b4b9c5] transition hover:border-[#2e3648] hover:text-[#e5e7eb] disabled:opacity-50"
               >
                 Refresh
               </button>
             )}
             <Link
               href="/campaign/create"
-              className="rounded-xl bg-white px-4 py-2.5 text-[13px] font-medium text-[#0d1117] transition hover:opacity-90"
+              className="rounded-xl bg-[#7c3aed] px-4 py-2.5 text-[13px] font-medium text-white transition hover:bg-[#8b50f1]"
             >
               New Stream
             </Link>
@@ -464,15 +465,15 @@ export default function CampaignsPage() {
       </div>
 
       {!publicKey ? (
-        <div className="rounded-2xl border border-dashed border-white/[0.08] bg-white/[0.02] px-8 py-16 text-center">
-          <h2 className="text-[16px] font-semibold text-white">Connect your wallet</h2>
-          <p className="mt-2 text-[13px] text-[#8b92a5]">
+        <div className="rounded-2xl border border-dashed border-[#222838] bg-[#13161f]/60 px-8 py-16 text-center">
+          <h2 className="text-[16px] font-semibold text-[#e5e7eb]">Connect your wallet</h2>
+          <p className="mt-2 font-mono text-[12px] text-[#64748b]">
             Your sender and recipient streams will appear here.
           </p>
         </div>
       ) : (
         <>
-          <div className="rounded-2xl border border-white/[0.06] bg-white/[0.02] p-4">
+          <div className="rounded-2xl border border-[#222838] bg-[#13161f] p-4">
             <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
               <div className="flex flex-wrap gap-2">
                 {TABS.map((tab) => {
@@ -482,10 +483,10 @@ export default function CampaignsPage() {
                       key={tab.key}
                       type="button"
                       onClick={() => setActiveTab(tab.key)}
-                      className={`rounded-full px-4 py-2 text-[13px] transition ${
+                      className={`rounded-full px-4 py-2 font-mono text-[11px] transition ${
                         active
-                          ? "bg-white text-[#0d1117]"
-                          : "border border-white/[0.08] bg-white/[0.03] text-[#8b92a5]"
+                          ? "border border-[#7c3aed]/40 bg-[#7c3aed]/15 text-[#a78bfa]"
+                          : "border border-[#222838] bg-transparent text-[#64748b] hover:border-[#2e3648] hover:text-[#b4b9c5]"
                       }`}
                     >
                       {tab.label} ({tabCounts[tab.key]})
@@ -505,7 +506,7 @@ export default function CampaignsPage() {
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
                   placeholder="Search by campaign, address, or token"
-                  className="w-full rounded-xl border border-white/[0.08] bg-[#11161f] px-4 py-3 text-[13px] text-white outline-none transition focus:border-white/20"
+                  className="w-full rounded-xl border border-[#222838] bg-[#0b0d12] px-4 py-2.5 font-mono text-[12px] text-[#b4b9c5] outline-none placeholder:text-[#64748b] transition focus:border-[#7c3aed]/40"
                 />
               </div>
             </div>
@@ -533,46 +534,46 @@ export default function CampaignsPage() {
               {[...Array(5)].map((_, i) => (
                 <div
                   key={i}
-                  className="flex animate-pulse items-center gap-4 rounded-2xl border border-white/[0.06] bg-white/[0.02] px-5 py-4"
+                  className="flex animate-pulse items-center gap-4 rounded-2xl border border-[#222838] bg-[#13161f] px-5 py-4"
                 >
-                  <div className="h-9 w-9 shrink-0 rounded-xl bg-white/[0.06]" />
+                  <div className="h-9 w-9 shrink-0 rounded-xl bg-[#1c2130]" />
                   <div className="flex-1 space-y-2">
-                    <div className="h-3.5 w-1/3 rounded-full bg-white/[0.06]" />
-                    <div className="h-2.5 w-1/2 rounded-full bg-white/[0.04]" />
+                    <div className="h-3.5 w-1/3 rounded-full bg-[#1c2130]" />
+                    <div className="h-2.5 w-1/2 rounded-full bg-[#161a25]" />
                   </div>
                   <div className="hidden space-y-2 sm:block">
-                    <div className="h-3 w-20 rounded-full bg-white/[0.06]" />
-                    <div className="h-2.5 w-16 rounded-full bg-white/[0.04]" />
+                    <div className="h-3 w-20 rounded-full bg-[#1c2130]" />
+                    <div className="h-2.5 w-16 rounded-full bg-[#161a25]" />
                   </div>
-                  <div className="h-6 w-16 shrink-0 rounded-lg bg-white/[0.06]" />
+                  <div className="h-6 w-16 shrink-0 rounded-lg bg-[#1c2130]" />
                 </div>
               ))}
             </div>
           ) : error ? (
-            <div className="rounded-2xl border border-red-500/20 bg-red-500/[0.05] p-5">
+            <div className="rounded-2xl border border-red-500/25 bg-[#13161f] p-5">
               <div className="flex items-start gap-3">
-                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-red-500/15 text-red-400">
+                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-red-500/20 bg-red-500/10 text-red-400">
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                     <circle cx="12" cy="12" r="10" /><line x1="12" y1="8" x2="12" y2="12" /><line x1="12" y1="16" x2="12.01" y2="16" />
                   </svg>
                 </div>
                 <div>
                   <p className="text-[13px] font-medium text-red-300">Failed to load streams</p>
-                  <p className="mt-1 text-[12px] text-[#8b92a5]">{error}</p>
+                  <p className="mt-1 font-mono text-[11px] text-[#64748b]">{error}</p>
                 </div>
               </div>
             </div>
           ) : filteredRows.length === 0 ? (
             activeTab === "action" ? (
-              <div className="rounded-2xl border border-white/[0.06] bg-white/[0.02] px-8 py-16 text-center">
-                <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-emerald-500/15">
-                  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="text-emerald-400">
+              <div className="rounded-2xl border border-[#222838] bg-[#13161f] px-8 py-16 text-center">
+                <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-2xl border border-[#14f1d9]/20 bg-[#14f1d9]/10">
+                  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#14f1d9" strokeWidth="2">
                     <path d="M22 11.08V12a10 10 0 11-5.93-9.14" />
                     <polyline points="22 4 12 14.01 9 11.01" />
                   </svg>
                 </div>
-                <h2 className="text-[16px] font-semibold text-white">All caught up</h2>
-                <p className="mt-2 text-[13px] text-[#8b92a5]">No campaigns need attention right now.</p>
+                <h2 className="text-[16px] font-semibold text-[#e5e7eb]">All caught up</h2>
+                <p className="mt-2 font-mono text-[12px] text-[#64748b]">No campaigns need attention right now.</p>
               </div>
             ) : search.trim() ? (
               <EmptyState

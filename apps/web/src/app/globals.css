@@ -1,8 +1,13 @@
 @import "tailwindcss";
 
+@theme {
+  --font-sans: var(--font-space-grotesk), system-ui, sans-serif;
+  --font-mono: var(--font-jetbrains-mono), ui-monospace, monospace;
+}
+
 :root {
-  --background: #0a0a0a;
-  --foreground: #ededed;
+  --background: #0b0d12;
+  --foreground: #e5e7eb;
 }
 
 * {
@@ -15,7 +20,7 @@
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--font-sans, "Space Grotesk", system-ui, sans-serif);
 }
 
 body[data-vesting-tx-pending="true"] [data-sidebar-nav] {

@@ -29,18 +29,18 @@ function ActivityFeedRow({
   return (
     <div className="flex items-start gap-3 py-3">
       <div
-        className={`mt-0.5 flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-lg bg-white/[0.04] text-[13px] ${config.color}`}
+        className={`mt-0.5 flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-lg border border-[#222838] bg-[#161a25] text-[13px] ${config.color}`}
       >
         {config.icon}
       </div>
       <div className="min-w-0 flex-1">
-        <p className="text-[13px] text-[#c8cdd8]">
+        <p className="text-[13px] text-[#b4b9c5]">
           {eventDescription(event, mintDecimals ?? null)}
         </p>
-        <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[11px] text-[#555d73]">
+        <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 font-mono text-[10px] text-[#64748b]">
           <Link
             href={`/campaign/${event.treeAddress}`}
-            className="transition hover:text-violet-400"
+            className="transition hover:text-[#a78bfa]"
           >
             {campaignLabel}
           </Link>
@@ -51,7 +51,7 @@ function ActivityFeedRow({
             href={explorerUrl}
             target="_blank"
             rel="noopener noreferrer"
-            className="transition hover:text-[#8b92a5]"
+            className="transition hover:text-[#b4b9c5]"
           >
             {truncateSig(event.signature)}
           </a>
@@ -66,10 +66,10 @@ function ActivityFeedSkeleton() {
     <div className="space-y-3">
       {[...Array(5)].map((_, i) => (
         <div key={i} className="flex items-start gap-3 py-1">
-          <div className="h-7 w-7 animate-pulse rounded-lg bg-white/[0.04]" />
+          <div className="h-7 w-7 animate-pulse rounded-lg bg-[#1c2130]" />
           <div className="flex-1 space-y-1.5">
-            <div className="h-3.5 w-3/4 animate-pulse rounded bg-white/[0.04]" />
-            <div className="h-3 w-1/2 animate-pulse rounded bg-white/[0.04]" />
+            <div className="h-3.5 w-3/4 animate-pulse rounded bg-[#1c2130]" />
+            <div className="h-3 w-1/2 animate-pulse rounded bg-[#1c2130]" />
           </div>
         </div>
       ))}
@@ -89,14 +89,14 @@ export function ActivityFeed({
   const { data, isLoading } = useRecentActivity(address, limit);
 
   return (
-    <div className="rounded-2xl border border-white/[0.06] bg-white/[0.02] p-5">
+    <div className="rounded-2xl border border-[#222838] bg-[#13161f] p-5">
       <div className="mb-3 flex items-center justify-between">
-        <h3 className="text-[13px] font-medium uppercase tracking-[0.1em] text-[#555d73]">
+        <h3 className="font-mono text-[11px] font-medium uppercase tracking-[0.18em] text-[#64748b]">
           Recent Activity
         </h3>
         {data && data.total > data.events.length && (
-          <span className="text-[11px] text-[#555d73]">
-            Showing {data.events.length} of {data.total}
+          <span className="font-mono text-[10px] text-[#64748b]">
+            {data.events.length} of {data.total}
           </span>
         )}
       </div>
@@ -104,9 +104,9 @@ export function ActivityFeed({
       {isLoading ? (
         <ActivityFeedSkeleton />
       ) : !data || data.events.length === 0 ? (
-        <p className="text-[13px] text-[#555d73]">No recent activity</p>
+        <p className="font-mono text-[12px] text-[#64748b]">No recent activity</p>
       ) : (
-        <div className="divide-y divide-white/[0.04]">
+        <div className="divide-y divide-[#1c2130]">
           {data.events.map((event) => (
             <ActivityFeedRow
               key={`${event.signature}-${event.type}`}

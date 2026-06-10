@@ -65,10 +65,10 @@ function SidebarContent({ onNavClick }: { onNavClick?: () => void }) {
 
   return (
     <>
-      <div className="flex h-16 items-center gap-2.5 border-b border-white/[0.06] px-5">
+      <div className="flex h-16 items-center gap-2.5 border-b border-[#1c2130] px-5">
         <img src="/brand/velthoryn-logo-sm.svg" alt="Velthoryn" className="h-8 w-8" />
-        <span className="text-[15px] font-semibold tracking-tight text-white">Velthoryn</span>
-        <span className="ml-auto rounded-full bg-emerald-500/15 px-2 py-0.5 text-[10px] font-medium text-emerald-400">
+        <span className="text-[15px] font-semibold tracking-tight text-[#e5e7eb]">Velthoryn</span>
+        <span className="ml-auto rounded-full border border-emerald-500/20 bg-emerald-500/10 px-2 py-0.5 font-mono text-[9px] font-medium tracking-[0.08em] text-emerald-400">
           {clusterLabel().toLowerCase()}
         </span>
       </div>
@@ -88,18 +88,18 @@ function SidebarContent({ onNavClick }: { onNavClick?: () => void }) {
                 <Link
                   href={item.href}
                   onClick={onNavClick}
-                  className={`flex items-center gap-3 rounded-lg px-3 py-2.5 text-[13px] font-medium transition-colors ${
+                  className={`flex items-center gap-3 rounded-lg px-3 py-2.5 text-[13px] font-medium transition-all ${
                     isActive
-                      ? "bg-violet-600/15 text-violet-300"
-                      : "text-[#8b92a5] hover:bg-white/[0.04] hover:text-white"
+                      ? "border border-[#7c3aed]/25 bg-[#7c3aed]/12 text-[#a78bfa]"
+                      : "border border-transparent text-[#64748b] hover:border-[#222838] hover:bg-[#13161f] hover:text-[#b4b9c5]"
                   }`}
                 >
-                  <span className={isActive ? "text-violet-400" : "text-[#555d73]"}>
+                  <span className={isActive ? "text-[#a78bfa]" : "text-[#64748b]"}>
                     {item.icon}
                   </span>
                   {item.label}
                   {item.href === "/campaigns" && needsActionCount > 0 && !needsActionLoading && (
-                    <span className="ml-auto h-2 w-2 rounded-full bg-amber-400" />
+                    <span className="ml-auto h-1.5 w-1.5 rounded-full bg-amber-400 shadow-[0_0_6px_rgba(251,191,36,0.5)]" />
                   )}
                 </Link>
               </li>
@@ -108,10 +108,13 @@ function SidebarContent({ onNavClick }: { onNavClick?: () => void }) {
         </ul>
       </nav>
 
-      <div className="border-t border-white/[0.06] px-4 py-4">
-        <div className="rounded-lg bg-white/[0.03] px-3 py-2.5 text-[11px] text-[#555d73]">
+      <div className="border-t border-[#1c2130] px-4 py-4">
+        <div className="flex items-center gap-2 rounded-lg border border-[#1c2130] bg-[#0b0d12] px-3 py-2.5 font-mono text-[10px] tracking-[0.06em] text-[#64748b]">
+          <span className="relative flex h-1.5 w-1.5">
+            <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-50" />
+            <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-emerald-400" />
+          </span>
           {clusterNetworkLabel()}
-          <span className="ml-1.5 inline-block h-1.5 w-1.5 rounded-full bg-emerald-400" />
         </div>
       </div>
     </>
@@ -128,7 +131,7 @@ export function Sidebar({ mobileOpen, onMobileClose }: { mobileOpen?: boolean; o
   return (
     <>
       {/* Desktop sidebar */}
-      <aside className="fixed left-0 top-0 z-30 hidden h-screen w-[240px] flex-col border-r border-white/[0.06] bg-[#0a0c10] lg:flex">
+      <aside className="fixed left-0 top-0 z-30 hidden h-screen w-[240px] flex-col border-r border-[#1c2130] bg-[#0b0d12] lg:flex">
         <SidebarContent />
       </aside>
 
@@ -139,7 +142,7 @@ export function Sidebar({ mobileOpen, onMobileClose }: { mobileOpen?: boolean; o
             className="fixed inset-0 z-40 bg-black/60 backdrop-blur-sm lg:hidden"
             onClick={onMobileClose}
           />
-          <aside className="fixed left-0 top-0 z-50 flex h-screen w-[280px] flex-col border-r border-white/[0.06] bg-[#0a0c10] lg:hidden">
+          <aside className="fixed left-0 top-0 z-50 flex h-screen w-[280px] flex-col border-r border-[#1c2130] bg-[#0b0d12] lg:hidden">
             <SidebarContent onNavClick={onMobileClose} />
           </aside>
         </>
