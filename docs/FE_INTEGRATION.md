@@ -717,6 +717,20 @@ const listenerId = program.addEventListener("Claimed", (event, slot) => {
 program.removeEventListener(listenerId);
 ```
 
+### Post-transaction indexer sync (dApp)
+
+After a wallet-signed transaction (claim, cancel, pause, milestone release), the UI triggers backend indexing so dashboards update without waiting for cron:
+
+```ts
+await fetch("/api/events/sync", {
+  method: "POST",
+  headers: { "Content-Type": "application/json" },
+  body: JSON.stringify({ signature: txSig }),
+});
+```
+
+This route is **public** (rate-limited). Operator backfill uses admin-only `POST /api/claims/sync`. See [`API_TRUST_BOUNDARIES.md`](API_TRUST_BOUNDARIES.md).
+
 ---
 
 ## 9. Error Handling
@@ -933,7 +947,12 @@ apps/web/src/lib/
 │   ├── milestone.ts     ← Milestone helpers
 │   └── verify-onchain.ts ← Dev-only: compare client vs on-chain vesting
 ├── api/
-│   └── tx-builder.ts    ← Server-side tx builders + PDA helpers
+│   ├── tx-builder.ts    ← Server-side tx builders + PDA helpers
+│   └── serialize.ts     ← serializeBigInt() for API-safe JSON
+├── components/
+│   ├── ui/              ← StatCard, ProgressBar, Spinner, SectionHeader, FieldRow, DetailRow
+│   └── campaign/
+│       └── CampaignCard.tsx ← Shared portfolio/dashboard campaign card
 ├── campaign/
 │   ├── authority.ts     ← Authority management
 │   ├── root-rotation.ts ← Root rotation helpers

@@ -1,157 +1,20 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import Link from "next/link";
 import { useWallet } from "@solana/wallet-adapter-react";
 import {
   useVestingProgressSummary,
   type VestingProgressCampaign,
 } from "@/hooks/useVestingProgress";
-import { StatusBadge } from "@/components/campaign/list/StatusBadge";
+import { CampaignCard, toCampaignCardData } from "@/components/campaign/CampaignCard";
 import {
-  formatCountdown,
   formatTokenAmount,
-  getVestingTypeBadgeColor,
-  getVestingTypeLabel,
   mixedMintAggregateSub,
 } from "@/lib/vesting/display";
 import { useMintDecimals } from "@/hooks/useMintDecimals";
-import { truncateAddress } from "@/lib/vesting/timeline-helpers";
-import type { StreamStatus } from "@/lib/vesting/list";
+import { StatCard } from "@/components/ui/StatCard";
 
 type SortKey = "claimable" | "progress" | "nextUnlock";
-
-function StatCard({
-  label,
-  value,
-  sub,
-  accent,
-}: {
-  label: string;
-  value: string;
-  sub?: string;
-  accent?: boolean;
-}) {
-  return (
-    <div className="rounded-2xl border border-white/[0.06] bg-white/[0.02] p-5">
-      <div className="text-[11px] font-medium uppercase tracking-[0.12em] text-[#555d73]">
-        {label}
-      </div>
-      <div className={`mt-2 text-2xl font-semibold ${accent ? "text-violet-400" : "text-white"}`}>
-        {value}
-      </div>
-      {sub && <div className="mt-1 text-[12px] text-[#555d73]">{sub}</div>}
-    </div>
-  );
-}
-
-function getCampaignStatus(campaign: VestingProgressCampaign): StreamStatus {
-  const claimable = BigInt(campaign.progress.claimable);
-  const entitled = BigInt(campaign.progress.totalEntitled);
-  const claimed = BigInt(campaign.progress.claimedSoFar);
-
-  if (entitled > 0n && claimed >= entitled) return "Claimed";
-  if (campaign.cancelledAt !== null) return "Cancelled";
-  if (campaign.paused) return "Paused";
-  if (claimable > 0n) return "Claimable";
-  if (campaign.leaf.releaseType === 2 && !campaign.milestoneReleased) return "Scheduled";
-  return "Active";
-}
-
-function formatNextUnlock(
-  campaign: VestingProgressCampaign,
-  nowTs: bigint,
-): string {
-  if (campaign.leaf.releaseType === 2 && !campaign.milestoneReleased) {
-    return "Milestone not released";
-  }
-  if (!campaign.progress.nextUnlock) return "Fully vested";
-  return formatCountdown(BigInt(campaign.progress.nextUnlock), nowTs);
-}
-
-function CampaignCard({
-  campaign,
-  nowTs,
-  fmtAmount,
-}: {
-  campaign: VestingProgressCampaign;
-  nowTs: bigint;
-  fmtAmount: (raw: bigint, campaign: VestingProgressCampaign) => string;
-}) {
-  const name =
-    campaign.metadata?.name ??
-    truncateAddress(campaign.treeAddress);
-  const status = getCampaignStatus(campaign);
-  const claimable = BigInt(campaign.progress.claimable);
-  const typeLabel = getVestingTypeLabel(campaign.leaf.releaseType);
-  const typeBadgeColor = getVestingTypeBadgeColor(campaign.leaf.releaseType);
-
-  return (
-    <Link
-      href={`/campaign/${campaign.treeAddress}`}
-      className="group block rounded-2xl border border-white/[0.06] bg-white/[0.02] p-5 transition-colors hover:border-violet-500/20 hover:bg-violet-500/[0.03]"
-    >
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h3 className="text-[15px] font-medium text-white group-hover:text-violet-300">
-            {name}
-          </h3>
-        </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <span
-            className={`inline-flex items-center rounded-full border px-2.5 py-1 text-[11px] font-medium ${typeBadgeColor}`}
-          >
-            {typeLabel}
-          </span>
-          <StatusBadge status={status} />
-        </div>
-      </div>
-
-      <div className="mt-4">
-        <div className="flex items-center justify-between text-[11px] text-[#555d73]">
-          <span>Progress</span>
-          <span>{campaign.progress.progressPercent.toFixed(1)}%</span>
-        </div>
-        <div className="mt-1.5 h-2.5 overflow-hidden rounded-full bg-white/[0.06]">
-          <div
-            className={`h-full rounded-full transition-all ${
-              claimable > 0n ? "bg-emerald-500" : status === "Claimed" ? "bg-sky-500" : "bg-violet-500"
-            }`}
-            style={{ width: `${Math.min(100, campaign.progress.progressPercent)}%` }}
-          />
-        </div>
-      </div>
-
-      <div className="mt-4 grid gap-2 text-[12px] sm:grid-cols-2">
-        <div className="text-[#8b92a5]">
-          Entitled: <span className="text-white">{fmtAmount(BigInt(campaign.progress.totalEntitled), campaign)}</span>
-        </div>
-        <div className="text-[#8b92a5]">
-          Vested: <span className="text-white">{fmtAmount(BigInt(campaign.progress.vestedSoFar), campaign)}</span>
-        </div>
-        <div className="text-[#8b92a5]">
-          Claimed: <span className="text-white">{fmtAmount(BigInt(campaign.progress.claimedSoFar), campaign)}</span>
-        </div>
-        <div className="text-[#8b92a5]">
-          Claimable: <span className={claimable > 0n ? "text-emerald-400" : "text-white"}>
-            {fmtAmount(claimable, campaign)}
-          </span>
-        </div>
-      </div>
-
-      <div className="mt-4 flex items-center justify-between">
-        <span className="text-[12px] text-[#555d73]">
-          Next unlock: {formatNextUnlock(campaign, nowTs)}
-        </span>
-        {claimable > 0n && (
-          <span className="text-[12px] font-medium text-emerald-400">
-            Claim →
-          </span>
-        )}
-      </div>
-    </Link>
-  );
-}
 
 function PortfolioSkeleton() {
   return (
@@ -315,9 +178,7 @@ export default function PortfolioPage() {
                 {sortedCampaigns.map((campaign) => (
                   <CampaignCard
                     key={`${campaign.treeAddress}-${campaign.leaf.leafIndex}`}
-                    campaign={campaign}
-                    nowTs={nowTs}
-                    fmtAmount={fmtAmount}
+                    campaign={toCampaignCardData(campaign, nowTs, fmtAmount)}
                   />
                 ))}
               </div>

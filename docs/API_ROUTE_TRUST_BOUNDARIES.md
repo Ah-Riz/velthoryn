@@ -1,5 +1,7 @@
 # API Route Trust Boundaries (Phase 00)
 
+> **Superseded for day-to-day use.** See [`API_TRUST_BOUNDARIES.md`](API_TRUST_BOUNDARIES.md) for the current full route table (26 routes, June 2026). This file is kept as the original P0.2 scoping note.
+
 **Owner:** Lana (SC/BE) — definitions for P0.2 implementation by Geral  
 **Date:** 2026-05-25  
 **Scope:** Routes that mirror or index on-chain vesting state

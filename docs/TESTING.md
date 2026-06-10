@@ -2,10 +2,10 @@
 
 ## Test Suite Overview
 
-**~695+ tests total** — green on local CI reproduction (June 2026).
+**~705+ tests total** — green on local CI reproduction (June 2026).
 
 - On-chain (Anchor): **127+ passing** across 15 files (`pnpm test:localnet`)
-- Web (Vitest): **553 passing**, 13 skipped (devnet integration; Postgres required)
+- Web (Vitest): **563 passing** (`vitest.unit.config.ts`; Postgres required for API tests)
 - Trident fuzz: smoke test in CI (`trident-tests/fuzz_vesting`)
 - Rust unit tests: **31** (math/merkle + math/schedule proptests + inline)
 - Mollusk instruction tests: **72 active** across 7 test files (18 ignored — Mollusk limitations)
@@ -382,6 +382,19 @@ pnpm test:e2e
 ```
 
 `pnpm test:e2e` starts Next.js on `127.0.0.1:3100` and runs the Playwright smoke tests in `tests/e2e/`.
+
+### E2E mock wallet and send-tx
+
+For UI flows without a live devnet RPC, Playwright uses:
+
+| localStorage key | Purpose |
+|------------------|---------|
+| `velthoryn:e2e-wallet` | Enables mock wallet (`NEXT_PUBLIC_E2E_MOCK_WALLET=true` on localhost) |
+| `velthoryn:e2e-mock-send-tx` | `sendTransaction` returns a fixed signature; skips `confirmTransaction` (cancel flows) |
+
+Helpers in `tests/e2e/helpers.ts`: `mockCampaignApi`, `mockProofApi`, `waitForCampaignListMocks`. Expanded coverage in `campaign-actions.spec.ts`.
+
+Signing specs under `tests/e2e/signing/` use a real local validator on port 3200 — see file headers for the manual dev-server command.
 
 If Chromium exits with `error while loading shared libraries: libnspr4.so`, install the Playwright OS dependencies:
 

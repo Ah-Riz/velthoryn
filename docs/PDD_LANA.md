@@ -173,7 +173,7 @@ Guard conditions per transition:
 | Created → Funded | `fund_campaign` | `amount > 0`, `vault + amount <= total_supply` |
 | Active → Paused | `pause_campaign` | `pause_authority.is_some()`, signer matches, `!cancelled`, `!paused` |
 | Paused → Active | `unpause_campaign` | `paused == true` |
-| Active → Cancelled | `cancel_campaign` | `cancellable == true`, signer matches cancel_authority, `!cancelled` |
+| Active → Cancelled | `cancel_campaign` | `cancellable == true`, signer matches cancel_authority, `!cancelled`; sets `paused = false` |
 | Cancelled → Swept | `withdraw_unvested` | `cancelled_at.is_some()`, `now >= cancelled_at + GRACE_PERIOD_SECS` |
 
 ### §4.3 Non-Cancellable Variant
@@ -232,7 +232,7 @@ Creators should use `cancellable = false` only when the recipient list is final 
 | `cancellable` | `bool` | 1 | Never after init | If false, `cancel_campaign` and `update_root` are permanently blocked |
 | `cancel_authority` | `Option<Pubkey>` | 33 | Never after init | Required when `cancellable = true`; gated by error 6003 |
 | `cancelled_at` | `Option<i64>` | 9 | `cancel_campaign` (once) | None = active; Some(ts) = cancelled at unix timestamp ts; terminal |
-| `paused` | `bool` | 1 | `pause_campaign`, `unpause_campaign` | Blocks `claim` when true |
+| `paused` | `bool` | 1 | `pause_campaign`, `unpause_campaign`, `cancel_campaign` (reset to false) | Blocks `claim` and `withdraw` when true, except on cancelled campaigns (defense-in-depth grace-period exception) |
 | `pause_authority` | `Option<Pubkey>` | 33 | Never after init | None = no pause capability (error 6021 if pause attempted) |
 | `created_at` | `i64` | 8 | Never after init | Unix timestamp at campaign creation; informational |
 | `bump` | `u8` | 1 | Never after init | Canonical PDA bump; cached to avoid re-derivation |
@@ -604,13 +604,13 @@ The claim instruction then checks `claimable > 0` before proceeding. If `claimab
 
 **Required signer:** Beneficiary (must match `leaf.beneficiary`)
 
-**State preconditions:** Campaign must not be paused. Campaign may be cancelled (claims allowed during grace period). Vault must have sufficient balance.
+**State preconditions:** Campaign must not be paused unless cancelled (defense-in-depth allows grace-period claims regardless of stale pause state). Campaign may be cancelled (claims allowed during grace period). Vault must have sufficient balance.
 
 **Validation order (order is non-negotiable — see §10.1):**
 
 | Step | Check | Error if fails |
 |---|---|---|
-| 1 | `!VestingTree.paused` | 6009 CampaignPaused |
+| 1 | `!VestingTree.paused \|\| cancelled_at.is_some()` (defense-in-depth) | 6009 CampaignPaused |
 | 2 | `signer == leaf.beneficiary` | 6010 UnauthorizedClaimer |
 | 3 | `start_time <= cliff_time <= end_time` | 6011 InvalidSchedule |
 | 4 | `release_type in {0, 1, 2}` | 6012 InvalidScheduleType |
@@ -633,11 +633,13 @@ The claim instruction then checks `claimable > 0` before proceeding. If `claimab
 
 **Primary error paths:** 6009, 6010, 6011, 6012, 6013, 6014, 6015, 6016, 6017, 6008.
 
+**Related — `withdraw` (single-stream campaigns):** Uses the same defense-in-depth pause guard as step 1 above: `!VestingTree.paused || cancelled_at.is_some()`. Allows beneficiary withdrawals on cancelled campaigns during the grace period regardless of pause state.
+
 ---
 
 ### §9.4 cancel_campaign
 
-**Purpose:** Mark a campaign as cancelled, freezing the vesting curve and beginning the grace period.
+**Purpose:** Mark a campaign as cancelled, freezing the vesting curve and beginning the grace period. Resets `paused = false` to allow beneficiary claims during the grace period.
 
 **Required signer:** cancel_authority (matches `VestingTree.cancel_authority`)
 
@@ -651,7 +653,9 @@ The claim instruction then checks `claimable > 0` before proceeding. If `claimab
 | `VestingTree.cancelled_at == None` | 6020 AlreadyCancelled |
 | `signer == cancel_authority` | 6005 Unauthorized |
 
-**State mutations:** `VestingTree.cancelled_at = Some(Clock::get().unix_timestamp)`
+**State mutations:**
+- `VestingTree.cancelled_at = Some(Clock::get().unix_timestamp)`
+- `VestingTree.paused = false` — resets pause so grace-period `claim`/`withdraw` are not blocked if cancel follows pause
 
 **Token transfer:** None.
 
@@ -836,7 +840,7 @@ This is identical to the cancel-clamp logic in §8.5. The caller supplies `cance
 
 The five-step ordering in §9.3 is non-negotiable. The rationale:
 
-1. **Pause check first (cheapest).** A paused campaign should short-circuit all subsequent work. This check costs ~1 account field read. Running it first avoids deserializing the leaf, running schedule math, and computing the Merkle hash when the answer would be a rejection regardless.
+1. **Pause check first (cheapest).** A paused campaign should short-circuit all subsequent work, except when `cancelled_at.is_some()` (defense-in-depth: grace-period claims proceed even if pause was not cleared before cancel). This check costs ~1 account field read. Running it first avoids deserializing the leaf, running schedule math, and computing the Merkle hash when the answer would be a rejection regardless.
 
 2. **Beneficiary check before proof.** Verifying `signer == leaf.beneficiary` before running the Merkle proof prevents an oracle attack: an adversary who submits a valid proof for someone else's leaf learns nothing from the rejection (UnauthorizedClaimer) versus what they would learn if the order were reversed (the proof is valid, but you're not the beneficiary). Rejecting the signer first reveals no information about proof validity.
 
@@ -979,7 +983,7 @@ Off-chain consumers subscribe via `program.addEventListener(eventName, callback)
 
 | Code | Variant | Triggering condition |
 |---|---|---|
-| 6009 | CampaignPaused | `paused == true` at claim time |
+| 6009 | CampaignPaused | `paused == true` at claim/withdraw time and campaign is not cancelled |
 | 6010 | UnauthorizedClaimer | `signer != leaf.beneficiary` |
 | 6011 | InvalidSchedule | `start_time > cliff_time OR cliff_time > end_time` |
 | 6012 | InvalidScheduleType | `release_type not in {0, 1, 2}` |
@@ -1047,7 +1051,7 @@ Off-chain consumers subscribe via `program.addEventListener(eventName, callback)
 | 6006 | OverFunded | "Vault would exceed the declared total_supply" | `fund_campaign` |
 | 6007 | MintMismatch | "Mint of provided account does not match the campaign mint" | `create_campaign`, `fund_campaign` |
 | 6008 | Overflow | "Arithmetic overflow" | `claim` |
-| 6009 | CampaignPaused | "Campaign is paused" | `claim` |
+| 6009 | CampaignPaused | "Campaign is paused" | `claim`, `withdraw` |
 | 6010 | UnauthorizedClaimer | "Signer does not own this leaf" | `claim` |
 | 6011 | InvalidSchedule | "Leaf has malformed schedule (start <= cliff <= end violated)" | `claim`, `get_vested_amount` |
 | 6012 | InvalidScheduleType | "release_type must be 0 (Cliff), 1 (Linear), or 2 (Milestone)" | `claim`, `get_vested_amount` |

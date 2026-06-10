@@ -11,6 +11,7 @@ vi.mock("@/lib/indexer/claim-events", async (importOriginal) => {
   return {
     ...actual,
     syncClaimEvents: vi.fn(),
+    syncClaimEventsForSignatures: vi.fn(),
   };
 });
 
@@ -36,6 +37,7 @@ import { POST as postRootVersion } from "@/app/api/campaigns/[treeAddress]/root-
 import { GET as getClaims } from "@/app/api/campaigns/[treeAddress]/claims/route";
 import { GET as getBeneficiaryCampaigns } from "@/app/api/beneficiary/[address]/campaigns/route";
 import { POST as postAdminSync } from "@/app/api/admin/sync/route";
+import { POST as postClaimsSync } from "@/app/api/claims/sync/route";
 
 import {
   createCampaignRequestSchema,
@@ -50,6 +52,7 @@ import {
   CLAIMED_DISCRIMINATOR,
 } from "@/lib/indexer/claim-events";
 import { indexAllEvents } from "@/lib/indexer/event-indexer";
+import { syncClaimEventsForSignatures } from "@/lib/indexer/claim-events";
 
 import { resetDb } from "../helpers/db";
 import {
@@ -1057,7 +1060,82 @@ describe("POST /api/admin/sync", () => {
 });
 
 // ===========================================================================
-// 10. Indexer Event Parsing (parseClaimedEvent logic)
+// 10. POST /api/claims/sync
+// ===========================================================================
+
+describe("POST /api/claims/sync", () => {
+  const originalEnv = process.env;
+
+  beforeEach(() => {
+    process.env = { ...originalEnv };
+  });
+
+  afterEach(() => {
+    process.env = originalEnv;
+  });
+
+  it("returns 401 without x-admin-key header", async () => {
+    process.env.ADMIN_API_KEY = "super-secret-key";
+
+    const req = new NextRequest(makeUrl("/api/claims/sync"), {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ signature: "abc123" }),
+    });
+    const res = await postClaimsSync(req);
+    const json = await res.json();
+
+    expect(res.status).toBe(401);
+    expect(json.error).toBe("Unauthorized");
+  });
+
+  it("returns 401 with wrong admin key", async () => {
+    process.env.ADMIN_API_KEY = "super-secret-key";
+
+    const req = new NextRequest(makeUrl("/api/claims/sync"), {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-admin-key": "wrong-key",
+      },
+      body: JSON.stringify({ signature: "abc123" }),
+    });
+    const res = await postClaimsSync(req);
+    const json = await res.json();
+
+    expect(res.status).toBe(401);
+    expect(json.error).toBe("Unauthorized");
+  });
+
+  it("returns { ok, processed } with valid key", async () => {
+    process.env.ADMIN_API_KEY = "super-secret-key";
+
+    vi.mocked(syncClaimEventsForSignatures).mockResolvedValue({
+      processed: 1,
+      lastSlot: 999,
+    });
+
+    const req = new NextRequest(makeUrl("/api/claims/sync"), {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-admin-key": "super-secret-key",
+      },
+      body: JSON.stringify({ signature: "abc123" }),
+    });
+    const res = await postClaimsSync(req);
+    const json = await res.json();
+
+    expect(res.status).toBe(200);
+    expect(json.ok).toBe(true);
+    expect(json.processed).toBe(1);
+    expect(json.lastSlot).toBe(999);
+    expect(syncClaimEventsForSignatures).toHaveBeenCalledWith(["abc123"]);
+  });
+});
+
+// ===========================================================================
+// 11. Indexer Event Parsing (parseClaimedEvent logic)
 // ===========================================================================
 
 describe("parseClaimedEvent logic (unit test of event parsing)", () => {

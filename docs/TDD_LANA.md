@@ -1,10 +1,10 @@
 # TDD — Velthoryn Protocol (Lana's Scope)
 
 **Author:** Lana — smart-contract / backend lead
-**Status:** Week 4 complete — all sections implemented and tested (12 instructions, 63 tests). Deployed to devnet (slot 461219566). 57/63 passing on local validator (6 known failures pending fix).
+**Status:** Week 8 — pause+cancel remediation complete (12 instructions, 76 integration tests). Deployed to devnet (slot 461219566).
 **Companion docs:** `docs/PRD_LANA.md`, `docs/SECURITY.md`, `docs/PROGRAM.md`
 
-This document is the implementation blueprint. All sections have been implemented and verified with 63 tests (51 supplementary, 10 security exploit, 2 smoke, plus 4 golden vector and 11 Rust unit tests). Local validator: 57 passing, 6 known failures (4 setClock timing + 2 error-code mismatches), 3 skipped.
+This document is the implementation blueprint. All sections have been implemented and verified with **76 integration tests** (63 supplementary incl. T69/T70, 11 security exploit incl. EXPLOIT 12, 2 smoke), plus **14 bankrun clock tests** (incl. pause→cancel→claim precise vesting), **5 golden vector**, and **11 Rust unit tests**.
 
 ---
 
@@ -1077,10 +1077,15 @@ describe("golden vector", () => {
 - T39: `fund_campaign` exceeding total_supply → `OverFunded`
 - T40: `withdraw` on multi-leaf campaign → `NotSingleStream`
 - T41: `get_vested_amount` view function test (simulate)
-- T69: pause → cancel → claim during grace succeeds
-- T70: cancel on paused campaign resets `paused = false`
-- EXPLOIT 12 (`security.spec.ts`): pause+cancel cannot lock beneficiaries out of grace claims
-- Clock: pause at T1, cancel at T2, claim mid-grace, creator `withdraw_unvested` after grace (50/50 split)
+
+**Pause+Cancel remediation tests (Week 8)** — verify cancel clears pause and grace claims succeed:
+
+| ID | File | Test name | What it proves |
+|---|---|---|---|
+| T69 | `tests/vesting.supplementary.spec.ts` | `T69: pause then cancel then claim during grace succeeds` | Pause → cancel → claim during grace succeeds; `paused` cleared; claim amount matches vested-at-cancel |
+| T70 | `tests/vesting.supplementary.spec.ts` | `T70: cancel on paused campaign resets paused to false` | `cancel_campaign` on a paused tree sets `paused = false` |
+| EXPLOIT 12 | `tests/security.spec.ts` | `EXPLOIT 12: pause then cancel then claim during grace succeeds` | Pause+cancel exploit blocked — beneficiaries not locked out of grace claims |
+| Clock | `tests/vesting.clock.spec.ts` | `clock: pause→cancel→claim with precise vesting math` | Bankrun warp: pause day 25, cancel day 50 (50% vested), claim day 53 (50 tokens), creator `withdraw_unvested` day 58 (50 tokens) |
 
 ---
 

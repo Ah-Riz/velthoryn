@@ -519,6 +519,118 @@ describe("vesting supplementary T6-T25", () => {
   });
 
   // -----------------------------------------------------------------------
+  // out-of-order milestone claim: 0 → 2 → 1 (US-4)
+  // -----------------------------------------------------------------------
+  it("out-of-order milestone claim: 0 → 2 → 1 succeeds", async () => {
+    const beneficiary = await makeBeneficiary(provider);
+    const TOTAL = 10_000;
+    const AMT_0 = 1_000; // 10%
+    const AMT_1 = 3_000; // 30%
+    const AMT_2 = 6_000; // 60%
+
+    const t = await createTimeHelpers(provider.connection);
+    const cliff = t.past(100);
+
+    const leaf0: VestingLeaf = {
+      leafIndex: 0,
+      beneficiary: beneficiary.publicKey,
+      amount: new BN(AMT_0),
+      releaseType: ReleaseType.Milestone,
+      startTime: new BN(cliff),
+      cliffTime: new BN(cliff),
+      endTime: new BN(t.future(1000)),
+      milestoneIdx: 0,
+    };
+
+    const leaf1: VestingLeaf = {
+      leafIndex: 1,
+      beneficiary: beneficiary.publicKey,
+      amount: new BN(AMT_1),
+      releaseType: ReleaseType.Milestone,
+      startTime: new BN(cliff),
+      cliffTime: new BN(cliff),
+      endTime: new BN(t.future(1000)),
+      milestoneIdx: 1,
+    };
+
+    const leaf2: VestingLeaf = {
+      leafIndex: 2,
+      beneficiary: beneficiary.publicKey,
+      amount: new BN(AMT_2),
+      releaseType: ReleaseType.Milestone,
+      startTime: new BN(cliff),
+      cliffTime: new BN(cliff),
+      endTime: new BN(t.future(1000)),
+      milestoneIdx: 2,
+    };
+
+    const { mint, tree, treePda, vaultAuthPda, vault } =
+      await createAndFundCampaign(
+        { provider, program, creator, cancelAuthority, pauseAuthority },
+        980_003,
+        [leaf0, leaf1, leaf2],
+        TOTAL,
+      );
+
+    const [crPda] = await claimRecordPDA(
+      PROGRAM_ID,
+      treePda,
+      beneficiary.publicKey,
+    );
+    const beneficiaryAta = getAssociatedTokenAddressSync(
+      mint,
+      beneficiary.publicKey,
+    );
+
+    const claimMilestone = async (leaf: VestingLeaf, proofIdx: number) => {
+      await program.methods
+        .claim(idlLeaf(leaf), idlProof(tree.proof(proofIdx)))
+        .accounts({
+          beneficiary: beneficiary.publicKey,
+          vestingTree: treePda,
+          claimRecord: crPda,
+          vaultAuthority: vaultAuthPda,
+          vault,
+          beneficiaryAta,
+          mint,
+        })
+        .signers([beneficiary])
+        .rpc();
+    };
+
+    // Creator releases milestone 0 and 2 (skipping 1)
+    await releaseMilestone({ program, creator }, treePda, 0);
+    await releaseMilestone({ program, creator }, treePda, 2);
+
+    // Claim milestone 0
+    await claimMilestone(leaf0, 0);
+    let cr = await program.account.claimRecord.fetch(crPda);
+    expect(cr.totalEntitled.toNumber()).to.equal(AMT_0);
+    expect(cr.claimedAmount.toNumber()).to.equal(AMT_0);
+
+    // Claim milestone 2 (skipping 1)
+    await claimMilestone(leaf2, 2);
+    cr = await program.account.claimRecord.fetch(crPda);
+    expect(cr.totalEntitled.toNumber()).to.equal(AMT_0 + AMT_2);
+    expect(cr.claimedAmount.toNumber()).to.equal(AMT_0 + AMT_2);
+
+    // Creator releases milestone 1
+    await releaseMilestone({ program, creator }, treePda, 1);
+
+    // Claim milestone 1 (backfill)
+    await claimMilestone(leaf1, 1);
+    cr = await program.account.claimRecord.fetch(crPda);
+    expect(cr.totalEntitled.toNumber()).to.equal(TOTAL);
+    expect(cr.claimedAmount.toNumber()).to.equal(TOTAL);
+
+    // Verify milestoneBitmap has all 3 bits set (indices 0, 1, 2)
+    expect(cr.milestoneBitmap[0]).to.equal(0b111);
+    expect(
+      cr.milestoneBitmap.slice(1).every((b: number) => b === 0),
+    ).to.equal(true);
+  });
+
+  // -----------------------------------------------------------------------
   // T12: withdraw_unvested before grace period -> GracePeriodActive
   // -----------------------------------------------------------------------
   it("T12: withdraw_unvested during grace period rejects with GracePeriodActive", async () => {
