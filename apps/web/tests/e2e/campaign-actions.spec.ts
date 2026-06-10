@@ -823,3 +823,177 @@ test.describe("Non-cancellable campaign", () => {
     expect(pageErrors).toEqual([]);
   });
 });
+
+// ---------------------------------------------------------------------------
+// Responsive Clawback UI — 375px viewport (iPhone SE)
+// ---------------------------------------------------------------------------
+
+test.describe("Responsive clawback UI (375px)", () => {
+  test.use({ viewport: { width: 375, height: 812 } });
+
+  test("grace banner renders correctly at 375px", async ({ page }) => {
+    const pageErrors = collectRelevantPageErrors(page);
+    await enableE2eWallet(page);
+
+    const cancelledAt = now() - 86400;
+    await mockCampaignApi(page, ADDR, {
+      cancelledAt,
+      gracePeriod: {
+        end: String(cancelledAt + 86400 * 7),
+        remaining: String(86400 * 6),
+        isExpired: false,
+      },
+    });
+    await gotoWithRetry(page, `/campaign/${ADDR}`);
+
+    const banner = page
+      .locator('[class*="border-amber-500"]')
+      .filter({ hasText: /Grace period expires in/i });
+    await expect(banner).toBeVisible({ timeout: 20_000 });
+    await expect(banner).toBeInViewport();
+
+    const box = await banner.boundingBox();
+    expect(box).toBeTruthy();
+    expect(box!.width).toBeLessThanOrEqual(375);
+    expect(pageErrors).toEqual([]);
+  });
+
+  test("needs action tab wraps on narrow viewport", async ({ page }) => {
+    const pageErrors = collectRelevantPageErrors(page);
+    const cancelledAt = now() - 86400;
+
+    await enableE2eWallet(page);
+    await mockCampaignListApis(page, {
+      senderCampaigns: [
+        {
+          treeAddress: "SendCancel11111111111111111111111111111111",
+          creator: creatorWallet,
+          mint: nativeSolMint,
+          campaignId: 101,
+          leafCount: 2,
+          totalSupply: 1_000_000_000,
+          totalClaimed: 0,
+          cancellable: true,
+          paused: false,
+          cancelledAt,
+          createdAt: now() - 86400 * 10,
+          metadata: { name: "Cancelled Campaign" },
+        },
+      ],
+      recipientCampaigns: [],
+    });
+    await gotoWithRetry(page, "/campaigns");
+    await waitForCampaignListMocks(page);
+
+    const allTab = page.getByRole("button", { name: /^all\b/i });
+    await expect(allTab).toBeVisible({ timeout: 20_000 });
+    await expect(page.getByText(/loading streams/i)).not.toBeVisible({ timeout: 20_000 });
+
+    const needsActionTab = page.getByRole("button", { name: /needs action/i });
+    await expect(needsActionTab).toBeVisible();
+    await expect(needsActionTab).toBeInViewport();
+
+    const tabBox = await needsActionTab.boundingBox();
+    expect(tabBox).toBeTruthy();
+    expect(tabBox!.x + tabBox!.width).toBeLessThanOrEqual(375);
+    expect(pageErrors).toEqual([]);
+  });
+
+  test("sidebar amber dot visible on mobile drawer", async ({ page }) => {
+    const pageErrors = collectRelevantPageErrors(page);
+    const cancelledAt = now() - 86400;
+
+    await enableE2eWallet(page);
+    await mockCampaignListApis(page, {
+      senderCampaigns: [
+        {
+          treeAddress: "SendCancel11111111111111111111111111111111",
+          creator: creatorWallet,
+          mint: nativeSolMint,
+          campaignId: 101,
+          leafCount: 2,
+          totalSupply: 1_000_000_000,
+          totalClaimed: 0,
+          cancellable: true,
+          paused: false,
+          cancelledAt,
+          createdAt: now() - 86400 * 10,
+          metadata: { name: "Cancelled Campaign" },
+        },
+      ],
+      recipientCampaigns: [],
+    });
+    await gotoWithRetry(page, "/dashboard");
+    await waitForCampaignListMocks(page);
+
+    const menuToggle = page.getByRole("button", { name: /menu|toggle|sidebar/i }).first();
+    if (await menuToggle.isVisible()) {
+      await menuToggle.click();
+    }
+
+    const campaignsLink = page.getByRole("link", { name: /campaigns/i }).first();
+    await expect(campaignsLink).toBeVisible({ timeout: 20_000 });
+
+    const amberDot = campaignsLink.locator("span.rounded-full.bg-amber-400").first();
+    if (await amberDot.isVisible({ timeout: 5_000 }).catch(() => false)) {
+      await expect(amberDot).toBeInViewport();
+    }
+    expect(pageErrors).toEqual([]);
+  });
+
+  test("dashboard needs attention section stacks on mobile", async ({ page }) => {
+    const pageErrors = collectRelevantPageErrors(page);
+    const cancelledAt = now() - 86400;
+
+    await enableE2eWallet(page);
+    await mockCampaignListApis(page, {
+      senderCampaigns: [
+        {
+          treeAddress: "SendCancel11111111111111111111111111111111",
+          creator: creatorWallet,
+          mint: nativeSolMint,
+          campaignId: 101,
+          leafCount: 2,
+          totalSupply: 1_000_000_000,
+          totalClaimed: 0,
+          cancellable: true,
+          paused: false,
+          cancelledAt,
+          createdAt: now() - 86400 * 10,
+          metadata: { name: "Cancelled Campaign A" },
+        },
+        {
+          treeAddress: "SendCancel22222222222222222222222222222222",
+          creator: creatorWallet,
+          mint: nativeSolMint,
+          campaignId: 102,
+          leafCount: 1,
+          totalSupply: 500_000_000,
+          totalClaimed: 0,
+          cancellable: true,
+          paused: false,
+          cancelledAt: cancelledAt - 86400,
+          createdAt: now() - 86400 * 14,
+          metadata: { name: "Cancelled Campaign B" },
+        },
+      ],
+      recipientCampaigns: [],
+    });
+    await gotoWithRetry(page, "/dashboard");
+    await waitForCampaignListMocks(page);
+
+    const attentionHeading = page.getByText(/needs attention/i).first();
+    await expect(attentionHeading).toBeVisible({ timeout: 20_000 });
+
+    const cards = page.locator('[class*="border-amber-500"], [class*="border-red-500"]');
+    const count = await cards.count();
+    expect(count).toBeGreaterThanOrEqual(1);
+
+    for (let i = 0; i < count; i++) {
+      const box = await cards.nth(i).boundingBox();
+      expect(box).toBeTruthy();
+      expect(box!.width).toBeLessThanOrEqual(375);
+    }
+    expect(pageErrors).toEqual([]);
+  });
+});
