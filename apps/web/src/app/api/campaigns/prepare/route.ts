@@ -67,6 +67,22 @@ async function postPrepareHandler(request: NextRequest) {
     }
   }
 
+  // Known Issue #29: reject multiple cliff/linear leaves per beneficiary.
+  const cliffLinearSeen = new Map<string, number[]>();
+  for (let i = 0; i < data.recipients.length; i++) {
+    const r = data.recipients[i];
+    if (r.releaseType !== 2) {
+      const prev = cliffLinearSeen.get(r.beneficiary) ?? [];
+      if (prev.length > 0) {
+        throw new ValidationError(
+          `Known Issue #29: beneficiary ${r.beneficiary} has multiple cliff/linear leaves ` +
+            `(indices [${prev.join(", ")}, ${i}]). Use separate campaigns instead.`,
+        );
+      }
+      cliffLinearSeen.set(r.beneficiary, [...prev, i]);
+    }
+  }
+
   let recipients: CampaignRecipient[];
   try {
     recipients = data.recipients.map((r) => ({

@@ -432,7 +432,7 @@ Schema uses `pgTable` from `drizzle-orm/pg-core` instead of `sqliteTable`.
 1. Add dependencies to `apps/web/package.json` (`drizzle-orm`, `postgres`, `drizzle-kit`, `zod`)
 2. Create `lib/db/schema.ts` (Drizzle `pgTable` schema) + `lib/db/index.ts` (connection)
 3. Create `drizzle.config.ts` at `apps/web/drizzle.config.ts`
-4. Run `drizzle-kit generate` + `drizzle-kit push` (applies schema to Supabase)
+4. Run `drizzle-kit generate` + `pnpm db:migrate` (applies numbered migrations to Supabase)
 5. Create `lib/api/validators.ts` (Zod schemas)
 6. Build `POST /api/campaigns` (handles both create_campaign and create_stream)
 7. Build `GET /api/campaigns/:treeAddress/proof` (core hot path)
@@ -486,7 +486,7 @@ Local Postgres for Vitest:
 docker run -d --name vesting-pg -e POSTGRES_USER=ci -e POSTGRES_PASSWORD=ci \
   -e POSTGRES_DB=ci -p 5432:5432 postgres:15
 export DATABASE_URL=postgresql://ci:ci@127.0.0.1:5432/ci
-cd apps/web && pnpm db:push && pnpm test
+cd apps/web && pnpm db:migrate && pnpm test
 ```
 
 **RLS:** Enabled on all 4 tables (read-public, write-service-role). **SSL:** `apps/web/src/lib/db/index.ts` enables TLS only for remote hosts; `127.0.0.1` / `localhost` skip TLS (required for CI Postgres).
