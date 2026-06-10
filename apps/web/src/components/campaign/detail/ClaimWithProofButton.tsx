@@ -188,6 +188,10 @@ function isWalletInternalSendError(err: unknown): boolean {
   return /WalletSendTransactionError|Internal error/i.test(raw);
 }
 
+function waitForLoadingPaint() {
+  return new Promise<void>((resolve) => setTimeout(resolve, 250));
+}
+
 export function ClaimWithProofButton({
   program,
   publicKey,
@@ -329,6 +333,7 @@ export function ClaimWithProofButton({
       return;
     }
     setLoading(true);
+    await waitForLoadingPaint();
     try {
       const anchorLeaf = toAnchorLeaf({
         ...selected.leaf,
@@ -565,7 +570,7 @@ export function ClaimWithProofButton({
       const syncClaim = async (retries = 5) => {
         for (let i = 0; i < retries; i++) {
           try {
-            const res = await fetch(`/api/claims/sync`, {
+            const res = await fetch(`/api/events/sync`, {
               method: "POST",
               headers: { "Content-Type": "application/json" },
               body: JSON.stringify({ signature: sig }),

@@ -100,7 +100,8 @@ pub fn handler(ctx: Context<Claim>, leaf: VestingLeaf, proof: Vec<[u8; 32]>) -> 
 
     // First-touch init of ClaimRecord (step 6 per SECURITY.md)
     let cr = &mut ctx.accounts.claim_record;
-    if cr.beneficiary == Pubkey::default() {
+    let is_first_touch = cr.beneficiary == Pubkey::default();
+    if is_first_touch {
         cr.tree = tree_key;
         cr.beneficiary = ctx.accounts.beneficiary.key();
         cr.claimed_amount = 0;
@@ -113,7 +114,7 @@ pub fn handler(ctx: Context<Claim>, leaf: VestingLeaf, proof: Vec<[u8; 32]>) -> 
     // Accumulate total_entitled for milestone claims — each milestone claim
     // is a distinct leaf (bitmap prevents duplicates), so the sum converges
     // to the true total across all milestone leaves.
-    if leaf.release_type == 2 && cr.beneficiary != Pubkey::default() {
+    if leaf.release_type == 2 && !is_first_touch {
         cr.total_entitled = cr
             .total_entitled
             .checked_add(leaf.amount)

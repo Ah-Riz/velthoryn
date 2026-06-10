@@ -36,9 +36,9 @@ velthoryn/
 
 **Instant refund (B1):** Creator-only immediate refund for **unstarted multi-leaf** campaigns (`now < min_cliff_time`, no milestones released). Single-leaf campaigns still use `cancel_stream`; started campaigns use `cancel_campaign` (7-day grace). BE exposes `instantRefundEligible` and `POST .../instant-refund` tx builder — see [`docs/BACKEND_API.md`](docs/BACKEND_API.md).
 
-**Week 9 QA sweep:** 7 bugs found and fixed across SC/BE/FE layers. Key fixes: (1) out-of-order milestone claiming bug in frontend — greedy `claimedAmount` allocation replaced with on-chain `milestoneBitmap` lookup; (2) `StreamExpired` early-return blocked multi-leaf claims; (3) `total_entitled` now accumulates across milestone claims; (4–5) backend validation added for `milestoneIdx` bounds (0–255) and duplicate `(beneficiary, milestoneIdx)` pairs; (6–7) VestingProgress API checks milestone release flags, MilestoneReleasePanel uses actual milestone indices from leaves. See [`docs/WEEK8_KNOWN_ISSUES.md`](docs/WEEK8_KNOWN_ISSUES.md).
+**Week 8 bug sweep:** 15 bugs found and fixed across SC/BE/FE layers. **L1/P0 fixes (8):** root rotation `minCliffTime`, API auth on root-versions + campaign creation, base58 validation, race condition 409, migration 0010, PDA seed docs. **QA sweep (7):** (1) out-of-order milestone claiming bug in frontend — greedy `claimedAmount` allocation replaced with on-chain `milestoneBitmap` lookup; (2) `StreamExpired` early-return blocked multi-leaf claims; (3) `total_entitled` now accumulates across milestone claims; (4–5) backend validation added for `milestoneIdx` bounds (0–255) and duplicate `(beneficiary, milestoneIdx)` pairs; (6–7) VestingProgress API checks milestone release flags, MilestoneReleasePanel uses actual milestone indices from leaves. See [`docs/WEEK8_KNOWN_ISSUES.md`](docs/WEEK8_KNOWN_ISSUES.md).
 
-**F1-F4 roadmap complete:** F1 Bulk Send (server-side Merkle build, CSV import), F2 Dashboard Transparency (event timeline, vesting progress, auto-sync cron), F3 Clawback (cancel campaign/stream, withdraw unvested, milestone release), F4 Production Hardening (Sentry monitoring, API versioning, vesting simulation, schedule templates). 11 new API routes, 6 event tables, 8 bug fixes from code review.
+**F1–F4 roadmap complete and implemented:** F1 Bulk Send (server-side Merkle build, CSV import), F2 Transparency Dashboard (dashboard rewrite with 6 stat cards + claimable banner + vesting progress + activity feed, portfolio page with per-campaign breakdown + sort, `/api/activity/[address]` cross-campaign feed, `useMintDecimals` for real token amounts), F3 Clawback (cancel campaign/stream, withdraw unvested, milestone release + `CampaignStatusBanner` 7-state banner, `GracePeriodCountdown`, sidebar amber dot badge, "Needs Action" tab, dashboard "Needs Attention" section), F4 Production Hardening (Sentry monitoring, API versioning, vesting simulation, schedule templates). 12 new API routes, 6 event tables, 15 bug fixes from code review.
 
 **Test results: 127+ SC tests PASS** (`pnpm test:localnet`); **553 web Vitest PASS** (13 skipped devnet integration; API routes use Postgres in CI)
 **BE–SC Merkle pipeline verified end-to-end**: 3-leaf campaigns (Cliff/Linear/Milestone) through prepare → POST (all leaves verified) → GET proof → verify. RLS on all Supabase tables. **Bootcamp acceptance: 8/8** — see [`docs/BE-SC-MERKLE-ACCEPTANCE-STATUS.md`](docs/BE-SC-MERKLE-ACCEPTANCE-STATUS.md).
@@ -136,11 +136,15 @@ export DATABASE_URL=postgresql://ci:ci@127.0.0.1:5432/ci
 pnpm db:push && pnpm test
 ```
 
+> **Database schema:** Use `pnpm db:push` for local dev (fast sync, no migration files). Use `pnpm db:migrate` for CI and production — it applies numbered files under `src/lib/db/migrations/` in order. After schema changes, run `pnpm db:generate`, commit the migration, then `pnpm db:migrate` against the target database.
+
 ### Pages
 
 - `/` — Landing page
+- `/dashboard` — Transparency dashboard: 6 stat cards, claimable banner, vesting progress, recent activity feed, needs attention alerts (F2)
+- `/portfolio` — Per-campaign vesting breakdown: progress bars, sort by claimable/progress/next unlock, summary stats (F2)
 - `/campaign/create` — Create a vesting stream (calls `createStream`)
-- `/campaign/[treeAddress]` — View stream & claim tokens (calls `withdraw`)
+- `/campaign/[treeAddress]` — View stream & claim tokens (calls `withdraw`), campaign status banner, grace period countdown, milestone release panel
 
 Wallet connection uses wallet-standard auto-detect (Phantom/Solflare/Backpack). Set `NEXT_PUBLIC_RPC_ENDPOINT` to override the default devnet RPC.
 
@@ -155,6 +159,7 @@ Wallet connection uses wallet-standard auto-detect (Phantom/Solflare/Backpack). 
 | `/api/campaigns/[treeAddress]/claims` | GET | Claim history |
 | `/api/campaigns/[treeAddress]/root-versions` | GET | Root version history |
 | `/api/beneficiary/[address]/campaigns` | GET | All campaigns for address |
+| `/api/activity/[address]` | GET | Cross-campaign activity feed for address (F2) |
 | `/api/admin/sync` | POST | Indexer: backfill claim events (auth: x-admin-key) |
 | `/api/campaigns/prepare` | POST | Build Merkle tree server-side; returns `minCliffTime` (F1, auth: x-admin-key) |
 | `/api/campaigns/[treeAddress]/instant-refund` | POST | Instant refund tx for unstarted multi-leaf campaigns (wallet auth) |
@@ -176,6 +181,8 @@ See [`docs/BACKEND_API.md`](docs/BACKEND_API.md) for full API documentation.
 ### Vercel Deployment
 
 Deployed at [velthoryn.vercel.app](https://velthoryn.vercel.app/). Root directory: `apps/web/`. Required env vars: see `apps/web/.env.example`.
+
+**Production database:** Do not run `db:push` against production. Apply schema changes with `pnpm db:migrate` (from `apps/web/`, with production `DATABASE_URL` set) after merging migration files. CI (`lint.yml`, `web-ci.yml`) uses `db:migrate` the same way. Local development may still use `db:push` for speed.
 
 Frontend docs: [`docs/PRD_GERAL.md`](docs/PRD_GERAL.md), [`docs/PDD_GERAL.md`](docs/PDD_GERAL.md), [`docs/TDD_GERAL.md`](docs/TDD_GERAL.md), [`docs/SECURITY_GERAL.md`](docs/SECURITY_GERAL.md).
 

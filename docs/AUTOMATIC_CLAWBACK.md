@@ -3,6 +3,8 @@
 > **Feature 4 of Velthoryn (safety net).**
 > This document is for the development team and Cursor AI to implement from.
 > The ENTIRE BACKEND IS COMPLETE. This doc covers the frontend visibility layer only.
+>
+> **STATUS UPDATE (June 2026): All 7 frontend tasks (T1–T7) are now FULLY IMPLEMENTED.** See [Verification Steps](#verification-steps) for confirmation. This doc is preserved for architectural reference.
 
 ---
 
@@ -216,15 +218,17 @@ Key points:
 
 ## What Is Missing
 
-| Item | Priority | Description |
-|------|----------|-------------|
-| `CampaignStatusBanner` component | P0 | Status-driven banner at the top of the campaign detail page |
-| `GracePeriodCountdown` component | P0 | Reusable live countdown for grace period |
-| Banner integration in detail page | P0 | Wire `CampaignStatusBanner` into the campaign detail page, remove inline duplicates |
-| `useNeedsActionCount` hook | P1 | Lightweight hook counting campaigns needing attention |
-| Sidebar notification badge | P1 | Amber dot on "My Campaigns" when action needed |
-| "Needs Action" tab | P1 | Filter tab in campaigns list for cancelled + claimable campaigns |
-| Dashboard "Needs Attention" section | P2 | Shows cancelled sender campaigns with grace status (co-dependent with transparency-dashboard-ui T9) |
+> **All items below have been implemented (June 2026).** This section is preserved for historical reference.
+
+| Item | Priority | Description | Status |
+|------|----------|-------------|--------|
+| `CampaignStatusBanner` component | P0 | Status-driven banner at the top of the campaign detail page | ✅ Done — `CampaignStatusBanner.tsx` (124 lines, 7 states) |
+| `GracePeriodCountdown` component | P0 | Reusable live countdown for grace period | ✅ Done — `GracePeriodCountdown.tsx` (45 lines, 60s interval) |
+| Banner integration in detail page | P0 | Wire `CampaignStatusBanner` into the campaign detail page, remove inline duplicates | ✅ Done — campaign detail page line 1717 |
+| `useNeedsActionCount` hook | P1 | Lightweight hook counting campaigns needing attention | ✅ Done — `useNeedsActionCount.ts` (53 lines) |
+| Sidebar notification badge | P1 | Amber dot on "My Campaigns" when action needed | ✅ Done — `Sidebar.tsx` amber dot when `needsActionCount > 0` |
+| "Needs Action" tab | P1 | Filter tab in campaigns list for cancelled + claimable campaigns | ✅ Done — campaigns list `action` tab |
+| Dashboard "Needs Attention" section | P2 | Shows cancelled sender campaigns with grace status | ✅ Done — dashboard page per-campaign grace countdown |
 
 ---
 
@@ -1066,6 +1070,23 @@ Insert after the "Claimable Banner" (line 182) and before the StatCards (line 18
 ---
 
 ## Verification Steps
+
+### Implementation Verification (June 2026) — ALL COMPLETE
+
+| Task | Component | Evidence | Verified |
+|------|-----------|----------|----------|
+| T1 | `GracePeriodCountdown` | `components/campaign/detail/GracePeriodCountdown.tsx` (45 lines), `GracePeriodCountdown.test.ts` (60 lines) | ✅ |
+| T2 | `CampaignStatusBanner` | `components/campaign/detail/CampaignStatusBanner.tsx` (124 lines), `CampaignStatusBanner.test.ts` (85 lines, 7 states) | ✅ |
+| T3 | Banner in detail page | `campaign/[id]/page.tsx` line 1717 — `CampaignStatusBanner` rendered with all props | ✅ |
+| T4 | `useNeedsActionCount` | `hooks/useNeedsActionCount.ts` (53 lines) | ✅ |
+| T5 | Sidebar amber dot | `Sidebar.tsx` — amber dot on "My Campaigns" when `needsActionCount > 0` | ✅ |
+| T6 | "Needs Action" tab | Campaigns list page — `TabKey = "all" \| "recipient" \| "sender" \| "action"` with count badge | ✅ |
+| T7 | Dashboard "Needs Attention" | `dashboard/page.tsx` — `cancelledSenderCampaigns` with `GracePeriodCountdown` per campaign | ✅ |
+
+Additional test coverage:
+- API: `apps/web/tests/api/clawback.test.ts` (681 lines) — 23 tests covering cancel, withdraw, cancel-stream, milestone release
+- E2E: `campaign-actions.spec.ts` — pause, cancel, instant refund, withdraw, milestone actions
+- Library: `lib/vesting-display.test.ts`, `lib/campaign-authority.test.ts`, `lib/cancel-transaction.test.ts`
 
 ### Build Verification
 ```bash

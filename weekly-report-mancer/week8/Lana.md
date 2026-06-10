@@ -2,7 +2,7 @@
 
 **Scope:** BE-DB-SC-Merkle (backend API, Postgres/indexer, Solana program, Merkle client). Frontend UI is out of scope unless noted as a dependency on Geral.
 
-**This week (chronological):** Week 7 report review + backlog analysis → exploration (Mollusk tests, BE infra, security/ops) → **Mollusk 0.13.1 bump + 18 IGNORED comment standardization** → **production code quality sweep (`.expect()` → `.ok_or()`, clippy suppressions 4→2, unused import fix)** → **CU budget audit (8 new benchmarks, 12/18 handlers measured)** → **multisig setup docs + devnet test script** → **mainnet readiness checklist** → **CI hardening (Mollusk + proptest + cargo audit)** → **Week 9 QA sweep (7 bugs found & fixed across SC/BE/FE)**.
+**This week (chronological):** Week 7 report review + backlog analysis → exploration (Mollusk tests, BE infra, security/ops) → **Mollusk 0.13.1 bump + 18 IGNORED comment standardization** → **production code quality sweep (`.expect()` → `.ok_or()`, clippy suppressions 4→2, unused import fix)** → **CU budget audit (8 new benchmarks, 12/18 handlers measured)** → **multisig setup docs + devnet test script** → **mainnet readiness checklist** → **CI hardening (Mollusk + proptest + cargo audit)** → **Week 8 L1/P0 fixes (8 issues: root rotation minCliffTime, API auth, base58 validation, race condition 409, migration 0010, PDA seed docs)** → **Week 8 QA sweep (7 bugs found & fixed across SC/BE/FE)** → **Transparency Dashboard UI (F2: dashboard rewrite, portfolio page, activity feed, hooks)** → **Auto Clawback UI surfaces (F3: banner, countdown, sidebar badge, needs-action tab, dashboard section)** → **Cron reverted to daily (Vercel Hobby limitation)**.
 
 ---
 
@@ -34,6 +34,23 @@
 | **QA** | milestoneIdx validation | `validators.ts` — `.max(255)` on all 3 Zod schemas; `prepare/route.ts` — duplicate `(beneficiary, milestoneIdx)` check |
 | **QA** | VestingProgress milestone check | `vesting-progress/route.ts` — LEFT JOIN `milestone_events`, zeroes `claimable` for unreleased milestones |
 | **QA** | MilestoneReleasePanel real indices | Panel uses `milestoneIndices` from API (derived from actual leaves) instead of `leafCount` |
+| **FE** | Transparency Dashboard (F2) rewrite | `dashboard/page.tsx` (481 lines) — claimable banner, 6 stat cards (Total Streams, Active, TVL, As Sender, As Recipient, Claimable Now), vesting progress cards (top 5), recent activity feed, needs attention alerts |
+| **FE** | Portfolio page (F2) | `portfolio/page.tsx` (331 lines) — 4 summary stats, per-campaign cards with progress bars + sort (by claimable/progress/next unlock) |
+| **FE** | ActivityFeed component (F2) | `components/dashboard/ActivityFeed.tsx` (122 lines) — cross-campaign event feed with 8 event types, Solana explorer links |
+| **FE** | Activity API route (F2) | `/api/activity/[address]/route.ts` (201 lines) — CTE + UNION ALL across 8 event tables, filtered to user's campaigns |
+| **FE** | Timeline helpers extraction (F2) | `lib/vesting/timeline-helpers.ts` (114 lines) — shared `EVENT_CONFIG`, `eventDescription`, `formatBlockTime`, `formatAmount` for CampaignTimeline + ActivityFeed |
+| **FE** | Vesting progress hooks (F2) | `useVestingProgress` + `useVestingProgressSummary` — fetch + aggregate BigInt totals; `useRecentActivity` — cross-campaign activity |
+| **FE** | `useMintDecimals` integration (F2) | Dashboard + portfolio use on-chain mint decimals for real token amounts (not raw lamports) |
+| **FE** | Sidebar Portfolio nav (F2) | Added "Portfolio" item between Dashboard and Create Stream in Sidebar.tsx |
+| **FE** | CampaignStatusBanner (F3) | `components/campaign/detail/CampaignStatusBanner.tsx` (124 lines) — 7 states: null, instant-refunded, grace-active, grace-expired, settled, unfunded |
+| **FE** | GracePeriodCountdown (F3) | `components/campaign/detail/GracePeriodCountdown.tsx` (45 lines) — 60s interval, amber/red color logic |
+| **FE** | useNeedsActionCount hook (F3) | `hooks/useNeedsActionCount.ts` (53 lines) — counts cancelled sender campaigns + claimable recipient campaigns |
+| **FE** | Sidebar amber dot badge (F3) | Amber dot on "My Campaigns" nav when `needsActionCount > 0` |
+| **FE** | Needs Action tab (F3) | Campaigns list `action` tab — filters sender-cancelled + recipient-claimable campaigns |
+| **FE** | Dashboard Needs Attention (F3) | Dashboard section with per-campaign grace period countdown + alert cards |
+| **Tests** | Clawback API test suite | `apps/web/tests/api/clawback.test.ts` (681 lines) — cancel campaign (6), withdraw unvested (5), cancel stream (7), milestone release (5) |
+| **Tests** | Clawback component tests | `CampaignStatusBanner.test.ts` (85 lines, 7 states), `GracePeriodCountdown.test.ts` (60 lines) |
+| **Ops** | Cron schedule reverted | `vercel.json` — `*/5 * * * *` → `0 0 * * *` (daily). Vercel Hobby plan only supports daily crons |
 
 ### Incomplete / deferred
 
@@ -47,6 +64,8 @@
 | FE: native SOL + instant refund | Geral | BE exposes fields + tx builders |
 | Rate limiting | — | ALREADY DONE (Upstash Redis + in-memory fallback, per-route limits, all 25 routes wired) |
 | API versioning | — | ALREADY DONE (`X-API-Version: 1` header on all responses) |
+| Cron 5-min sync | Ops | Reverted to daily; Vercel Hobby limitation. Paid plan needed for `*/5 * * * *` |
+| Component extraction | Lana | `ProgressBar`, `NeedsAttentionAlert`, `CampaignCard` are inline — could extract for reuse |
 
 ---
 
@@ -75,11 +94,15 @@
 | CI test steps | 5 (merkle, anchor build, IDL check, bankrun, localnet) | **+3** (lib/proptest, Mollusk 8-file suite, cargo audit) |
 | New docs | 0 this week | **3** (`CU_BUDGET.md`, `MAINNET_CHECKLIST.md`, `multisig-setup.md`) |
 | New scripts | 0 this week | **1** (`test-multisig-transfer.sh`) |
-| Total files changed | — | **25** (24 modified + 1 new), 875 insertions, 63 deletions |
-| Bugs found | 0 | **7** (2 P0, 3 P1, 2 P2) — QA sweep with senior-dev + code-reviewer + qa agents |
-| Bugs fixed | 0 | **7** — all fixed, compiles clean, 31 Rust unit tests pass |
+| Bugs found | 0 | **15** (8 L1/P0 + 2 P0 + 3 P1 + 2 P2 from QA sweep) — found with senior-dev + code-reviewer + qa agents |
+| Bugs fixed | 0 | **15** — all fixed, compiles clean, 31 Rust unit tests pass |
 | Rate limiting | Thought incomplete | **ALREADY DONE** — discovered during exploration |
 | API versioning | Thought incomplete | **ALREADY DONE** — discovered during exploration |
+| FE pages (new/rewritten) | 0 | **+2** (dashboard rewrite 481 lines, portfolio page 331 lines) |
+| FE components (new) | 0 | **+4** (`ActivityFeed`, `GracePeriodCountdown`, `CampaignStatusBanner`, timeline helpers) |
+| FE hooks (new) | 0 | **+3** (`useVestingProgress` + `useVestingProgressSummary`, `useRecentActivity`, `useNeedsActionCount`) |
+| API routes (new) | 20 | **+1** (`/api/activity/[address]` — cross-campaign activity feed) |
+| FE tests (new) | 0 | **+4** (clawback API 681 lines, CampaignStatusBanner 85 lines, GracePeriodCountdown 60 lines, E2E campaign-actions) |
 
 ---
 
@@ -98,10 +121,12 @@
 - [ ] **Sentry live DSN** — ops sets env var in Vercel
 - [ ] **Rate limit tuning** — adjust per-route limits based on k6 load test results
 - [ ] **MilestoneReleasePanel cache invalidation** — after milestone release, invalidate `["campaign"]` and `["beneficiaryCampaigns"]` query keys (currently only invalidates `["timeline"]`)
+- [ ] **Cron upgrade to paid Vercel plan** — restore `*/5 * * * *` sync schedule for near-real-time dashboard
 
-### FE — Frontend (Geral dependency)
-- [ ] **Native SOL create flows** — FE uses `*_native` instructions when mint = `NATIVE_SOL_MINT`
-- [ ] **Instant refund UI** — Cancel UI distinguishes instant vs grace refund
+### FE — Frontend
+- [ ] **Component extraction** — extract `ProgressBar`, `NeedsAttentionAlert`, `CampaignCard` from inline in dashboard/portfolio pages
+- [ ] **Native SOL create flows** — FE uses `*_native` instructions when mint = `NATIVE_SOL_MINT` (Geral dependency)
+- [ ] **Instant refund UI** — Cancel UI distinguishes instant vs grace refund (Geral dependency)
 
 ### Security & Ops
 - [ ] **Monitoring dashboard** — Grafana/PagerDuty for program + API health

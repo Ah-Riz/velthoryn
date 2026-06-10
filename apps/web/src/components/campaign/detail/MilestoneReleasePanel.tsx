@@ -68,13 +68,16 @@ export function MilestoneReleasePanel({
       const sig = await sendTransaction(tx, connection);
       await connection.confirmTransaction(sig, "confirmed");
 
-      fetch("/api/events/sync", {
+      const treeKey = treePubkey.toBase58();
+      void queryClient.invalidateQueries({ queryKey: ["campaign"] });
+      void queryClient.invalidateQueries({ queryKey: ["beneficiaryCampaigns"] });
+      void queryClient.invalidateQueries({ queryKey: ["timeline", treeKey] });
+
+      void fetch("/api/events/sync", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ signature: sig }),
-      })
-        .then(() => queryClient.invalidateQueries({ queryKey: ["timeline", treePubkey.toBase58()] }))
-        .catch(() => {});
+      }).catch(() => {});
 
       toast(`Milestone #${idx} released.`, "success");
       onSuccess(idx);

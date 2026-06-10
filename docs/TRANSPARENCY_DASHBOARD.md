@@ -2,7 +2,7 @@
 
 > **Feature**: Transparency / Real-Time Dashboard
 > **Priority**: Feature 2 of Velthoryn (4/8 users requested)
-> **Status**: Backend complete, frontend not started
+> **Status**: FULLY IMPLEMENTED (backend + frontend complete)
 > **Branch prefix**: `feat/transparency-dashboard`
 
 ---
@@ -33,20 +33,23 @@ A secondary `/portfolio` page provides the full per-campaign breakdown.
 | Campaign List (sender) | `GET /api/campaigns?creator={addr}` | Built | `useCampaignList` hook |
 | Cron Sync | `POST /api/cron/sync` | Built | **Bug: runs daily instead of every 5 min** |
 
-### Frontend (partial, needs expansion)
+### Frontend (complete)
 
-| File | Purpose | Gap |
-|------|---------|-----|
-| `apps/web/src/app/(app)/dashboard/page.tsx` | 213 lines, 4 stat cards + 2 action cards | No charts, no activity, no vesting progress, no TVL/claimable stats |
-| `apps/web/src/hooks/useBeneficiaryCampaigns.ts` | TanStack Query hook for `/api/beneficiary/{address}/campaigns` | Good pattern to follow for new hooks |
-| `apps/web/src/hooks/useCampaignTimeline.ts` | TanStack Query hook for per-campaign timeline | Pattern to follow, but only per-campaign |
-| `apps/web/src/components/campaign/detail/CampaignTimeline.tsx` | Per-campaign timeline display with `EVENT_CONFIG`, `eventDescription`, `formatBlockTime` | These helpers need extraction for reuse |
-| `apps/web/src/components/campaign/detail/VestingChart.tsx` | SVG vesting curve chart (542 lines) | Per-campaign only, not aggregated |
-| `apps/web/src/components/campaign/list/StatusBadge.tsx` | StreamStatus badge component | Reuse on dashboard/portfolio |
-| `apps/web/src/lib/vesting/display.ts` | `getVestingTypeLabel`, `getGracePeriodState`, `formatCountdown`, `GRACE_PERIOD_SECS` | Key utilities for alerts |
-| `apps/web/src/lib/vesting/list.ts` | `getRecipientStreamStatus`, `getSenderStreamStatus`, `StreamStatus` type | Used by existing dashboard |
-| `apps/web/src/lib/vesting/schedule.ts` | `getVestedAmount`, `VestingSchedule`, `ReleaseType` | Used by vesting-progress API |
-| `apps/web/src/components/shell/Sidebar.tsx` | 3 nav items: Dashboard, Create Stream, My Campaigns | Missing Portfolio nav item |
+| File | Purpose | Status |
+|------|---------|--------|
+| `apps/web/src/app/(app)/dashboard/page.tsx` | 481 lines — 6 stat cards, claimable banner, needs attention alerts, vesting progress cards (top 5), recent activity feed, quick actions | **Done** |
+| `apps/web/src/app/(app)/portfolio/page.tsx` | 331 lines — 4 summary stats, per-campaign cards with progress bars, sort (claimable/progress/next unlock) | **Done** |
+| `apps/web/src/components/dashboard/ActivityFeed.tsx` | 122 lines — cross-campaign event feed with 8 event types, Solana explorer links | **Done** |
+| `apps/web/src/lib/vesting/timeline-helpers.ts` | 114 lines — shared `EVENT_CONFIG`, `eventDescription`, `formatBlockTime`, `formatAmount` | **Done** (extracted from CampaignTimeline) |
+| `apps/web/src/hooks/useVestingProgress.ts` | `useVestingProgress` + `useVestingProgressSummary` — fetch + aggregate BigInt totals | **Done** |
+| `apps/web/src/hooks/useRecentActivity.ts` | Cross-campaign activity feed hook, fetches from `/api/activity/{address}` | **Done** |
+| `apps/web/src/hooks/useCampaignTimeline.ts` | TanStack Query hook for per-campaign timeline | Unchanged |
+| `apps/web/src/components/campaign/detail/CampaignTimeline.tsx` | Per-campaign timeline, now imports from `timeline-helpers.ts` | **Done** (refactored) |
+| `apps/web/src/components/campaign/detail/VestingChart.tsx` | SVG vesting curve chart (542 lines) | Unchanged |
+| `apps/web/src/components/shell/Sidebar.tsx` | 4 nav items: Dashboard, Portfolio, Create Stream, My Campaigns (+ amber dot badge) | **Done** |
+| `apps/web/src/lib/vesting/display.ts` | `getVestingTypeLabel`, `getGracePeriodState`, `formatCountdown`, `GRACE_PERIOD_SECS` | Unchanged |
+| `apps/web/src/lib/vesting/schedule.ts` | `getVestedAmount`, `VestingSchedule`, `ReleaseType` | Unchanged |
+| `apps/web/src/hooks/useMintDecimals.ts` | On-chain mint decimals for real token amounts (dashboard + portfolio) | **Done** (bonus) |
 
 ---
 
@@ -71,6 +74,8 @@ Change the cron schedule from daily to every 5 minutes:
 ```
 
 This ensures the event indexer keeps data fresh enough for a real-time dashboard experience.
+
+> **Note (June 2026):** The 5-min schedule was applied in commit `ab7b0cf` but **reverted to daily** (`0 0 * * *`) in commit `420e4d0` because the Vercel Hobby plan only supports daily crons. To restore `*/5 * * * *` for near-real-time sync, upgrade to a paid Vercel plan.
 
 ---
 

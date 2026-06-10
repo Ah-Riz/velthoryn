@@ -170,9 +170,13 @@ test.describe("Token picker", () => {
   test("custom mint address search shows error when token not found", async ({ page }) => {
     const pageErrors = collectRelevantPageErrors(page);
 
-    // Intercept the Solana RPC call and return null (account does not exist)
-    await page.route("**/helius-rpc.com/**", async (route) => {
-      const body = route.request().postDataJSON() as { id: number | string };
+    // Intercept any Solana RPC getAccountInfo call regardless of endpoint URL
+    await page.route("**", async (route) => {
+      const req = route.request();
+      if (req.method() !== "POST") return route.continue();
+      let body: { id?: number | string; method?: string } | null = null;
+      try { body = req.postDataJSON(); } catch { return route.continue(); }
+      if (body?.method !== "getAccountInfo") return route.continue();
       await route.fulfill({ json: rpcNullResponse(body?.id ?? 1), status: 200 });
     });
 

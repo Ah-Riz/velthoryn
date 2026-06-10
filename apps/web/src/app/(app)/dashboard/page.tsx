@@ -8,6 +8,8 @@ import { useBeneficiaryCampaigns } from "@/hooks/useBeneficiaryCampaigns";
 import { useLocalCampaigns } from "@/hooks/useLocalCampaigns";
 import { useVestingProgressSummary } from "@/hooks/useVestingProgress";
 import { ActivityFeed } from "@/components/dashboard/ActivityFeed";
+import { ProgressBar } from "@/components/ui/ProgressBar";
+import { StatCard } from "@/components/ui/StatCard";
 import { GracePeriodCountdown } from "@/components/campaign/detail/GracePeriodCountdown";
 import { getRecipientStreamStatus, getSenderStreamStatus } from "@/lib/vesting/list";
 import {
@@ -19,26 +21,6 @@ import {
 } from "@/lib/vesting/display";
 import { useMintDecimals } from "@/hooks/useMintDecimals";
 import { truncateAddress } from "@/lib/vesting/timeline-helpers";
-
-function StatCard({
-  label,
-  value,
-  sub,
-  accent,
-}: {
-  label: string;
-  value: string;
-  sub?: string;
-  accent?: boolean;
-}) {
-  return (
-    <div className="rounded-2xl border border-white/[0.06] bg-white/[0.02] p-5">
-      <div className="text-[11px] font-medium uppercase tracking-[0.12em] text-[#555d73]">{label}</div>
-      <div className={`mt-2 text-2xl font-semibold ${accent ? "text-violet-400" : "text-white"}`}>{value}</div>
-      {sub && <div className="mt-1 text-[12px] text-[#555d73]">{sub}</div>}
-    </div>
-  );
-}
 
 function ActionCard({
   href,
@@ -421,12 +403,11 @@ export default function DashboardPage() {
                         </span>
                       </div>
                       <div className="mt-3">
-                        <div className="h-1.5 overflow-hidden rounded-full bg-white/[0.06]">
-                          <div
-                            className={`h-full rounded-full ${claimable > 0n ? "bg-emerald-500" : "bg-violet-500"}`}
-                            style={{ width: `${Math.min(100, campaign.progress.progressPercent)}%` }}
-                          />
-                        </div>
+                        <ProgressBar
+                          percentage={campaign.progress.progressPercent}
+                          size="sm"
+                          colorClass={claimable > 0n ? "bg-emerald-500" : "bg-violet-500"}
+                        />
                         <div className="mt-2 text-[11px] text-[#555d73]">
                           {fmtAmount(vestedSoFar, campaign)} / {fmtAmount(totalEntitled, campaign)} vested
                           {" · "}Next: {nextUnlockLabel}
