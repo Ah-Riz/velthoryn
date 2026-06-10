@@ -190,10 +190,12 @@ export default function PortfolioPage() {
     () => [...new Set(campaigns.map((c) => c.mint).filter(Boolean))],
     [campaigns],
   );
-  const { decimalsMap } = useMintDecimals(mintAddresses);
+  const { decimalsMap, isLoading: decimalsLoading } = useMintDecimals(mintAddresses);
 
   const singleMint = mintAddresses.length === 1 ? mintAddresses[0] : null;
   const aggregateDecimals = singleMint ? (decimalsMap.get(singleMint) ?? null) : null;
+
+  const statsLoading = isLoading || (mintAddresses.length > 0 && decimalsLoading);
 
   function fmtAmount(raw: bigint, campaign: VestingProgressCampaign): string {
     return formatTokenAmount(raw, decimalsMap.get(campaign.mint) ?? null);
@@ -271,26 +273,26 @@ export default function PortfolioPage() {
                 mintAddresses.length,
                 summary ? `across ${summary.campaignCount} campaigns` : undefined,
               )}
-              loading={isLoading}
+              loading={statsLoading}
             />
             <StatCard
               label="Total Vested"
               value={formatTokenAmount(summary?.totalVested ?? 0n, aggregateDecimals)}
-              sub={isLoading ? undefined : mixedMintAggregateSub(mintAddresses.length, `${vestedPercent}%`)}
-              loading={isLoading}
+              sub={statsLoading ? undefined : mixedMintAggregateSub(mintAddresses.length, `${vestedPercent}%`)}
+              loading={statsLoading}
             />
             <StatCard
               label="Total Claimed"
               value={formatTokenAmount(summary?.totalClaimed ?? 0n, aggregateDecimals)}
-              sub={isLoading ? undefined : mixedMintAggregateSub(mintAddresses.length, `${claimedPercent}%`)}
-              loading={isLoading}
+              sub={statsLoading ? undefined : mixedMintAggregateSub(mintAddresses.length, `${claimedPercent}%`)}
+              loading={statsLoading}
             />
             <StatCard
               label="Claimable Now"
               value={formatTokenAmount(summary?.totalClaimable ?? 0n, aggregateDecimals)}
-              sub={isLoading ? undefined : mixedMintAggregateSub(mintAddresses.length, `${claimablePercent}%`)}
+              sub={statsLoading ? undefined : mixedMintAggregateSub(mintAddresses.length, `${claimablePercent}%`)}
               accent
-              loading={isLoading}
+              loading={statsLoading}
             />
           </div>
 
@@ -312,7 +314,7 @@ export default function PortfolioPage() {
               )}
             </div>
 
-            {isLoading ? (
+            {statsLoading ? (
               <PortfolioSkeleton />
             ) : campaigns.length === 0 ? (
               <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-[#222838] bg-[#13161f]/60 px-8 py-16 text-center">

@@ -121,11 +121,15 @@ export default function DashboardPage() {
     () => [...new Set([...vestingMintAddresses, ...senderMintAddresses])],
     [vestingMintAddresses, senderMintAddresses],
   );
-  const { decimalsMap } = useMintDecimals(allMintAddresses);
+  const { decimalsMap, isLoading: decimalsLoading } = useMintDecimals(allMintAddresses);
 
   const vestingSingleMint = vestingMintAddresses.length === 1 ? vestingMintAddresses[0] : null;
   const vestingAggregateDecimals = vestingSingleMint
     ? (decimalsMap.get(vestingSingleMint) ?? null)
+    : null;
+
+  const activityMintDecimals = allMintAddresses.length === 1
+    ? (decimalsMap.get(allMintAddresses[0]) ?? null)
     : null;
 
   const tvlSingleMint = senderMintAddresses.length === 1 ? senderMintAddresses[0] : null;
@@ -247,6 +251,7 @@ export default function DashboardPage() {
 
   const isLoading =
     senderQuery.isLoading || recipientQuery.isLoading || localCampaigns.isLoading;
+  const statsLoading = isLoading || (allMintAddresses.length > 0 && decimalsLoading);
 
   const claimableAmount = vestingSummary?.totalClaimable ?? 0n;
   const claimableStreams = vestingSummary?.claimableCampaigns ?? counts.claimableCount;
@@ -393,16 +398,16 @@ export default function DashboardPage() {
 
           {/* Summary Stats */}
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            <StatCard label="Total Streams" value={String(counts.total)} sub="All campaigns" loading={isLoading} />
-            <StatCard label="Active" value={String(counts.active)} sub="Currently vesting" accent loading={isLoading} />
+            <StatCard label="Total Streams" value={String(counts.total)} sub="All campaigns" loading={statsLoading} />
+            <StatCard label="Active" value={String(counts.active)} sub="Currently vesting" accent loading={statsLoading} />
             <StatCard
               label="TVL"
               value={formatTokenAmount(counts.tvl, tvlAggregateDecimals)}
               sub={mixedMintAggregateSub(senderMintAddresses.length, "Locked value")}
-              loading={isLoading}
+              loading={statsLoading}
             />
-            <StatCard label="As Sender" value={String(counts.sender)} sub="Streams you created" loading={isLoading} />
-            <StatCard label="As Recipient" value={String(counts.recipient)} sub="Streams you receive" loading={isLoading} />
+            <StatCard label="As Sender" value={String(counts.sender)} sub="Streams you created" loading={statsLoading} />
+            <StatCard label="As Recipient" value={String(counts.recipient)} sub="Streams you receive" loading={statsLoading} />
             <StatCard
               label="Claimable Now"
               value={formatTokenAmount(claimableAmount, vestingAggregateDecimals)}
@@ -413,7 +418,7 @@ export default function DashboardPage() {
                   : "Ready to withdraw",
               )}
               accent
-              loading={vestingLoading}
+              loading={vestingLoading || (vestingMintAddresses.length > 0 && decimalsLoading)}
             />
           </div>
 
@@ -430,7 +435,7 @@ export default function DashboardPage() {
               )}
             </div>
 
-            {vestingLoading ? (
+            {vestingLoading || (vestingMintAddresses.length > 0 && decimalsLoading) ? (
               <div className="grid gap-3 sm:grid-cols-2">
                 {[...Array(2)].map((_, i) => (
                   <div key={i} className="h-28 animate-pulse rounded-2xl border border-[#222838] bg-[#13161f]" />
@@ -498,7 +503,7 @@ export default function DashboardPage() {
           </div>
 
           {/* Recent Activity */}
-          <ActivityFeed address={walletAddress!} limit={10} />
+          <ActivityFeed address={walletAddress!} limit={10} mintDecimals={activityMintDecimals} />
         </>
       )}
     </div>
