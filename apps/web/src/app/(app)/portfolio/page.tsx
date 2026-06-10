@@ -114,7 +114,7 @@ function CampaignCard({
         </div>
         <div className="mt-1.5 h-2.5 overflow-hidden rounded-full bg-white/[0.06]">
           <div
-            className={`h-full rounded-full transition-all ${
+            className={`h-full rounded-full transition-all duration-500 ease-out ${
               claimable > 0n ? "bg-emerald-500" : status === "Claimed" ? "bg-sky-500" : "bg-violet-500"
             }`}
             style={{ width: `${Math.min(100, campaign.progress.progressPercent)}%` }}

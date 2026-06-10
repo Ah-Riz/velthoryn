@@ -98,6 +98,17 @@ export default function CliffCreatePage() {
   const tokenBalance = walletToken?.uiAmount ?? null;
   const totalAmount = streams.reduce((sum, s) => sum + (Number(s.amount) || 0), 0);
 
+  const validateField = useCallback(
+    (key: string, value: string, type: "recipient" | "amount" | "cliff") => {
+      let err: string | null = null;
+      if (type === "recipient") err = validatePublicKey(value);
+      else if (type === "amount") err = validateAmountWithDecimals(value, effectiveMintDecimals);
+      else if (type === "cliff") err = value ? null : "Cliff date is required.";
+      setFormErrors((prev) => ({ ...prev, [key]: err }));
+    },
+    [effectiveMintDecimals],
+  );
+
   const refreshPendingFundings = useCallback(() => {
     if (!publicKey) {
       setPendingFundings([]);
@@ -503,6 +514,7 @@ export default function CliffCreatePage() {
                           placeholder="e.g. 1000"
                           value={stream.amount}
                           onChange={(e) => updateStream(stream.id, "amount", e.target.value)}
+                          onBlur={(e) => validateField(`amount_${i}`, e.target.value, "amount")}
                           className={`${INPUT} pr-24 ${formErrors[`amount_${i}`] ? INPUT_ERR : ""}`}
                         />
                         <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-1.5">
@@ -529,6 +541,7 @@ export default function CliffCreatePage() {
                         placeholder="Solana wallet address..."
                         value={stream.recipient}
                         onChange={(e) => updateStream(stream.id, "recipient", e.target.value)}
+                        onBlur={(e) => validateField(`recipient_${i}`, e.target.value, "recipient")}
                         className={`${INPUT} font-mono ${formErrors[`recipient_${i}`] ? INPUT_ERR : ""}`}
                       />
                     }
@@ -544,6 +557,7 @@ export default function CliffCreatePage() {
                           type="datetime-local"
                           value={stream.cliffTime}
                           onChange={(e) => updateStream(stream.id, "cliffTime", e.target.value)}
+                          onBlur={(e) => validateField(`cliff_${i}`, e.target.value, "cliff")}
                           className={`${INPUT} flex-1 ${formErrors[`cliff_${i}`] ? INPUT_ERR : ""}`}
                         />
                         {streams.length > 1 && stream.cliffTime && (

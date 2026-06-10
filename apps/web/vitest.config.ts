@@ -10,6 +10,10 @@ export default defineConfig({
     globalSetup: ["./tests/globalSetup.ts"],
     fileParallelism: false,
     testTimeout: 15_000,
+    alias: {
+      "@/": resolve(__dirname, "src") + "/",
+      "@velthoryn/client": resolve(__dirname, "../../clients/ts/src/index.ts"),
+    },
   },
   resolve: {
     alias: {

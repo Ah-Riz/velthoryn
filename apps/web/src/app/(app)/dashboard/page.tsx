@@ -346,6 +346,38 @@ export default function DashboardPage() {
             </div>
           )}
 
+          {/* Quick Actions */}
+          <div>
+            <h2 className="mb-3 text-[13px] font-medium uppercase tracking-[0.1em] text-[#555d73]">
+              Quick Actions
+            </h2>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <ActionCard
+                href="/campaign/create"
+                title="Create New Stream"
+                description="Set up a new vesting stream for token distribution"
+                icon={
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <circle cx="12" cy="12" r="10" />
+                    <line x1="12" y1="8" x2="12" y2="16" />
+                    <line x1="8" y1="12" x2="16" y2="12" />
+                  </svg>
+                }
+              />
+              <ActionCard
+                href="/campaigns"
+                title="View My Campaigns"
+                description="Monitor and manage your existing vesting streams"
+                icon={
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+                    <polyline points="14 2 14 8 20 8" />
+                  </svg>
+                }
+              />
+            </div>
+          </div>
+
           {/* Summary Stats */}
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
             <StatCard label="Total Streams" value={isLoading ? "..." : String(counts.total)} sub="All campaigns" />
@@ -423,7 +455,7 @@ export default function DashboardPage() {
                       <div className="mt-3">
                         <div className="h-1.5 overflow-hidden rounded-full bg-white/[0.06]">
                           <div
-                            className={`h-full rounded-full ${claimable > 0n ? "bg-emerald-500" : "bg-violet-500"}`}
+                            className={`h-full rounded-full transition-all duration-500 ease-out ${claimable > 0n ? "bg-emerald-500" : "bg-violet-500"}`}
                             style={{ width: `${Math.min(100, campaign.progress.progressPercent)}%` }}
                           />
                         </div>
@@ -441,38 +473,6 @@ export default function DashboardPage() {
 
           {/* Recent Activity */}
           <ActivityFeed address={walletAddress!} limit={10} />
-
-          {/* Quick Actions */}
-          <div>
-            <h2 className="mb-3 text-[13px] font-medium uppercase tracking-[0.1em] text-[#555d73]">
-              Quick Actions
-            </h2>
-            <div className="grid gap-3 sm:grid-cols-2">
-              <ActionCard
-                href="/campaign/create"
-                title="Create New Stream"
-                description="Set up a new vesting stream for token distribution"
-                icon={
-                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <circle cx="12" cy="12" r="10" />
-                    <line x1="12" y1="8" x2="12" y2="16" />
-                    <line x1="8" y1="12" x2="16" y2="12" />
-                  </svg>
-                }
-              />
-              <ActionCard
-                href="/campaigns"
-                title="View My Campaigns"
-                description="Monitor and manage your existing vesting streams"
-                icon={
-                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
-                    <polyline points="14 2 14 8 20 8" />
-                  </svg>
-                }
-              />
-            </div>
-          </div>
         </>
       )}
     </div>

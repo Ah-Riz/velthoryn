@@ -105,6 +105,16 @@ export default function MilestoneCreatePage() {
   const totalAmount = milestones.reduce((sum, m) => sum + (Number(m.amount) || 0), 0);
   const manualCreatesCampaign = milestones.length > 1;
 
+  const validateField = useCallback(
+    (key: string, value: string, type: "recipient" | "amount") => {
+      let err: string | null = null;
+      if (type === "recipient") err = validatePublicKey(value);
+      else if (type === "amount") err = validateAmountWithDecimals(value, effectiveMintDecimals);
+      setFormErrors((prev) => ({ ...prev, [key]: err }));
+    },
+    [effectiveMintDecimals],
+  );
+
   const refreshPendingFundings = useCallback(() => {
     if (!publicKey) {
       setPendingFundings([]);
@@ -444,6 +454,7 @@ export default function MilestoneCreatePage() {
                     placeholder="Solana wallet address..."
                     value={recipient}
                     onChange={(e) => setRecipient(e.target.value)}
+                    onBlur={(e) => validateField("recipient", e.target.value, "recipient")}
                     className={`${INPUT} font-mono ${formErrors.recipient ? INPUT_ERR : ""}`}
                   />
                 }
@@ -501,6 +512,7 @@ export default function MilestoneCreatePage() {
                           placeholder="e.g. 1000"
                           value={milestone.amount}
                           onChange={(e) => updateMilestone(milestone.id, "amount", e.target.value)}
+                          onBlur={(e) => validateField(`amount_${i}`, e.target.value, "amount")}
                           className={`${INPUT} pr-24 ${formErrors[`amount_${i}`] ? INPUT_ERR : ""}`}
                         />
                         <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-1.5">

@@ -512,45 +512,89 @@ export default function CampaignsPage() {
           </div>
 
           {showingLocalFallback ? (
-            <div className="rounded-2xl border border-amber-500/20 bg-amber-500/10 px-5 py-4 text-[13px] text-amber-200">
-              Indexed API is unavailable right now. Showing streams recovered from local cache when possible.
+            <div className="flex items-center gap-3 rounded-2xl border border-amber-500/20 bg-amber-500/[0.06] px-5 py-3.5">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="shrink-0 text-amber-400">
+                <path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" /><line x1="12" y1="9" x2="12" y2="13" /><line x1="12" y1="17" x2="12.01" y2="17" />
+              </svg>
+              <p className="flex-1 text-[12px] text-amber-200">
+                Indexed API unavailable — showing local cache. Some streams may be missing.
+              </p>
+              <button
+                onClick={() => window.location.reload()}
+                className="shrink-0 rounded-lg border border-amber-500/30 px-3 py-1.5 text-[11px] font-medium text-amber-300 transition hover:bg-amber-500/10"
+              >
+                Retry
+              </button>
             </div>
           ) : null}
 
           {isLoading ? (
-            <div className="rounded-2xl border border-white/[0.06] bg-white/[0.02] px-8 py-16 text-center text-[13px] text-[#8b92a5]">
-              Loading streams...
+            <div className="space-y-3">
+              {[...Array(5)].map((_, i) => (
+                <div
+                  key={i}
+                  className="flex animate-pulse items-center gap-4 rounded-2xl border border-white/[0.06] bg-white/[0.02] px-5 py-4"
+                >
+                  <div className="h-9 w-9 shrink-0 rounded-xl bg-white/[0.06]" />
+                  <div className="flex-1 space-y-2">
+                    <div className="h-3.5 w-1/3 rounded-full bg-white/[0.06]" />
+                    <div className="h-2.5 w-1/2 rounded-full bg-white/[0.04]" />
+                  </div>
+                  <div className="hidden space-y-2 sm:block">
+                    <div className="h-3 w-20 rounded-full bg-white/[0.06]" />
+                    <div className="h-2.5 w-16 rounded-full bg-white/[0.04]" />
+                  </div>
+                  <div className="h-6 w-16 shrink-0 rounded-lg bg-white/[0.06]" />
+                </div>
+              ))}
             </div>
           ) : error ? (
-            <div className="rounded-2xl border border-red-500/20 bg-red-500/10 px-5 py-4 text-[13px] text-red-300">
-              {error}
+            <div className="rounded-2xl border border-red-500/20 bg-red-500/[0.05] p-5">
+              <div className="flex items-start gap-3">
+                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-red-500/15 text-red-400">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <circle cx="12" cy="12" r="10" /><line x1="12" y1="8" x2="12" y2="12" /><line x1="12" y1="16" x2="12.01" y2="16" />
+                  </svg>
+                </div>
+                <div>
+                  <p className="text-[13px] font-medium text-red-300">Failed to load streams</p>
+                  <p className="mt-1 text-[12px] text-[#8b92a5]">{error}</p>
+                </div>
+              </div>
             </div>
           ) : filteredRows.length === 0 ? (
             activeTab === "action" ? (
               <div className="rounded-2xl border border-white/[0.06] bg-white/[0.02] px-8 py-16 text-center">
                 <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-emerald-500/15">
-                  <svg
-                    width="24"
-                    height="24"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="2"
-                    className="text-emerald-400"
-                  >
+                  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="text-emerald-400">
                     <path d="M22 11.08V12a10 10 0 11-5.93-9.14" />
                     <polyline points="22 4 12 14.01 9 11.01" />
                   </svg>
                 </div>
                 <h2 className="text-[16px] font-semibold text-white">All caught up</h2>
-                <p className="mt-2 text-[13px] text-[#8b92a5]">
-                  No campaigns need attention right now.
-                </p>
+                <p className="mt-2 text-[13px] text-[#8b92a5]">No campaigns need attention right now.</p>
               </div>
+            ) : search.trim() ? (
+              <EmptyState
+                title="No results"
+                body={`No streams match "${search.trim()}". Try a different search term.`}
+              />
+            ) : activeTab === "recipient" ? (
+              <EmptyState
+                title="No recipient streams"
+                body="You haven't been added as a recipient to any vesting campaigns yet."
+              />
+            ) : activeTab === "sender" ? (
+              <EmptyState
+                title="No campaigns created"
+                body="You haven't created any vesting campaigns yet."
+                actionHref="/campaign/create"
+                actionLabel="Create your first stream"
+              />
             ) : (
               <EmptyState
-                title="No streams found"
-                body="Try a different tab or search term."
+                title="No streams yet"
+                body="Create a vesting stream or ask a project to add you as a recipient."
                 actionHref="/campaign/create"
                 actionLabel="Create stream"
               />

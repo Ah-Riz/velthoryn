@@ -78,7 +78,9 @@ function SidebarContent({ onNavClick }: { onNavClick?: () => void }) {
           {NAV_ITEMS.map((item) => {
             const isActive = mounted && (
               pathname === item.href ||
-              (item.href !== "/dashboard" && pathname.startsWith(item.href))
+              (item.href !== "/dashboard" && pathname.startsWith(item.href)) ||
+              // Highlight "My Campaigns" when viewing a campaign detail (not create)
+              (item.href === "/campaigns" && pathname.startsWith("/campaign/") && !pathname.startsWith("/campaign/create"))
             );
 
             return (

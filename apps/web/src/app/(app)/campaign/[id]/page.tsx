@@ -1643,9 +1643,31 @@ export default function CampaignPage({ params }: { params: Promise<{ id: string 
   /* -- Loading state -- */
   if (loading) {
     return (
-      <div className="mx-auto max-w-5xl flex flex-col items-center justify-center py-32 space-y-4">
-        <Spinner />
-        <p className="text-[13px] text-[#555d73]">Loading campaign...</p>
+      <div className="mx-auto max-w-5xl animate-pulse space-y-6">
+        {/* Header */}
+        <div className="space-y-2">
+          <div className="h-7 w-1/3 rounded-full bg-white/[0.06]" />
+          <div className="h-4 w-1/4 rounded-full bg-white/[0.04]" />
+        </div>
+        {/* Metrics row */}
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          {[...Array(6)].map((_, i) => (
+            <div key={i} className="rounded-2xl border border-white/[0.06] bg-white/[0.02] p-5">
+              <div className="h-3 w-1/2 rounded-full bg-white/[0.06]" />
+              <div className="mt-3 h-6 w-2/3 rounded-full bg-white/[0.06]" />
+            </div>
+          ))}
+        </div>
+        {/* Progress bar */}
+        <div className="rounded-2xl border border-white/[0.06] bg-white/[0.02] p-5">
+          <div className="h-3 w-1/4 rounded-full bg-white/[0.06]" />
+          <div className="mt-4 h-2 rounded-full bg-white/[0.06]" />
+        </div>
+        {/* Action buttons */}
+        <div className="flex gap-3">
+          <div className="h-10 w-32 rounded-xl bg-white/[0.06]" />
+          <div className="h-10 w-28 rounded-xl bg-white/[0.06]" />
+        </div>
       </div>
     );
   }

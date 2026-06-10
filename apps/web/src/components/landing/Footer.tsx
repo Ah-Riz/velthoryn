@@ -27,7 +27,7 @@ export function Footer() {
               Fair, automatic, and cheap.
             </p>
             <div className="footer-cta">
-              <Link href="/campaign/create" className="lp-btn waitlist-cta">
+              <Link href="/dashboard" className="lp-btn waitlist-cta">
                 Open app <span className="arrow">&rarr;</span>
               </Link>
               <a
@@ -72,7 +72,7 @@ export function Footer() {
             <h5>Get Started</h5>
             <SmoothScrollLink href="#faq">FAQ</SmoothScrollLink>
             <SmoothScrollLink href="#waitlist">Waitlist</SmoothScrollLink>
-            <Link href="/campaign/create">Open app</Link>
+            <Link href="/dashboard">Open app</Link>
             <a href={`${repoUrl}/issues`} target="_blank" rel="noopener noreferrer">Contact</a>
           </div>
         </div>
