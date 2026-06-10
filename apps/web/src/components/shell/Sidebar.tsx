@@ -4,7 +4,6 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 import { useNeedsActionCount } from "@/hooks/useNeedsActionCount";
-import { clusterLabel, clusterNetworkLabel } from "@/lib/sol/cluster";
 
 const NAV_ITEMS = [
   {
@@ -63,7 +62,15 @@ const NAV_ITEMS = [
   },
 ];
 
-function SidebarContent({ onNavClick }: { onNavClick?: () => void }) {
+function SidebarContent({
+  onNavClick,
+  collapsed,
+  onToggleCollapse,
+}: {
+  onNavClick?: () => void;
+  collapsed?: boolean;
+  onToggleCollapse?: () => void;
+}) {
   const pathname = usePathname();
   const [mounted, setMounted] = useState(false);
   const { count: needsActionCount, isLoading: needsActionLoading } = useNeedsActionCount();
@@ -74,41 +81,55 @@ function SidebarContent({ onNavClick }: { onNavClick?: () => void }) {
 
   return (
     <>
-      <div className="flex h-16 items-center gap-2.5 border-b border-[#1c2130] px-5">
-        <img src="/brand/velthoryn-logo-sm.svg" alt="Velthoryn" className="h-8 w-8" />
-        <span className="text-[15px] font-semibold tracking-tight text-[#e5e7eb]">Velthoryn</span>
-        <span className="ml-auto rounded-full border border-emerald-500/20 bg-emerald-500/10 px-2 py-0.5 font-mono text-[9px] font-medium tracking-[0.08em] text-emerald-400">
-          {clusterLabel().toLowerCase()}
-        </span>
+      {/* Header */}
+      <div className={`flex h-16 items-center border-b border-[#1c2130] ${collapsed ? "justify-center px-0" : "gap-2.5 px-5"}`}>
+        <img src="/brand/velthoryn-logo-sm.svg" alt="Velthoryn" className="h-8 w-8 shrink-0" />
+        {!collapsed && (
+          <span className="text-[15px] font-semibold tracking-tight text-[#e5e7eb]">Velthoryn</span>
+        )}
       </div>
 
-      <nav data-sidebar-nav className="flex-1 overflow-y-auto px-3 py-4">
+      {/* Nav */}
+      <nav data-sidebar-nav className="flex-1 overflow-y-auto px-2 py-4">
         <ul className="space-y-1">
           {NAV_ITEMS.map((item) => {
             const isActive = mounted && (
               pathname === item.href ||
               (item.href !== "/dashboard" && pathname.startsWith(item.href)) ||
-              // Highlight "My Campaigns" when viewing a campaign detail (not create)
               (item.href === "/campaigns" && pathname.startsWith("/campaign/") && !pathname.startsWith("/campaign/create"))
             );
+            const showBadge = item.href === "/campaigns" && needsActionCount > 0 && !needsActionLoading;
 
             return (
               <li key={item.href}>
                 <Link
                   href={item.href}
                   onClick={onNavClick}
-                  className={`flex items-center gap-3 rounded-lg px-3 py-2.5 text-[13px] font-medium transition-all ${
+                  title={collapsed ? item.label : undefined}
+                  aria-label={collapsed ? item.label : undefined}
+                  className={`flex items-center rounded-lg transition-all ${
+                    collapsed
+                      ? "mx-auto h-11 w-11 justify-center"
+                      : "gap-3 px-3 py-2.5 text-[13px] font-medium"
+                  } ${
                     isActive
                       ? "border border-[#7c3aed]/25 bg-[#7c3aed]/12 text-[#a78bfa]"
                       : "border border-transparent text-[#64748b] hover:border-[#222838] hover:bg-[#13161f] hover:text-[#b4b9c5]"
                   }`}
                 >
-                  <span className={isActive ? "text-[#a78bfa]" : "text-[#64748b]"}>
+                  <span className={`relative shrink-0 ${isActive ? "text-[#a78bfa]" : "text-[#64748b]"}`}>
                     {item.icon}
+                    {showBadge && collapsed && (
+                      <span className="absolute -right-0.5 -top-0.5 h-1.5 w-1.5 rounded-full bg-amber-400 shadow-[0_0_6px_rgba(251,191,36,0.5)]" />
+                    )}
                   </span>
-                  {item.label}
-                  {item.href === "/campaigns" && needsActionCount > 0 && !needsActionLoading && (
-                    <span className="ml-auto h-1.5 w-1.5 rounded-full bg-amber-400 shadow-[0_0_6px_rgba(251,191,36,0.5)]" />
+                  {!collapsed && (
+                    <>
+                      {item.label}
+                      {showBadge && (
+                        <span className="ml-auto h-1.5 w-1.5 rounded-full bg-amber-400 shadow-[0_0_6px_rgba(251,191,36,0.5)]" />
+                      )}
+                    </>
                   )}
                 </Link>
               </li>
@@ -117,20 +138,37 @@ function SidebarContent({ onNavClick }: { onNavClick?: () => void }) {
         </ul>
       </nav>
 
-      <div className="border-t border-[#1c2130] px-4 py-4">
-        <div className="flex items-center gap-2 rounded-lg border border-[#1c2130] bg-[#0b0d12] px-3 py-2.5 font-mono text-[10px] tracking-[0.06em] text-[#64748b]">
-          <span className="relative flex h-1.5 w-1.5">
-            <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-50" />
-            <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-emerald-400" />
-          </span>
-          {clusterNetworkLabel()}
-        </div>
+      {/* Collapse toggle */}
+      <div className={`border-t border-[#1c2130] p-3 flex ${collapsed ? "justify-center" : "justify-end"}`}>
+        <button
+          type="button"
+          onClick={onToggleCollapse}
+          aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+          className="flex h-8 w-8 items-center justify-center rounded-lg border border-[#1c2130] bg-[#0b0d12] text-[#64748b] transition hover:border-[#2e3648] hover:text-[#b4b9c5]"
+        >
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            {collapsed
+              ? <polyline points="9 18 15 12 9 6" />
+              : <polyline points="15 18 9 12 15 6" />
+            }
+          </svg>
+        </button>
       </div>
     </>
   );
 }
 
-export function Sidebar({ mobileOpen, onMobileClose }: { mobileOpen?: boolean; onMobileClose?: () => void }) {
+export function Sidebar({
+  mobileOpen,
+  onMobileClose,
+  collapsed,
+  onToggleCollapse,
+}: {
+  mobileOpen?: boolean;
+  onMobileClose?: () => void;
+  collapsed?: boolean;
+  onToggleCollapse?: () => void;
+}) {
   const pathname = usePathname();
 
   useEffect(() => {
@@ -140,8 +178,15 @@ export function Sidebar({ mobileOpen, onMobileClose }: { mobileOpen?: boolean; o
   return (
     <>
       {/* Desktop sidebar */}
-      <aside className="fixed left-0 top-0 z-30 hidden h-screen w-[240px] flex-col border-r border-[#1c2130] bg-[#0b0d12] lg:flex">
-        <SidebarContent />
+      <aside
+        className={`fixed left-0 top-0 z-30 hidden h-screen flex-col border-r border-[#1c2130] bg-[#0b0d12] transition-[width] duration-200 ease-in-out lg:flex ${
+          collapsed ? "w-[64px]" : "w-[240px]"
+        }`}
+      >
+        <SidebarContent
+          collapsed={collapsed}
+          onToggleCollapse={onToggleCollapse}
+        />
       </aside>
 
       {/* Mobile overlay */}

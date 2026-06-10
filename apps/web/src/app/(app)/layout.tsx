@@ -1,13 +1,29 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Sidebar } from "@/components/shell/Sidebar";
 import { AppHeader } from "@/components/shell/AppHeader";
 import { ToastProvider } from "@/components/shell/Toast";
 import { PendingCampaignIndexer } from "@/components/providers/PendingCampaignIndexer";
 
+const SIDEBAR_KEY = "velthoryn:sidebar-collapsed";
+
 export default function AppShellLayout({ children }: { children: React.ReactNode }) {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+
+  useEffect(() => {
+    const stored = localStorage.getItem(SIDEBAR_KEY);
+    if (stored === "true") setSidebarCollapsed(true);
+  }, []);
+
+  const toggleSidebar = () => {
+    setSidebarCollapsed((prev) => {
+      const next = !prev;
+      localStorage.setItem(SIDEBAR_KEY, String(next));
+      return next;
+    });
+  };
 
   return (
     <ToastProvider>
@@ -16,8 +32,14 @@ export default function AppShellLayout({ children }: { children: React.ReactNode
         <Sidebar
           mobileOpen={mobileMenuOpen}
           onMobileClose={() => setMobileMenuOpen(false)}
+          collapsed={sidebarCollapsed}
+          onToggleCollapse={toggleSidebar}
         />
-        <div className="flex flex-1 flex-col lg:pl-[240px]">
+        <div
+          className={`flex flex-1 flex-col transition-[padding-left] duration-200 ease-in-out ${
+            sidebarCollapsed ? "lg:pl-[64px]" : "lg:pl-[240px]"
+          }`}
+        >
           <AppHeader onMenuToggle={() => setMobileMenuOpen((prev) => !prev)} />
           <main className="flex-1 px-4 py-4 sm:px-6 sm:py-6 lg:px-10 lg:py-8">
             {children}

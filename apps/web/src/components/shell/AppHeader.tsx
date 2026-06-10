@@ -1,39 +1,12 @@
 "use client";
 
 import dynamic from "next/dynamic";
-import { useConnection, useWallet } from "@solana/wallet-adapter-react";
-import { useEffect, useState } from "react";
+import { useWallet } from "@solana/wallet-adapter-react";
 
 const WalletMultiButton = dynamic(
   () => import("@solana/wallet-adapter-react-ui").then((m) => m.WalletMultiButton),
   { ssr: false },
 );
-
-function NetworkBadge() {
-  const { connection } = useConnection();
-  const [slot, setSlot] = useState<number | null>(null);
-
-  useEffect(() => {
-    let cancelled = false;
-    connection.getSlot().then((s) => {
-      if (!cancelled) setSlot(s);
-    }).catch(() => {});
-    return () => { cancelled = true; };
-  }, [connection]);
-
-  return (
-    <div className="flex items-center gap-2 rounded-lg border border-[#1c2130] bg-[#13161f] px-2 py-1.5 font-mono text-[10px] sm:px-3 sm:text-[11px] text-[#64748b]">
-      <span className="relative flex h-1.5 w-1.5">
-        <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-60" />
-        <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-emerald-400" />
-      </span>
-      <span className="hidden sm:inline tracking-[0.06em]">Devnet</span>
-      {slot !== null && (
-        <span className="hidden md:inline text-[#64748b]">#{slot.toLocaleString()}</span>
-      )}
-    </div>
-  );
-}
 
 export function AppHeader({ onMenuToggle }: { onMenuToggle?: () => void }) {
   const { connected, publicKey } = useWallet();
@@ -64,8 +37,7 @@ export function AppHeader({ onMenuToggle }: { onMenuToggle?: () => void }) {
           <span className="hidden text-[14px] font-semibold text-white sm:inline">Velthoryn</span>
         </div>
       </div>
-      <div className="flex items-center gap-2 sm:gap-3">
-        <NetworkBadge />
+      <div className="flex items-center">
         {showE2eWallet ? (
           <div className="rounded-lg border border-[#1c2130] bg-[#13161f] px-2 py-1.5 font-mono text-[11px] text-[#b4b9c5] sm:px-3 sm:py-2 sm:text-[12px]">
             {publicKey.toBase58().slice(0, 4)}...{publicKey.toBase58().slice(-4)}
