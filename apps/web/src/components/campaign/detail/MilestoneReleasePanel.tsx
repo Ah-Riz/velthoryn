@@ -15,7 +15,7 @@ type Props = {
   publicKey: PublicKey;
   treePubkey: PublicKey;
   milestoneReleasedFlags: Uint8Array;
-  leafCount: number;
+  milestoneIndices: number[];
   canRelease: boolean;
   onSuccess: (idx: number) => void;
   toast: (msg: string, type?: "success" | "error" | "info") => void;
@@ -26,7 +26,7 @@ export function MilestoneReleasePanel({
   publicKey,
   treePubkey,
   milestoneReleasedFlags,
-  leafCount,
+  milestoneIndices,
   canRelease,
   onSuccess,
   toast,
@@ -36,26 +36,26 @@ export function MilestoneReleasePanel({
   const queryClient = useQueryClient();
   const [loadingIdx, setLoadingIdx] = useState<number | null>(null);
   const [page, setPage] = useState(0);
-  const count = Math.min(leafCount, 256);
-  const totalPages = Math.ceil(count / PAGE_SIZE);
+  const indices = milestoneIndices;
+  const totalPages = Math.ceil(indices.length / PAGE_SIZE);
   const pageStart = page * PAGE_SIZE;
-  const pageEnd = Math.min(pageStart + PAGE_SIZE, count);
-  const pageItems = Array.from({ length: pageEnd - pageStart }, (_, i) => pageStart + i);
+  const pageEnd = Math.min(pageStart + PAGE_SIZE, indices.length);
+  const pageItems = indices.slice(pageStart, pageEnd);
 
   const releasedCount = useMemo(() => {
     let released = 0;
-    for (let i = 0; i < count; i++) {
-      if (isMilestoneTriggered(milestoneReleasedFlags, i)) released++;
+    for (const idx of indices) {
+      if (isMilestoneTriggered(milestoneReleasedFlags, idx)) released++;
     }
     return released;
-  }, [milestoneReleasedFlags, count]);
+  }, [milestoneReleasedFlags, indices]);
 
   const nextUnreleased = useMemo(() => {
-    for (let i = 0; i < count; i++) {
-      if (!isMilestoneTriggered(milestoneReleasedFlags, i)) return i;
+    for (const idx of indices) {
+      if (!isMilestoneTriggered(milestoneReleasedFlags, idx)) return idx;
     }
     return null;
-  }, [milestoneReleasedFlags, count]);
+  }, [milestoneReleasedFlags, indices]);
 
   async function handleRelease(idx: number) {
     setLoadingIdx(idx);
@@ -86,7 +86,7 @@ export function MilestoneReleasePanel({
     }
   }
 
-  if (!canRelease || leafCount <= 1) return null;
+  if (!canRelease || indices.length === 0) return null;
 
   return (
     <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-4">
@@ -95,7 +95,7 @@ export function MilestoneReleasePanel({
         <div>
           <p className="text-[12px] font-medium text-white">Milestone Releases</p>
           <p className="mt-0.5 text-[11px] text-[#6f7c95]">
-            {releasedCount}/{count} released
+            {releasedCount}/{indices.length} released
           </p>
         </div>
         {nextUnreleased !== null && (
@@ -111,25 +111,25 @@ export function MilestoneReleasePanel({
 
       {/* Compact grid */}
       <div className="mt-3 grid grid-cols-4 gap-1.5 sm:grid-cols-6">
-        {pageItems.map((i) => {
-          const released = isMilestoneTriggered(milestoneReleasedFlags, i);
+        {pageItems.map((idx) => {
+          const released = isMilestoneTriggered(milestoneReleasedFlags, idx);
           return (
             <button
-              key={i}
-              onClick={() => !released && handleRelease(i)}
+              key={idx}
+              onClick={() => !released && handleRelease(idx)}
               disabled={released || loadingIdx !== null}
               className={`flex flex-col items-center justify-center rounded-lg border px-1 py-2 text-center transition ${
                 released
                   ? "border-emerald-500/20 bg-emerald-500/5 cursor-default"
                   : "border-white/[0.06] bg-white/[0.02] hover:border-violet-500/30 hover:bg-violet-500/5 disabled:opacity-50"
               }`}
-              title={released ? `Milestone #${i} released` : `Release milestone #${i}`}
+              title={released ? `Milestone #${idx} released` : `Release milestone #${idx}`}
             >
               <span className={`text-[11px] font-semibold ${released ? "text-emerald-400" : "text-white"}`}>
-                #{i}
+                #{idx}
               </span>
               <span className={`mt-0.5 text-[9px] ${released ? "text-emerald-400/60" : "text-[#555d73]"}`}>
-                {loadingIdx === i ? "..." : released ? "done" : "pending"}
+                {loadingIdx === idx ? "..." : released ? "done" : "pending"}
               </span>
             </button>
           );

@@ -11,25 +11,30 @@ function withQueryClient(element: React.ReactElement) {
 }
 
 function renderPanel(overrides = {}) {
+  const leafCount = (overrides as any).leafCount ?? 3;
+  const milestoneIndices = (overrides as any).milestoneIndices ?? Array.from({ length: leafCount }, (_, i) => i);
+
   const props = {
     program: {} as any,
     publicKey: {} as any,
     treePubkey: {} as any,
     milestoneReleasedFlags: new Uint8Array(32),
-    leafCount: 3,
+    milestoneIndices,
     canRelease: true,
     onSuccess: () => {},
     toast: () => {},
     ...overrides,
   };
+  // Remove leafCount — component doesn't accept it
+  delete (props as any).leafCount;
   return render(withQueryClient(createElement(MilestoneReleasePanel, props)));
 }
 
 describe("MilestoneReleasePanel", () => {
   afterEach(() => cleanup());
 
-  it("renders nothing when leafCount is 1", () => {
-    const { container } = renderPanel({ leafCount: 1 });
+  it("renders nothing when milestoneIndices is empty", () => {
+    const { container } = renderPanel({ milestoneIndices: [] });
     expect(container.innerHTML).toBe("");
   });
 

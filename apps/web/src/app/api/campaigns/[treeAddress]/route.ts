@@ -51,6 +51,7 @@ async function getCampaignByAddressHandler(
           beneficiary: leaves.beneficiary,
           amount: leaves.amount,
           releaseType: leaves.releaseType,
+          milestoneIdx: leaves.milestoneIdx,
         })
         .from(leaves)
         .where(eq(leaves.rootVersionId, latestRootVersion.id))
@@ -102,6 +103,14 @@ async function getCampaignByAddressHandler(
       : 0;
 
   const hasMilestoneLeaves = latestLeaves.some((l) => l.releaseType === 2);
+
+  // Derive unique milestone indices from actual leaves — avoids showing phantom
+  // milestone release buttons when the tree also contains cliff/linear leaves.
+  const milestoneIndices = [...new Set(
+    latestLeaves
+      .filter((l) => l.releaseType === 2)
+      .map((l) => l.milestoneIdx),
+  )].sort((a, b) => a - b);
 
   let gracePeriod: {
     end: string;
@@ -160,6 +169,7 @@ async function getCampaignByAddressHandler(
     createdAt: campaign.createdAt,
     metadata: campaign.metadata,
     hasMilestoneLeaves,
+    milestoneIndices,
     gracePeriod,
     analytics: {
       uniqueClaimers: analytics.uniqueClaimers,

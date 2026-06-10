@@ -94,6 +94,15 @@ jobs:
       - name: Merkle unit tests
         run: cargo test --manifest-path programs/vesting/Cargo.toml merkle -- --nocapture
 
+      - name: Rust unit + proptest
+        run: cargo test --manifest-path programs/vesting/Cargo.toml --lib -- --nocapture
+
+      - name: Install cargo-audit
+        run: cargo install cargo-audit
+
+      - name: Cargo audit
+        run: cargo audit --ignore RUSTSEC-2021-0145 --ignore RUSTSEC-2026-0097 --ignore RUSTSEC-2024-0344 --ignore RUSTSEC-2022-0093
+
       - name: anchor build
         env:
           PROGRAM_KEYPAIR_JSON: ${{ secrets.PROGRAM_KEYPAIR_JSON }}
@@ -119,6 +128,23 @@ jobs:
         run: |
           diff -q target/idl/vesting.json apps/web/src/lib/anchor/idl.json \
             || (echo "ERROR: apps/web/src/lib/anchor/idl.json is out of date — run anchor build and copy target/idl/vesting.json" && exit 1)
+
+      # Mollusk instruction-level tests. Requires BPF .so from anchor build.
+      # 72 active tests pass; 18 ignored (Mollusk 0.13.x init_if_needed/Optional<T> limitations).
+      - name: Mollusk instruction tests
+        env:
+          BPF_OUT_DIR: ${{ github.workspace }}/target/deploy
+          CARGO_TARGET_DIR: ${{ github.workspace }}/target
+        run: |
+          cd programs/vesting
+          cargo test --test instructions -- --nocapture
+          cargo test --test benchmarks -- --nocapture
+          cargo test --test stream -- --nocapture
+          cargo test --test lifecycle -- --nocapture
+          cargo test --test admin -- --nocapture
+          cargo test --test cancel -- --nocapture
+          cargo test --test claim -- --nocapture
+          cargo test --test cleanup -- --nocapture
 
       - name: Native SOL vesting tests (bankrun)
         env:

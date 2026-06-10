@@ -110,6 +110,16 @@ pub fn handler(ctx: Context<Claim>, leaf: VestingLeaf, proof: Vec<[u8; 32]>) -> 
         cr.bump = ctx.bumps.claim_record;
     }
 
+    // Accumulate total_entitled for milestone claims — each milestone claim
+    // is a distinct leaf (bitmap prevents duplicates), so the sum converges
+    // to the true total across all milestone leaves.
+    if leaf.release_type == 2 && cr.beneficiary != Pubkey::default() {
+        cr.total_entitled = cr
+            .total_entitled
+            .checked_add(leaf.amount)
+            .ok_or(VestingError::Overflow)?;
+    }
+
     // Milestone guard (step 7 per SECURITY.md)
     if leaf.release_type == 2 {
         let byte_idx = leaf.milestone_idx as usize / 8;
@@ -136,11 +146,8 @@ pub fn handler(ctx: Context<Claim>, leaf: VestingLeaf, proof: Vec<[u8; 32]>) -> 
         schedule::vested(&leaf, effective_now).saturating_sub(cr.claimed_amount)
     };
 
-    if claimable == 0 && leaf.release_type != 2 {
-        let fully_claimed = cr.claimed_amount >= leaf.amount;
-        if effective_now >= leaf.end_time || fully_claimed {
-            return Err(VestingError::StreamExpired.into());
-        }
+    if claimable == 0 && leaf.release_type != 2 && effective_now >= leaf.end_time {
+        return Err(VestingError::StreamExpired.into());
     }
 
     require!(claimable > 0, VestingError::NothingToClaim);
@@ -231,7 +238,7 @@ pub fn handler(ctx: Context<Claim>, leaf: VestingLeaf, proof: Vec<[u8; 32]>) -> 
             .as_ref()
             .ok_or(VestingError::MintMismatch)?;
 
-        let bump = ctx.bumps.vault_authority.expect("bump must exist when vault_authority is Some");
+        let bump = ctx.bumps.vault_authority.ok_or(VestingError::WrongVault)?;
         let signer_seeds: &[&[&[u8]]] = &[&[
             b"vault_authority",
             tree_key.as_ref(),

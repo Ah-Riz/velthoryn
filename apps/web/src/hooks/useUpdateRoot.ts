@@ -29,7 +29,11 @@ export function useUpdateRoot() {
 
       const treePubkey = new PublicKey(params.treeAddress);
       const ix = await program.methods
-        .updateRoot(Array.from(Buffer.from(params.payload.merkleRoot, "hex")), params.payload.leafCount)
+        .updateRoot(
+          Array.from(Buffer.from(params.payload.merkleRoot, "hex")),
+          params.payload.leafCount,
+          params.payload.minCliffTime,
+        )
         .accounts({
           cancelAuthority: publicKey,
           vestingTree: treePubkey,

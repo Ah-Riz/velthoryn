@@ -22,6 +22,7 @@ import {
   isStreamSettledLocal,
 } from "@/lib/stream/persist";
 import { CancelConfirmDialog } from "@/components/campaign/detail/CancelConfirmDialog";
+import { CampaignStatusBanner } from "@/components/campaign/detail/CampaignStatusBanner";
 
 import { MilestoneStatusBadge } from "@/components/campaign/detail/MilestoneStatusBadge";
 import { PauseToggleButton } from "@/components/campaign/detail/PauseToggleButton";
@@ -316,6 +317,7 @@ export default function CampaignPage({ params }: { params: Promise<{ id: string 
     : null;
   const [wrapModalOpen, setWrapModalOpen] = useState(false);
   const [recipientsOpen, setRecipientsOpen] = useState(false);
+  const withdrawButtonRef = useRef<HTMLButtonElement>(null);
   const fetchTreeInFlightRef = useRef<Promise<void> | null>(null);
   const lastFetchTreeAtRef = useRef(0);
   const treeStateRef = useRef<TreeState | null>(null);
@@ -849,6 +851,12 @@ export default function CampaignPage({ params }: { params: Promise<{ id: string 
     totalClaimed,
   });
   const hasStreamCancelledEvent = timelineQuery.data?.events.some((e) => e.type === "stream_cancelled") ?? false;
+  const isCreator =
+    !!publicKey && !!treeState?.creator && publicKey.equals(treeState.creator);
+  const unvestedAmount =
+    cancelledAtBigint !== null ? totalSupply - vested : 0n;
+  const isWithdrawn =
+    cancelledAtBigint !== null && (streamSettled || hasStreamCancelledEvent);
   const canShowWithdrawUnvested = !streamSettled && !hasStreamCancelledEvent && !(treeState?.instantRefunded) && canWithdrawUnvested({
     viewer: publicKey,
     creator: treeState?.creator,
@@ -1706,6 +1714,25 @@ export default function CampaignPage({ params }: { params: Promise<{ id: string 
         </div>
       </div>
 
+      <CampaignStatusBanner
+        cancelledAtBigint={cancelledAtBigint}
+        isCreator={isCreator}
+        isInstantRefunded={treeState.instantRefunded ?? false}
+        isFunded={!isFundingIncomplete || cancelledAtBigint !== null}
+        nowTs={nowTs}
+        onWithdrawClick={() => withdrawButtonRef.current?.click()}
+        onResumeFunding={canShowFundingRecovery ? handleFundExistingCampaign : undefined}
+        unvestedAmount={unvestedAmount}
+        mintDecimals={mintDecimals}
+        isWithdrawn={isWithdrawn}
+      />
+
+      {fundingStatus.type === "error" && isCreator && (
+        <div className="rounded-xl border border-red-500/20 bg-red-500/10 px-4 py-3 text-[12px] text-red-300">
+          {fundingStatus.msg}
+        </div>
+      )}
+
       <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_340px]">
         <div className="space-y-6">
           {isRecipientMetricsLoading ? (
@@ -1956,7 +1983,10 @@ export default function CampaignPage({ params }: { params: Promise<{ id: string 
         </div>
 
         <div className="space-y-6">
-          <div className="rounded-2xl border border-white/[0.06] bg-white/[0.02] p-5 lg:sticky lg:top-6">
+          <div
+            id="campaign-actions"
+            className="rounded-2xl border border-white/[0.06] bg-white/[0.02] p-5 lg:sticky lg:top-6"
+          >
             <SectionHeader
               title="Actions"
               caption={actionsCaption}
@@ -1981,41 +2011,6 @@ export default function CampaignPage({ params }: { params: Promise<{ id: string 
             )}
 
             <div className="mt-5 space-y-4">
-              {treeState.instantRefunded && (
-                <div className="rounded-xl border border-amber-500/20 bg-amber-500/5 p-4">
-                  <p className="text-[13px] font-medium text-amber-300">Campaign Instantly Refunded</p>
-                  <p className="mt-2 text-[12px] leading-6 text-amber-100/80">
-                    This campaign was refunded before vesting started. All funds were returned to the creator.
-                  </p>
-                </div>
-              )}
-
-              {isFundingIncomplete && !treeState.instantRefunded && (
-                <div className="rounded-xl border border-amber-500/20 bg-amber-500/5 p-4">
-                  <p className="text-[13px] font-medium text-amber-300">Funding incomplete</p>
-                  <p className="mt-2 text-[12px] leading-6 text-amber-100/80">
-                    This campaign needs {formatFundingAmount(fundingRemaining)} before claims can run.
-                  </p>
-                  {canShowFundingRecovery ? (
-                    <button
-                      type="button"
-                      onClick={handleFundExistingCampaign}
-                      disabled={fundingStatus.type === "loading"}
-                      className="mt-3 w-full rounded-xl bg-amber-400 px-4 py-3 text-[13px] font-semibold text-black transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
-                    >
-                      {fundingStatus.type === "loading" ? "Funding..." : "Resume Funding"}
-                    </button>
-                  ) : (
-                    <p className="mt-3 text-[12px] leading-5 text-amber-100/70">
-                      Creator must fund this campaign first.
-                    </p>
-                  )}
-                  {fundingStatus.type === "error" && (
-                    <p className="mt-3 text-[12px] leading-5 text-red-300">{fundingStatus.msg}</p>
-                  )}
-                </div>
-              )}
-
               {isMultiRecipient && program && !claimFundingDisabledReason ? (
                 <ClaimWithProofButton
                   program={program}
@@ -2097,7 +2092,7 @@ export default function CampaignPage({ params }: { params: Promise<{ id: string 
                   publicKey={publicKey}
                   treePubkey={new PublicKey(treeAddress)}
                   milestoneReleasedFlags={treeState.milestoneReleasedFlags}
-                  leafCount={treeState.leafCount}
+                  milestoneIndices={campaignDetailQuery.data?.milestoneIndices ?? []}
                   canRelease={canShowReleaseMilestone}
                   onSuccess={(idx: number) => {
                     setTreeState((prev) => {
@@ -2168,6 +2163,7 @@ export default function CampaignPage({ params }: { params: Promise<{ id: string 
 
               {program && (
                 <WithdrawUnvestedButton
+                  ref={withdrawButtonRef}
                   program={program}
                   publicKey={publicKey}
                   treePubkey={new PublicKey(treeAddress)}

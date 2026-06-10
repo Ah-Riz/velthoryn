@@ -244,3 +244,423 @@ fn build_get_vested_amount_ix_data(
     ix_data.extend_from_slice(&borsh_serialize(&milestone_released_flags));
     ix_data
 }
+
+// ---------------------------------------------------------------------------
+// create_stream_native benchmark
+// ---------------------------------------------------------------------------
+
+#[test]
+fn bench_create_stream_native() {
+    let mollusk = get_mollusk();
+    let pid = program_id();
+    let creator = Pubkey::new_unique();
+    let beneficiary = Pubkey::new_unique();
+
+    // Create a funded tree with leaf_count=1 for single-stream
+    // create_stream_native CREATES the tree — pass empty/uninitialized account
+    let (tree_pda, _) = derive_vesting_tree_pda(&creator, &NATIVE_SOL_MINT, 100);
+
+    let stream_args = CreateStreamArgs {
+        campaign_id: 100,
+        beneficiary,
+        amount: 500_000_000,
+        release_type: 1, // Linear
+        start_time: 0,
+        cliff_time: 0,
+        end_time: 2_000_000,
+        milestone_idx: 0,
+        cancellable: false,
+        cancel_authority: None,
+        pause_authority: None,
+    };
+
+    let data = build_ix_data("create_stream_native", &stream_args);
+    let ix = Instruction {
+        program_id: pid,
+        accounts: vec![
+            AccountMeta::new(creator, true),
+            AccountMeta::new(tree_pda, false),
+            AccountMeta::new_readonly(system_program_id(), false),
+            AccountMeta::new_readonly(rent_sysvar_id(), false),
+        ],
+        data,
+    };
+
+    let (rent_key, rent_account) = mollusk.sysvars.keyed_account_for_rent_sysvar();
+    let (sys_key, sys_account) = keyed_account_for_system_program();
+    let accounts: Vec<(Pubkey, Account)> = vec![
+        (creator, Account::new(CREATOR_LAMPORTS, 0, &system_program_id())),
+        (tree_pda, Account::new(0, 0, &system_program_id())), // empty — instruction creates it
+        (sys_key, sys_account),
+        (rent_key, rent_account),
+    ];
+
+    MolluskComputeUnitBencher::new(mollusk)
+        .bench(("create_stream_native [linear, 1 leaf]", &ix, &accounts))
+        .must_pass(true)
+        .out_dir("benches")
+        .execute();
+
+    println!("\n=== create_stream_native benchmark complete ===");
+}
+
+// ---------------------------------------------------------------------------
+// fund_campaign_native benchmark
+// ---------------------------------------------------------------------------
+
+#[test]
+fn bench_fund_campaign_native() {
+    let mollusk = get_mollusk();
+    let pid = program_id();
+    let creator = Pubkey::new_unique();
+
+    let (tree_pda, tree_account, _bump) = TreeConfig::new(creator, 200)
+        .leaf_count(3)
+        .total_supply(2_000_000_000)
+        .funded_lamports(500_000_000) // partially funded
+        .build();
+
+    let fund_amount = 500_000_000u64;
+    let data = build_fund_campaign_native_ix_data(fund_amount);
+    let ix = Instruction {
+        program_id: pid,
+        accounts: vec![
+            AccountMeta::new(creator, true),
+            AccountMeta::new(tree_pda, false),
+            AccountMeta::new_readonly(system_program_id(), false),
+        ],
+        data,
+    };
+
+    let accounts: Vec<(Pubkey, Account)> = vec![
+        (creator, Account::new(CREATOR_LAMPORTS, 0, &system_program_id())),
+        (tree_pda, tree_account),
+        system_program_account(),
+    ];
+
+    MolluskComputeUnitBencher::new(mollusk)
+        .bench(("fund_campaign_native [500M lamports]", &ix, &accounts))
+        .must_pass(true)
+        .out_dir("benches")
+        .execute();
+
+    println!("\n=== fund_campaign_native benchmark complete ===");
+}
+
+// ---------------------------------------------------------------------------
+// cancel_campaign benchmark
+// ---------------------------------------------------------------------------
+
+#[test]
+fn bench_cancel_campaign() {
+    let mollusk = get_mollusk();
+    let pid = program_id();
+    let creator = Pubkey::new_unique();
+    let cancel_auth = Pubkey::new_unique();
+
+    let (tree_pda, tree_account, _bump) = TreeConfig::new(creator, 300)
+        .cancellable_with(cancel_auth)
+        .leaf_count(3)
+        .total_supply(10_000_000)
+        .total_claimed(3_000_000)
+        .funded_lamports(1_000_000_000)
+        .build();
+
+    let data = build_cancel_campaign_ix_data();
+    let ix = Instruction {
+        program_id: pid,
+        accounts: vec![
+            AccountMeta::new(cancel_auth, true),
+            AccountMeta::new(tree_pda, false),
+        ],
+        data,
+    };
+
+    let accounts: Vec<(Pubkey, Account)> = vec![
+        (cancel_auth, Account::new(CREATOR_LAMPORTS, 0, &system_program_id())),
+        (tree_pda, tree_account),
+    ];
+
+    MolluskComputeUnitBencher::new(mollusk)
+        .bench(("cancel_campaign [partially claimed]", &ix, &accounts))
+        .must_pass(true)
+        .out_dir("benches")
+        .execute();
+
+    println!("\n=== cancel_campaign benchmark complete ===");
+}
+
+// ---------------------------------------------------------------------------
+// set_milestone_released benchmark
+// ---------------------------------------------------------------------------
+
+#[test]
+fn bench_set_milestone_released() {
+    let mollusk = get_mollusk();
+    let pid = program_id();
+    let creator = Pubkey::new_unique();
+
+    let (tree_pda, tree_account, _bump) = TreeConfig::new(creator, 400)
+        .leaf_count(3)
+        .total_supply(10_000_000)
+        .funded_lamports(10_000_000)
+        .build();
+
+    let data = build_set_milestone_released_ix_data(0);
+    let ix = Instruction {
+        program_id: pid,
+        accounts: vec![
+            AccountMeta::new(creator, true),
+            AccountMeta::new(tree_pda, false),
+        ],
+        data,
+    };
+
+    let accounts: Vec<(Pubkey, Account)> = vec![
+        (creator, Account::new(CREATOR_LAMPORTS, 0, &system_program_id())),
+        (tree_pda, tree_account),
+    ];
+
+    MolluskComputeUnitBencher::new(mollusk)
+        .bench(("set_milestone_released [idx=0]", &ix, &accounts))
+        .must_pass(true)
+        .out_dir("benches")
+        .execute();
+
+    println!("\n=== set_milestone_released benchmark complete ===");
+}
+
+// ---------------------------------------------------------------------------
+// update_root benchmark
+// ---------------------------------------------------------------------------
+
+#[test]
+fn bench_update_root() {
+    let mollusk = get_mollusk();
+    let pid = program_id();
+    let creator = Pubkey::new_unique();
+    let cancel_auth = Pubkey::new_unique();
+
+    let old_root = valid_merkle_root();
+    let mut new_root = [0u8; 32];
+    new_root[0] = 0xAA;
+
+    let (tree_pda, tree_account, _bump) = TreeConfig::new(creator, 500)
+        .merkle_root(old_root)
+        .cancellable_with(cancel_auth)
+        .leaf_count(3)
+        .min_cliff_time(1_000_000)
+        .funded_lamports(1_000_000_000)
+        .build();
+
+    let data = build_update_root_ix_data(new_root, 5, 2_000_000);
+    let ix = Instruction {
+        program_id: pid,
+        accounts: vec![
+            AccountMeta::new(cancel_auth, true),
+            AccountMeta::new(tree_pda, false),
+        ],
+        data,
+    };
+
+    let accounts: Vec<(Pubkey, Account)> = vec![
+        (cancel_auth, Account::new(CREATOR_LAMPORTS, 0, &system_program_id())),
+        (tree_pda, tree_account),
+    ];
+
+    MolluskComputeUnitBencher::new(mollusk)
+        .bench(("update_root [new root + 5 leaves]", &ix, &accounts))
+        .must_pass(true)
+        .out_dir("benches")
+        .execute();
+
+    println!("\n=== update_root benchmark complete ===");
+}
+
+// ---------------------------------------------------------------------------
+// pause_campaign + unpause_campaign benchmark
+// ---------------------------------------------------------------------------
+
+#[test]
+fn bench_pause_unpause() {
+    let mollusk = get_mollusk();
+    let pid = program_id();
+    let creator = Pubkey::new_unique();
+    let pause_auth = Pubkey::new_unique();
+
+    let (tree_pda, tree_account, _bump) = TreeConfig::new(creator, 600)
+        .leaf_count(3)
+        .total_supply(10_000_000)
+        .funded_lamports(1_000_000_000)
+        .pause_authority(Some(pause_auth))
+        .build();
+
+    let pause_data = anchor_discriminator("pause_campaign").to_vec();
+    let pause_ix = Instruction {
+        program_id: pid,
+        accounts: vec![
+            AccountMeta::new(pause_auth, true),
+            AccountMeta::new(tree_pda, false),
+        ],
+        data: pause_data,
+    };
+
+    let pause_accounts: Vec<(Pubkey, Account)> = vec![
+        (pause_auth, Account::new(CREATOR_LAMPORTS, 0, &system_program_id())),
+        (tree_pda, tree_account),
+    ];
+
+    // For unpause: build a paused tree
+    let (_, paused_tree_account, _) = TreeConfig::new(creator, 601)
+        .leaf_count(3)
+        .total_supply(10_000_000)
+        .funded_lamports(1_000_000_000)
+        .pause_authority(Some(pause_auth))
+        .paused(true)
+        .build();
+
+    let (tree_pda2, _, _) = TreeConfig::new(creator, 601)
+        .leaf_count(3)
+        .total_supply(10_000_000)
+        .funded_lamports(1_000_000_000)
+        .pause_authority(Some(pause_auth))
+        .paused(true)
+        .build();
+
+    let unpause_data = anchor_discriminator("unpause_campaign").to_vec();
+    let unpause_ix = Instruction {
+        program_id: pid,
+        accounts: vec![
+            AccountMeta::new(pause_auth, true),
+            AccountMeta::new(tree_pda2, false),
+        ],
+        data: unpause_data,
+    };
+
+    let unpause_accounts: Vec<(Pubkey, Account)> = vec![
+        (pause_auth, Account::new(CREATOR_LAMPORTS, 0, &system_program_id())),
+        (tree_pda2, paused_tree_account),
+    ];
+
+    MolluskComputeUnitBencher::new(mollusk)
+        .bench(("pause_campaign [3 leaves]", &pause_ix, &pause_accounts))
+        .bench(("unpause_campaign [3 leaves]", &unpause_ix, &unpause_accounts))
+        .must_pass(true)
+        .out_dir("benches")
+        .execute();
+
+    println!("\n=== pause/unpause benchmarks complete ===");
+}
+
+// ---------------------------------------------------------------------------
+// claim (native SOL) benchmark
+// ---------------------------------------------------------------------------
+// IGNORED: Mollusk 0.13.x limitation — claim uses init_if_needed for ClaimRecord PDA. Cannot benchmark in Mollusk bencher mode. Unblock when Mollusk supports init_if_needed.
+#[ignore]
+#[test]
+fn bench_claim_native() {
+    let mollusk = get_mollusk();
+    let pid = program_id();
+    let creator = Pubkey::new_unique();
+    let beneficiary = Pubkey::new_unique();
+
+    let leaf = VestingLeaf {
+        leaf_index: 0,
+        beneficiary,
+        amount: 1_000_000,
+        release_type: 1, // Linear
+        start_time: 0,
+        cliff_time: 0,
+        end_time: 2_000_000,
+        milestone_idx: 0,
+    };
+    let (root, proof) = build_single_leaf_proof(&leaf);
+
+    let (tree_pda, tree_account, _bump) = TreeConfig::new(creator, 700)
+        .merkle_root(root)
+        .leaf_count(1)
+        .total_supply(1_000_000)
+        .funded_lamports(2_000_000_000)
+        .build();
+
+    let (cr_pda, _) = derive_claim_record_pda(&tree_pda, &beneficiary);
+    let accounts = build_claim_accounts_native(tree_pda, tree_account, beneficiary, cr_pda);
+
+    // Build the full instruction with account metas
+    let claim_data = build_claim_ix_data(&leaf, &proof);
+    let ix = Instruction {
+        program_id: pid,
+        accounts: vec![
+            AccountMeta::new(beneficiary, true),
+            AccountMeta::new(tree_pda, false),
+            AccountMeta::new(cr_pda, false),
+            // Option accounts as None (key = pid signals None to Anchor)
+            AccountMeta::new_readonly(Pubkey::default(), false), // vault_authority
+            AccountMeta::new_readonly(Pubkey::default(), false), // vault
+            AccountMeta::new_readonly(Pubkey::default(), false), // beneficiary_ata
+            AccountMeta::new_readonly(Pubkey::default(), false), // mint
+            AccountMeta::new_readonly(Pubkey::default(), false), // token_program
+            AccountMeta::new_readonly(Pubkey::default(), false), // associated_token_program
+            AccountMeta::new_readonly(system_program_id(), false), // system_program
+        ],
+        data: claim_data,
+    };
+
+    MolluskComputeUnitBencher::new(mollusk)
+        .bench(("claim [native SOL, single leaf, linear]", &ix, &accounts))
+        .must_pass(true)
+        .out_dir("benches")
+        .execute();
+
+    println!("\n=== claim (native) benchmark complete ===");
+}
+
+// ---------------------------------------------------------------------------
+// close_claim_record benchmark
+// ---------------------------------------------------------------------------
+
+#[test]
+fn bench_close_claim_record() {
+    let mollusk = get_mollusk();
+    let pid = program_id();
+    let creator = Pubkey::new_unique();
+    let beneficiary = Pubkey::new_unique();
+
+    let (tree_pda, tree_account, _bump) = TreeConfig::new(creator, 800)
+        .leaf_count(1)
+        .total_supply(1_000_000_000)
+        .funded_lamports(1_000_000_000)
+        .build();
+
+    let total_entitled = 1_000_000u64;
+    let (cr_pda, cr_account) = ClaimRecordConfig::new(beneficiary, tree_pda)
+        .claimed_amount(total_entitled)
+        .total_entitled(total_entitled)
+        .build();
+
+    let data = build_close_claim_record_ix_data();
+    let ix = Instruction {
+        program_id: pid,
+        accounts: vec![
+            AccountMeta::new(beneficiary, true),
+            AccountMeta::new_readonly(tree_pda, false),
+            AccountMeta::new(cr_pda, false),
+        ],
+        data,
+    };
+
+    let accounts: Vec<(Pubkey, Account)> = vec![
+        (beneficiary, Account::new(CREATOR_LAMPORTS, 0, &system_program_id())),
+        (creator, Account::new(0, 0, &system_program_id())),
+        (tree_pda, tree_account),
+        (cr_pda, cr_account),
+    ];
+
+    MolluskComputeUnitBencher::new(mollusk)
+        .bench(("close_claim_record [fully claimed]", &ix, &accounts))
+        .must_pass(true)
+        .out_dir("benches")
+        .execute();
+
+    println!("\n=== close_claim_record benchmark complete ===");
+}
