@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeEach } from "vitest";
+import { Keypair } from "@solana/web3.js";
 import { NextRequest } from "next/server";
 import { POST as postPrepare } from "@/app/api/campaigns/prepare/route";
 import { POST as postImport } from "@/app/api/campaigns/import/route";
@@ -44,6 +45,10 @@ const VALID_LINEAR_RECIPIENT = {
   milestoneIdx: 0,
 };
 
+function uniqueBeneficiary(): string {
+  return Keypair.generate().publicKey.toBase58();
+}
+
 function makeBaseBody(overrides: Record<string, unknown> = {}) {
   return {
     recipients: [VALID_RECIPIENT],
@@ -86,7 +91,7 @@ describe("POST /api/campaigns/prepare", () => {
   it("10-recipient prepare: returns tree with 10 leaves and valid root", async () => {
     const recipients = Array.from({ length: 10 }, (_, i) => ({
       ...VALID_RECIPIENT,
-      beneficiary: i === 0 ? BENEFICIARY : SOLANA_BENEFICIARY_2,
+      beneficiary: uniqueBeneficiary(),
       amount: String((i + 1) * 1_000_000),
     }));
 
@@ -105,6 +110,7 @@ describe("POST /api/campaigns/prepare", () => {
   it("100-recipient prepare: all proofs valid against returned root", async () => {
     const recipients = Array.from({ length: 100 }, (_, i) => ({
       ...VALID_RECIPIENT,
+      beneficiary: uniqueBeneficiary(),
       amount: String((i + 1) * 1_000),
     }));
 
