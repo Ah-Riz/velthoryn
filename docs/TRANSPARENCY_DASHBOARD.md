@@ -37,9 +37,12 @@ A secondary `/portfolio` page provides the full per-campaign breakdown.
 
 | File | Purpose | Status |
 |------|---------|--------|
-| `apps/web/src/app/(app)/dashboard/page.tsx` | 481 lines — 6 stat cards, claimable banner, needs attention alerts, vesting progress cards (top 5), recent activity feed, quick actions | **Done** |
-| `apps/web/src/app/(app)/portfolio/page.tsx` | 331 lines — 4 summary stats, per-campaign cards with progress bars, sort (claimable/progress/next unlock) | **Done** |
-| `apps/web/src/components/dashboard/ActivityFeed.tsx` | 122 lines — cross-campaign event feed with 8 event types, Solana explorer links | **Done** |
+| `apps/web/src/app/(app)/dashboard/page.tsx` | 6 stat cards, claimable banner, needs attention alerts, vesting progress cards (top 5), recent activity feed, quick actions | **Done** |
+| `apps/web/src/app/(app)/portfolio/page.tsx` | Summary stats + `CampaignCard` list, sort (claimable/progress/next unlock) | **Done** (refactored — inline card removed) |
+| `apps/web/src/components/campaign/CampaignCard.tsx` | Shared per-campaign card; `toCampaignCardData()` adapter from `VestingProgressCampaign` | **Done** |
+| `apps/web/src/components/ui/StatCard.tsx` | Shared metric card (dashboard, portfolio, campaign detail) | **Done** |
+| `apps/web/src/components/ui/ProgressBar.tsx` | Shared vesting progress bar | **Done** |
+| `apps/web/src/components/dashboard/ActivityFeed.tsx` | Cross-campaign event feed with 8 event types, Solana explorer links | **Done** |
 | `apps/web/src/lib/vesting/timeline-helpers.ts` | 114 lines — shared `EVENT_CONFIG`, `eventDescription`, `formatBlockTime`, `formatAmount` | **Done** (extracted from CampaignTimeline) |
 | `apps/web/src/hooks/useVestingProgress.ts` | `useVestingProgress` + `useVestingProgressSummary` — fetch + aggregate BigInt totals | **Done** |
 | `apps/web/src/hooks/useRecentActivity.ts` | Cross-campaign activity feed hook, fetches from `/api/activity/{address}` | **Done** |

@@ -2,6 +2,19 @@
 
 > Generated from full spec audit across 12 specs in `.claude/specs/`.
 > Purpose: Give Cursor clear, prioritized work items. Separate "already done" from "actually missing".
+> **Last refresh:** 2026-06-10 — items 1–3, 9, 16 marked done in commit `4a3e7a0`.
+
+---
+
+## ✅ RECENTLY COMPLETED (2026-06-10)
+
+| # | Task | Resolution |
+|---|------|------------|
+| 1 | MilestoneReleasePanel cache invalidation | Invalidates `campaign`, `beneficiaryCampaigns`, and `timeline` keys immediately after release |
+| 2 | BigInt serialization helper | `apps/web/src/lib/api/serialize.ts` + `tests/lib/serialize-bigint.test.ts` |
+| 3 | Numbered migrations for event tables | `0002`–`0005` migration files + journal entries |
+| 9 | Trust boundary document | [`docs/API_TRUST_BOUNDARIES.md`](API_TRUST_BOUNDARIES.md) — full route table |
+| 16 | Component extraction | `StatCard`, `ProgressBar`, `CampaignCard`, `SectionHeader`, `FieldRow`, `DetailRow`, `Spinner`, `RecipientListModal` |
 
 ---
 
@@ -9,11 +22,7 @@
 
 ### BE (Backend)
 
-| # | Task | Source | What's needed |
-|---|------|--------|---------------|
-| 1 | MilestoneReleasePanel cache invalidation | Week8 Next | After milestone release, invalidate `["campaign"]` and `["beneficiaryCampaigns"]` query keys (currently only `["timeline"]`). File: `MilestoneReleasePanel.tsx` or its parent hook. |
-| 2 | BigInt serialization helper | P1.7 | Create `lib/api/serialize.ts` centralized helper (currently ad-hoc per-route). Low priority — ad-hoc works, but cleaner if centralized. |
-| 3 | Numbered migrations for event tables | F2.2 | Tables exist via `drizzle-kit push`. Need proper `0004_event_tables.sql` and `0005_timeline_indexes.sql` migration files. Migration numbering currently jumps 0001 → 0006. |
+_No open high-priority BE items from the original audit._
 
 ### SC (Solana Program)
 
@@ -29,9 +38,8 @@
 
 | # | Task | Source | What's needed |
 |---|------|--------|---------------|
-| 9 | Trust boundary document | 00.9 | Define API route trust boundaries for FE team (Geral/Cursor). Which routes are public, which need auth, which are admin-only. |
-| 10 | Update 5 SC documentation files | 00.10 | Update `SECURITY.md`, `PDD_LANA.md`, `TDD_LANA.md`, `AUDIT_REPORT.md`, `MATURITY_REPORT.md` with sc-remediation changes. |
-| 11 | Backup procedure documentation | B4 | Create backup docs: pg_dump, Supabase PITR, restore procedure, weekly check runbook. |
+| 10 | Update 5 SC documentation files | 00.10 | Partially done in week 8 — verify `SECURITY.md`, `PDD_LANA.md`, `TDD_LANA.md`, `AUDIT_REPORT.md`, `MATURITY_REPORT.md` match current SC state. |
+| 11 | Backup procedure documentation | B4 | Partially done — see [`docs/operations/backup-restore.md`](operations/backup-restore.md); verify runbook completeness. |
 
 ### Ops/Infra
 
@@ -55,8 +63,7 @@
 
 | # | Task | Source | What's needed |
 |---|------|--------|---------------|
-| 16 | Component extraction | Week8 Next | Extract from inline: `CampaignCard` (portfolio:72), `ProgressBar` (3 copies), `NeedsAttentionAlert` (dashboard), `MetricCard`/`StatCard` (2 copies), `SectionHeader`, `FieldRow`, `DetailRow`, `RecipientListModal` (campaign detail:2402). |
-| 17 | Clawback E2E Playwright tests | automatic-clawback-ui | 7 deferred E2E tests for banner states, sidebar badge, needs action tab, responsive. |
+| 17 | Clawback E2E Playwright tests | automatic-clawback-ui | 7 deferred E2E tests for banner states, sidebar badge, needs action tab, responsive. `campaign-actions.spec.ts` expanded with mock-send-tx helpers. |
 | 18 | Native SOL TokenPickerModal + E2E | T21, T22 | T19/T20 already done. T21 (TokenPickerModal) may be done — verify. T22 is manual devnet E2E. |
 
 ### SC
@@ -139,13 +146,13 @@ These items are implemented in the codebase but their `tasks.md` checkboxes were
 
 ## Summary
 
-| Category | Actually not done | Already done (spec cleanup) | Blocked/deferred |
-|----------|-------------------|----------------------------|------------------|
-| **SC** | 5 | 12 | 2 |
-| **BE** | 3 | 48 | 1 |
-| **FE** | 3 | 2 | 0 |
-| **Docs** | 3 | 0 | 0 |
-| **Ops** | 2 | 0 | 5 |
-| **Total** | **16** | **62** | **8** |
+| Category | Actually not done | Recently completed | Already done (spec cleanup) | Blocked/deferred |
+|----------|-------------------|--------------------|----------------------------|------------------|
+| **SC** | 5 | 0 | 12 | 2 |
+| **BE** | 0 | 3 | 48 | 1 |
+| **FE** | 2 | 1 | 2 | 0 |
+| **Docs** | 2 | 1 | 0 | 0 |
+| **Ops** | 2 | 0 | 0 | 5 |
+| **Total** | **11** | **5** | **62** | **8** |
 
-**86 total items audited.** 62 just need spec file checkboxes updated. 16 are real work. 8 are externally blocked.
+**86 total items audited.** 5 completed 2026-06-10. 62 need spec file checkboxes only. **11** remain as real work. 8 are externally blocked.

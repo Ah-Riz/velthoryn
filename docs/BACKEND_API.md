@@ -2,7 +2,7 @@
 
 **Status:** Implemented, deployed at [velthoryn.vercel.app](https://velthoryn.vercel.app/)
 **Owner:** Lana
-**Companion docs:** `PRD_LANA.md`, `INTEGRATION.md`, `PROGRAM.md`
+**Companion docs:** `PRD_LANA.md`, `INTEGRATION.md`, `PROGRAM.md`, [`API_TRUST_BOUNDARIES.md`](API_TRUST_BOUNDARIES.md) (auth tier per route)
 
 ---
 
@@ -295,20 +295,28 @@ Routes added by F1 (Bulk Send), F2 (Dashboard Transparency), F3 (Clawback), and 
 
 | Route | Method | Purpose | Auth |
 |-------|--------|---------|------|
-| `/api/campaigns/prepare` | POST | Build Merkle tree server-side (F1); returns `minCliffTime` for `create_campaign` | `x-admin-key` |
+| `/api/campaigns/prepare` | POST | Build Merkle tree server-side (F1); returns `minCliffTime` for `create_campaign` | Public (rate-limited) |
 | `/api/campaigns/[treeAddress]/instant-refund` | POST | Instant refund tx for unstarted multi-leaf campaigns | Wallet auth |
-| `/api/campaigns/import` | POST | CSV import of beneficiaries (F1) | `x-admin-key` |
+| `/api/campaigns/import` | POST | CSV import of beneficiaries (F1) | Wallet auth |
 | `/api/campaigns/[treeAddress]/timeline` | GET | Event timeline — cancel, pause, withdraw, milestone, root-update, stream-cancel (F2) | Public |
 | `/api/beneficiary/[address]/vesting-progress` | GET | Vesting progress for beneficiary across campaigns (F2) | Public |
-| `/api/cron/sync` | GET | Auto-sync cron — indexer event processing (F2, daily midnight UTC on Vercel Hobby) | `x-api-key` |
-| `/api/campaigns/[treeAddress]/cancel` | POST | Cancel campaign — freezes curve, starts 7-day grace (F3) | `x-admin-key` |
-| `/api/campaigns/[treeAddress]/withdraw-unvested` | POST | Withdraw unvested tokens after grace period (F3) | `x-admin-key` |
-| `/api/campaigns/[treeAddress]/cancel-stream` | POST | Cancel single stream — vested to beneficiary, rest to creator (F3) | `x-admin-key` |
-| `/api/campaigns/[treeAddress]/milestones/[idx]` | POST | Release milestone flag for indexed milestone (F3) | `x-admin-key` |
+| `/api/activity/[address]` | GET | Cross-campaign activity feed (F2) | Public |
+| `/api/cron/sync` | GET | Auto-sync cron — indexer event processing (F2, daily midnight UTC on Vercel Hobby) | `Authorization: Bearer <CRON_SECRET>` |
+| `/api/events/sync` | POST | Index on-chain events from tx signatures (browser post-tx) | Public (20/min) |
+| `/api/claims/sync` | POST | Operator claim-event backfill | `x-admin-key` |
+| `/api/admin/sync` | POST | Full indexer run | `x-admin-key` |
+| `/api/campaigns/[treeAddress]/cancel` | POST | Cancel campaign — freezes curve, starts 7-day grace (F3) | Wallet auth |
+| `/api/campaigns/[treeAddress]/withdraw-unvested` | POST | Withdraw unvested tokens after grace period (F3) | Wallet auth |
+| `/api/campaigns/[treeAddress]/cancel-stream` | POST | Cancel single stream — vested to beneficiary, rest to creator (F3) | Wallet auth |
+| `/api/campaigns/[treeAddress]/milestones/[idx]` | POST | Release milestone flag for indexed milestone (F3) | Wallet auth |
 | `/api/simulate-vesting` | POST | Vesting simulation — linear/cliff/milestone with custom params (F4) | Public |
 | `/api/schedule-templates` | GET | Schedule presets — common vesting templates (F4) | Public |
 
-All routes return `X-API-Version: 1` header. Protected routes require `x-admin-key` or `x-api-key` header matching server-side secrets.
+All routes return `X-API-Version: 1` header. Wallet-auth routes require `Authorization` with ed25519 signature over a nonce-backed message. Admin routes use `x-admin-key` or cron bearer secret — see [`API_TRUST_BOUNDARIES.md`](API_TRUST_BOUNDARIES.md).
+
+### BigInt serialization
+
+API responses use `serializeBigInt()` from `apps/web/src/lib/api/serialize.ts` so `JSON.stringify` never throws on `bigint` fields. All u64/i64 values arrive as decimal strings in JSON.
 
 ---
 
