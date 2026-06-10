@@ -5,6 +5,7 @@ import { useQuery } from "@tanstack/react-query";
 
 export interface VestingProgressCampaign {
   treeAddress: string;
+  mint: string;
   metadata: { name?: string; description?: string; logoUri?: string } | null;
   leaf: {
     amount: string;

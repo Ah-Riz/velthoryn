@@ -10,9 +10,12 @@ import {
 import { StatusBadge } from "@/components/campaign/list/StatusBadge";
 import {
   formatCountdown,
+  formatTokenAmount,
   getVestingTypeBadgeColor,
   getVestingTypeLabel,
+  mixedMintAggregateSub,
 } from "@/lib/vesting/display";
+import { useMintDecimals } from "@/hooks/useMintDecimals";
 import { truncateAddress } from "@/lib/vesting/timeline-helpers";
 import type { StreamStatus } from "@/lib/vesting/list";
 
@@ -42,14 +45,6 @@ function StatCard({
   );
 }
 
-function formatRawAmount(raw: bigint): string {
-  const n = Number(raw);
-  if (n >= 1_000_000_000) return `${(n / 1_000_000_000).toFixed(2)}B`;
-  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(2)}M`;
-  if (n >= 1_000) return `${(n / 1_000).toFixed(1)}K`;
-  return raw.toString();
-}
-
 function getCampaignStatus(campaign: VestingProgressCampaign): StreamStatus {
   const claimable = BigInt(campaign.progress.claimable);
   const entitled = BigInt(campaign.progress.totalEntitled);
@@ -77,9 +72,11 @@ function formatNextUnlock(
 function CampaignCard({
   campaign,
   nowTs,
+  fmtAmount,
 }: {
   campaign: VestingProgressCampaign;
   nowTs: bigint;
+  fmtAmount: (raw: bigint, campaign: VestingProgressCampaign) => string;
 }) {
   const name =
     campaign.metadata?.name ??
@@ -127,17 +124,17 @@ function CampaignCard({
 
       <div className="mt-4 grid gap-2 text-[12px] sm:grid-cols-2">
         <div className="text-[#8b92a5]">
-          Entitled: <span className="text-white">{formatRawAmount(BigInt(campaign.progress.totalEntitled))}</span>
+          Entitled: <span className="text-white">{fmtAmount(BigInt(campaign.progress.totalEntitled), campaign)}</span>
         </div>
         <div className="text-[#8b92a5]">
-          Vested: <span className="text-white">{formatRawAmount(BigInt(campaign.progress.vestedSoFar))}</span>
+          Vested: <span className="text-white">{fmtAmount(BigInt(campaign.progress.vestedSoFar), campaign)}</span>
         </div>
         <div className="text-[#8b92a5]">
-          Claimed: <span className="text-white">{formatRawAmount(BigInt(campaign.progress.claimedSoFar))}</span>
+          Claimed: <span className="text-white">{fmtAmount(BigInt(campaign.progress.claimedSoFar), campaign)}</span>
         </div>
         <div className="text-[#8b92a5]">
           Claimable: <span className={claimable > 0n ? "text-emerald-400" : "text-white"}>
-            {formatRawAmount(claimable)}
+            {fmtAmount(claimable, campaign)}
           </span>
         </div>
       </div>
@@ -174,6 +171,19 @@ export default function PortfolioPage() {
   const address = publicKey?.toBase58();
   const { summary, isLoading, campaigns } = useVestingProgressSummary(address);
   const [sortKey, setSortKey] = useState<SortKey>("claimable");
+
+  const mintAddresses = useMemo(
+    () => [...new Set(campaigns.map((c) => c.mint).filter(Boolean))],
+    [campaigns],
+  );
+  const { decimalsMap } = useMintDecimals(mintAddresses);
+
+  const singleMint = mintAddresses.length === 1 ? mintAddresses[0] : null;
+  const aggregateDecimals = singleMint ? (decimalsMap.get(singleMint) ?? null) : null;
+
+  function fmtAmount(raw: bigint, campaign: VestingProgressCampaign): string {
+    return formatTokenAmount(raw, decimalsMap.get(campaign.mint) ?? null);
+  }
 
   const nowTs = BigInt(Math.floor(Date.now() / 1000));
 
@@ -243,23 +253,26 @@ export default function PortfolioPage() {
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
             <StatCard
               label="Total Entitled"
-              value={isLoading ? "..." : formatRawAmount(summary?.totalEntitled ?? 0n)}
-              sub={summary ? `across ${summary.campaignCount} campaigns` : undefined}
+              value={isLoading ? "..." : formatTokenAmount(summary?.totalEntitled ?? 0n, aggregateDecimals)}
+              sub={mixedMintAggregateSub(
+                mintAddresses.length,
+                summary ? `across ${summary.campaignCount} campaigns` : undefined,
+              )}
             />
             <StatCard
               label="Total Vested"
-              value={isLoading ? "..." : formatRawAmount(summary?.totalVested ?? 0n)}
-              sub={isLoading ? undefined : `${vestedPercent}%`}
+              value={isLoading ? "..." : formatTokenAmount(summary?.totalVested ?? 0n, aggregateDecimals)}
+              sub={isLoading ? undefined : mixedMintAggregateSub(mintAddresses.length, `${vestedPercent}%`)}
             />
             <StatCard
               label="Total Claimed"
-              value={isLoading ? "..." : formatRawAmount(summary?.totalClaimed ?? 0n)}
-              sub={isLoading ? undefined : `${claimedPercent}%`}
+              value={isLoading ? "..." : formatTokenAmount(summary?.totalClaimed ?? 0n, aggregateDecimals)}
+              sub={isLoading ? undefined : mixedMintAggregateSub(mintAddresses.length, `${claimedPercent}%`)}
             />
             <StatCard
               label="Claimable Now"
-              value={isLoading ? "..." : formatRawAmount(summary?.totalClaimable ?? 0n)}
-              sub={isLoading ? undefined : `${claimablePercent}%`}
+              value={isLoading ? "..." : formatTokenAmount(summary?.totalClaimable ?? 0n, aggregateDecimals)}
+              sub={isLoading ? undefined : mixedMintAggregateSub(mintAddresses.length, `${claimablePercent}%`)}
               accent
             />
           </div>
@@ -304,6 +317,7 @@ export default function PortfolioPage() {
                     key={`${campaign.treeAddress}-${campaign.leaf.leafIndex}`}
                     campaign={campaign}
                     nowTs={nowTs}
+                    fmtAmount={fmtAmount}
                   />
                 ))}
               </div>

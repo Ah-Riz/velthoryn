@@ -3,8 +3,10 @@ import {
   getVestingTypeLabel,
   getVestingTypeBadgeColor,
   formatCountdown,
+  formatTokenAmount,
   getWithdrawDisabledReason,
   GRACE_PERIOD_SECS,
+  mixedMintAggregateSub,
 } from "@/lib/vesting/display";
 
 describe("getVestingTypeLabel", () => {
@@ -185,5 +187,41 @@ describe("getWithdrawDisabledReason", () => {
 describe("GRACE_PERIOD_SECS", () => {
   it("equals 7 days in seconds", () => {
     expect(GRACE_PERIOD_SECS).toBe(604800n);
+  });
+});
+
+describe("formatTokenAmount", () => {
+  it("formats 9-decimal amounts correctly", () => {
+    expect(formatTokenAmount(500_000_000n, 9)).toBe("0.5");
+  });
+
+  it("returns raw string when decimals are null or undefined", () => {
+    expect(formatTokenAmount(12345n, null)).toBe("12345");
+    expect(formatTokenAmount(12345n, undefined)).toBe("12345");
+  });
+
+  it("locale-formats zero-decimal amounts", () => {
+    expect(formatTokenAmount(1000n, 0)).toBe((1000).toLocaleString());
+  });
+
+  it("trims trailing fractional zeros", () => {
+    expect(formatTokenAmount(1_500_000_000n, 9)).toBe("1.5");
+    expect(formatTokenAmount(1_000_000_000n, 9)).toBe("1");
+  });
+
+  it("shows up to four fractional digits", () => {
+    expect(formatTokenAmount(1_234_567n, 6)).toBe("1.2345");
+  });
+});
+
+describe("mixedMintAggregateSub", () => {
+  it("returns base sub when only one mint", () => {
+    expect(mixedMintAggregateSub(1, "Locked value")).toBe("Locked value");
+    expect(mixedMintAggregateSub(0, "across 2 campaigns")).toBe("across 2 campaigns");
+  });
+
+  it("appends raw-units note for multiple mints", () => {
+    expect(mixedMintAggregateSub(3)).toBe("raw units across 3 tokens");
+    expect(mixedMintAggregateSub(2, "50.0%")).toBe("50.0% · raw units across 2 tokens");
   });
 });

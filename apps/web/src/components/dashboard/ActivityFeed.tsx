@@ -8,6 +8,7 @@ import {
   formatBlockTime,
   truncateSig,
 } from "@/lib/vesting/timeline-helpers";
+import { explorerTxUrl } from "@/lib/sol/cluster";
 
 function ActivityFeedRow({
   event,
@@ -23,7 +24,7 @@ function ActivityFeedRow({
   };
 
   const campaignLabel = event.campaignName ?? `${event.treeAddress.slice(0, 4)}...${event.treeAddress.slice(-4)}`;
-  const explorerUrl = `https://explorer.solana.com/tx/${event.signature}?cluster=devnet`;
+  const explorerUrl = explorerTxUrl(event.signature);
 
   return (
     <div className="flex items-start gap-3 py-3">

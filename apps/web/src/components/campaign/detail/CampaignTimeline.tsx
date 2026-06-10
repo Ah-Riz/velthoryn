@@ -7,6 +7,7 @@ import {
   formatBlockTime,
   truncateSig,
 } from "@/lib/vesting/timeline-helpers";
+import { explorerTxUrl } from "@/lib/sol/cluster";
 
 function TimelineItem({ event, mintDecimals }: { event: TimelineEvent; mintDecimals: number | null }) {
   const config = EVENT_CONFIG[event.type] ?? {
@@ -15,7 +16,7 @@ function TimelineItem({ event, mintDecimals }: { event: TimelineEvent; mintDecim
     label: event.type,
   };
 
-  const explorerUrl = `https://explorer.solana.com/tx/${event.signature}?cluster=devnet`;
+  const explorerUrl = explorerTxUrl(event.signature);
 
   return (
     <div className="flex items-start gap-3 py-2.5">
