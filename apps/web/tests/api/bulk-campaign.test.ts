@@ -172,10 +172,26 @@ describe("POST /api/campaigns/prepare", () => {
     expect(json.error).toBe("Validation failed");
   });
 
-  it("duplicate beneficiary: allowed as separate leaves", async () => {
+  it("returns 400 for duplicate cliff leaves for same beneficiary (Known Issue #29)", async () => {
     const recipients = [
       { ...VALID_RECIPIENT, amount: "1000000" },
-      { ...VALID_RECIPIENT, amount: "2000000" }, // same beneficiary, different amount
+      { ...VALID_RECIPIENT, amount: "2000000" },
+    ];
+
+    const req = await makeAuthenticatedPostRequest("/api/campaigns/prepare", makeBaseBody({ recipients }));
+    const res = await postPrepare(req);
+    const json = await res.json();
+
+    expect(res.status).toBe(400);
+    expect(json.error).toMatch(/Known Issue #29/);
+    expect(json.error).toContain(BENEFICIARY);
+    expect(json.error).toMatch(/indices \[0, 1\]/);
+  });
+
+  it("allows cliff + milestone for same beneficiary", async () => {
+    const recipients = [
+      { ...VALID_RECIPIENT, releaseType: 0 as const },
+      { ...VALID_RECIPIENT, releaseType: 2 as const, milestoneIdx: 1 },
     ];
 
     const req = await makeAuthenticatedPostRequest("/api/campaigns/prepare", makeBaseBody({ recipients }));
@@ -184,8 +200,6 @@ describe("POST /api/campaigns/prepare", () => {
 
     expect(res.status).toBe(200);
     expect(json.leafCount).toBe(2);
-    expect(json.leaves[0].beneficiary).toBe(BENEFICIARY);
-    expect(json.leaves[1].beneficiary).toBe(BENEFICIARY);
   });
 
   it("returns 400 for zero amount", async () => {

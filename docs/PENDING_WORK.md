@@ -2,7 +2,7 @@
 
 > Generated from full spec audit across 12 specs in `.claude/specs/`.
 > Purpose: Give Cursor clear, prioritized work items. Separate "already done" from "actually missing".
-> **Last refresh:** 2026-06-10 — items 1–3, 9, 16 marked done in commit `4a3e7a0`.
+> **Last refresh:** 2026-06-10 — verification sweep: items 4–7, 13 verified (SC tests + CI migrate); summary count 11 → 6.
 
 ---
 
@@ -15,6 +15,11 @@
 | 3 | Numbered migrations for event tables | `0002`–`0005` migration files + journal entries |
 | 9 | Trust boundary document | [`docs/API_TRUST_BOUNDARIES.md`](API_TRUST_BOUNDARIES.md) — full route table |
 | 16 | Component extraction | `StatCard`, `ProgressBar`, `CampaignCard`, `SectionHeader`, `FieldRow`, `DetailRow`, `Spinner`, `RecipientListModal` |
+| 4 | Token-2022 mint guard verified | T71 in `vesting.supplementary.spec.ts` — `UnsupportedMint` rejected (62 passing) |
+| 5 | Clock pause→cancel→claim test verified | `vesting.clock.spec.ts` — `clock: pause→cancel→claim with precise vesting math` (14 passing) |
+| 6 | EXPLOIT 12 label verified | `security.spec.ts` — `EXPLOIT 12: pause then cancel then claim during grace succeeds` (11 passing) |
+| 7 | Out-of-order milestone E2E verified | `vesting.supplementary.spec.ts` — `out-of-order milestone claim: 0 → 2 → 1 succeeds` |
+| 13 | CI migration strategy verified | `.github/workflows/lint.yml` + `web-ci.yml` use `pnpm db:migrate`; `BACKEND_API.md` updated |
 
 ---
 
@@ -28,11 +33,7 @@ _No open high-priority BE items from the original audit._
 
 | # | Task | Source | What's needed |
 |---|------|--------|---------------|
-| 4 | Verify Token-2022 mint guard | B6 | `UnsupportedMint` error exists in `errors.rs`, but verify `mint.owner == token_program.key()` constraint exists in `create_campaign.rs` and `create_stream.rs`. Grep came back empty — may use different mechanism or incomplete. |
-| 5 | Clock-based pause→cancel→claim test | 00.5 | Precise timestamp vesting math test in `vesting.clock.spec.ts`. Concept test exists in supplementary but dedicated clock test not confirmed. |
-| 6 | EXPLOIT 12 label in security test | 00.6 | Test concept exists in `security.spec.ts` ("pause -> cancel must not lock beneficiaries") but explicit "EXPLOIT 12" tag missing. |
-| 7 | Out-of-order milestone E2E test | Week8 Next | ts-mocha test: create 3-milestone campaign, claim 0→2→1, verify all succeed. |
-| 8 | Known issue #29 — cumulative claimed_amount undercount | Week8 Known Issues | Multi-leaf non-milestone leaves undercount via cumulative `claimed_amount`. Needs per-leaf tracking — **breaking on-chain change**. |
+| 8 | Known issue #29 — cumulative claimed_amount undercount | Week8 Known Issues | Multi-leaf non-milestone leaves undercount via cumulative `claimed_amount`. Needs per-leaf tracking — **breaking on-chain change**. BE validation added in T4 (prepare route). |
 
 ### Docs
 
@@ -46,7 +47,6 @@ _No open high-priority BE items from the original audit._
 | # | Task | Source | What's needed |
 |---|------|--------|---------------|
 | 12 | Sentry DSN in Vercel production | B1 | Scaffolding done (`sentry.client.config.ts`, `sentry.server.config.ts`). Just needs `NEXT_PUBLIC_SENTRY_DSN` env var set in Vercel dashboard. |
-| 13 | CI migration strategy | B3 | Switch CI from `drizzle-kit push` to `drizzle-kit migrate`. `db:migrate` script exists, migrations directory has 0000-0008 files. |
 
 ---
 
@@ -148,11 +148,11 @@ These items are implemented in the codebase but their `tasks.md` checkboxes were
 
 | Category | Actually not done | Recently completed | Already done (spec cleanup) | Blocked/deferred |
 |----------|-------------------|--------------------|----------------------------|------------------|
-| **SC** | 5 | 0 | 12 | 2 |
+| **SC** | 1 | 4 | 12 | 2 |
 | **BE** | 0 | 3 | 48 | 1 |
 | **FE** | 2 | 1 | 2 | 0 |
 | **Docs** | 2 | 1 | 0 | 0 |
-| **Ops** | 2 | 0 | 0 | 5 |
-| **Total** | **11** | **5** | **62** | **8** |
+| **Ops** | 1 | 1 | 0 | 5 |
+| **Total** | **6** | **10** | **62** | **8** |
 
-**86 total items audited.** 5 completed 2026-06-10. 62 need spec file checkboxes only. **11** remain as real work. 8 are externally blocked.
+**86 total items audited.** 10 completed 2026-06-10 (incl. verification sweep items 4–7, 13). 62 need spec file checkboxes only. **6** remain as real work. 8 are externally blocked.
