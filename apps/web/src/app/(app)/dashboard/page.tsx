@@ -12,9 +12,12 @@ import { GracePeriodCountdown } from "@/components/campaign/detail/GracePeriodCo
 import { getRecipientStreamStatus, getSenderStreamStatus } from "@/lib/vesting/list";
 import {
   formatCountdown,
+  formatTokenAmount,
   getGracePeriodState,
   getVestingTypeLabel,
+  mixedMintAggregateSub,
 } from "@/lib/vesting/display";
+import { useMintDecimals } from "@/hooks/useMintDecimals";
 import { truncateAddress } from "@/lib/vesting/timeline-helpers";
 
 function StatCard({
@@ -64,14 +67,6 @@ function ActionCard({
   );
 }
 
-function formatRawAmount(raw: bigint): string {
-  const n = Number(raw);
-  if (n >= 1_000_000_000) return `${(n / 1_000_000_000).toFixed(2)}B`;
-  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(2)}M`;
-  if (n >= 1_000) return `${(n / 1_000).toFixed(1)}K`;
-  return raw.toString();
-}
-
 export default function DashboardPage() {
   const { publicKey } = useWallet();
   const walletAddress = publicKey?.toBase58();
@@ -82,9 +77,15 @@ export default function DashboardPage() {
   const { summary: vestingSummary, isLoading: vestingLoading, campaigns: vestingCampaigns } =
     useVestingProgressSummary(walletAddress);
 
+  const vestingMintAddresses = useMemo(
+    () => [...new Set(vestingCampaigns.map((c) => c.mint).filter(Boolean))],
+    [vestingCampaigns],
+  );
+
   const senderCampaigns = useMemo(() => {
     const dbCampaigns = ((senderQuery.data?.campaigns ?? []) as Array<{
       treeAddress: string;
+      mint: string;
       paused: boolean;
       cancelledAt: number | null;
       totalSupply: number | string;
@@ -98,6 +99,29 @@ export default function DashboardPage() {
       : [];
     return [...dbCampaigns, ...localOnly];
   }, [senderQuery.data?.campaigns, senderQuery.error, localCampaigns.senderCampaigns, walletAddress]);
+
+  const senderMintAddresses = useMemo(
+    () => [...new Set(senderCampaigns.map((c) => c.mint).filter(Boolean))],
+    [senderCampaigns],
+  );
+
+  const allMintAddresses = useMemo(
+    () => [...new Set([...vestingMintAddresses, ...senderMintAddresses])],
+    [vestingMintAddresses, senderMintAddresses],
+  );
+  const { decimalsMap } = useMintDecimals(allMintAddresses);
+
+  const vestingSingleMint = vestingMintAddresses.length === 1 ? vestingMintAddresses[0] : null;
+  const vestingAggregateDecimals = vestingSingleMint
+    ? (decimalsMap.get(vestingSingleMint) ?? null)
+    : null;
+
+  const tvlSingleMint = senderMintAddresses.length === 1 ? senderMintAddresses[0] : null;
+  const tvlAggregateDecimals = tvlSingleMint ? (decimalsMap.get(tvlSingleMint) ?? null) : null;
+
+  function fmtAmount(raw: bigint, campaign: (typeof vestingCampaigns)[number]): string {
+    return formatTokenAmount(raw, decimalsMap.get(campaign.mint) ?? null);
+  }
 
   const recipientCampaigns = useMemo(() => {
     const dbCampaigns = (recipientQuery.data?.campaigns ?? []) as Array<{
@@ -257,7 +281,7 @@ export default function DashboardPage() {
                   {claimableStreams} stream{claimableStreams > 1 ? "s" : ""} ready to claim!
                 </p>
                 <p className="text-[12px] text-[#8b92a5]">
-                  {formatRawAmount(claimableAmount)} tokens available for withdrawal. Click to view.
+                  {formatTokenAmount(claimableAmount, vestingAggregateDecimals)} tokens available for withdrawal. Click to view.
                 </p>
               </div>
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="text-[#8b92a5]">
@@ -328,15 +352,20 @@ export default function DashboardPage() {
             <StatCard label="Active" value={isLoading ? "..." : String(counts.active)} sub="Currently vesting" accent />
             <StatCard
               label="TVL"
-              value={isLoading ? "..." : formatRawAmount(counts.tvl)}
-              sub="Locked value"
+              value={isLoading ? "..." : formatTokenAmount(counts.tvl, tvlAggregateDecimals)}
+              sub={mixedMintAggregateSub(senderMintAddresses.length, "Locked value")}
             />
             <StatCard label="As Sender" value={isLoading ? "..." : String(counts.sender)} sub="Streams you created" />
             <StatCard label="As Recipient" value={isLoading ? "..." : String(counts.recipient)} sub="Streams you receive" />
             <StatCard
               label="Claimable Now"
-              value={vestingLoading ? "..." : formatRawAmount(claimableAmount)}
-              sub={claimableStreams > 0 ? `${claimableStreams} stream${claimableStreams > 1 ? "s" : ""} ready` : "Ready to withdraw"}
+              value={vestingLoading ? "..." : formatTokenAmount(claimableAmount, vestingAggregateDecimals)}
+              sub={mixedMintAggregateSub(
+                vestingMintAddresses.length,
+                claimableStreams > 0
+                  ? `${claimableStreams} stream${claimableStreams > 1 ? "s" : ""} ready`
+                  : "Ready to withdraw",
+              )}
               accent
             />
           </div>
@@ -399,7 +428,7 @@ export default function DashboardPage() {
                           />
                         </div>
                         <div className="mt-2 text-[11px] text-[#555d73]">
-                          {formatRawAmount(vestedSoFar)} / {formatRawAmount(totalEntitled)} vested
+                          {fmtAmount(vestedSoFar, campaign)} / {fmtAmount(totalEntitled, campaign)} vested
                           {" · "}Next: {nextUnlockLabel}
                         </div>
                       </div>

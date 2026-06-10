@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 import { useNeedsActionCount } from "@/hooks/useNeedsActionCount";
+import { clusterLabel, clusterNetworkLabel } from "@/lib/sol/cluster";
 
 const NAV_ITEMS = [
   {
@@ -68,7 +69,7 @@ function SidebarContent({ onNavClick }: { onNavClick?: () => void }) {
         <img src="/brand/velthoryn-logo-sm.svg" alt="Velthoryn" className="h-8 w-8" />
         <span className="text-[15px] font-semibold tracking-tight text-white">Velthoryn</span>
         <span className="ml-auto rounded-full bg-emerald-500/15 px-2 py-0.5 text-[10px] font-medium text-emerald-400">
-          devnet
+          {clusterLabel().toLowerCase()}
         </span>
       </div>
 
@@ -107,7 +108,7 @@ function SidebarContent({ onNavClick }: { onNavClick?: () => void }) {
 
       <div className="border-t border-white/[0.06] px-4 py-4">
         <div className="rounded-lg bg-white/[0.03] px-3 py-2.5 text-[11px] text-[#555d73]">
-          Solana Devnet
+          {clusterNetworkLabel()}
           <span className="ml-1.5 inline-block h-1.5 w-1.5 rounded-full bg-emerald-400" />
         </div>
       </div>

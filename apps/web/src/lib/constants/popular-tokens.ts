@@ -2,6 +2,7 @@ import {
   NATIVE_SOL_MINT_ADDRESS,
   WRAPPED_SOL_MINT_ADDRESS,
 } from "@/lib/sol/auto-wrap";
+import { CLUSTER } from "@/lib/sol/cluster";
 
 export type PopularToken = {
   mint: string;
@@ -71,10 +72,4 @@ const DEVNET_TOKENS: PopularToken[] = [
   },
 ];
 
-const isDevnet =
-  typeof window !== "undefined"
-    ? window.location.hostname.includes("localhost") ||
-      (process.env.NEXT_PUBLIC_RPC_ENDPOINT ?? "").includes("devnet")
-    : (process.env.NEXT_PUBLIC_RPC_ENDPOINT ?? "").includes("devnet");
-
-export const POPULAR_TOKENS: PopularToken[] = isDevnet ? DEVNET_TOKENS : MAINNET_TOKENS;
+export const POPULAR_TOKENS: PopularToken[] = CLUSTER === "devnet" ? DEVNET_TOKENS : MAINNET_TOKENS;

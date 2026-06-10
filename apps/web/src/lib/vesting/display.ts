@@ -12,6 +12,27 @@ const TYPE_BADGE_COLORS: Record<number, string> = {
   2: "bg-blue-500/20 text-blue-400 border-blue-500/40",
 };
 
+/**
+ * Format a raw on-chain amount using token decimals.
+ * Example: formatTokenAmount(500_000_000n, 9) → "0.5"
+ */
+export function formatTokenAmount(raw: bigint, decimals: number | null | undefined): string {
+  if (decimals === null || decimals === undefined) return raw.toString();
+  if (decimals === 0) return raw.toLocaleString();
+  const divisor = 10n ** BigInt(decimals);
+  const whole = raw / divisor;
+  const frac = raw % divisor;
+  const fracStr = frac.toString().padStart(decimals, "0").slice(0, 4).replace(/0+$/, "");
+  return fracStr ? `${whole.toLocaleString()}.${fracStr}` : whole.toLocaleString();
+}
+
+/** Sub-label for aggregate stats when totals span multiple token mints. */
+export function mixedMintAggregateSub(mintCount: number, baseSub?: string): string | undefined {
+  if (mintCount <= 1) return baseSub;
+  const note = `raw units across ${mintCount} tokens`;
+  return baseSub ? `${baseSub} · ${note}` : note;
+}
+
 export function getVestingTypeLabel(releaseType: number): string {
   return TYPE_LABELS[releaseType] ?? "Unknown";
 }
