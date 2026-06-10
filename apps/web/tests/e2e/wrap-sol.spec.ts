@@ -165,8 +165,7 @@ test.describe("WrapSolModal — Max button", () => {
     await enableE2eWallet(page);
     await openWrapModal(page);
 
-    // Scope to WrapSolModal container (z-[60]) to avoid matching the form's Max button underneath
-    const wrapModal = page.locator('div[class*="z-[60]"]');
+    const wrapModal = page.getByRole("dialog");
     await expect(wrapModal.getByRole("button", { name: /max/i })).toBeVisible();
     expect(pageErrors).toEqual([]);
   });
@@ -178,8 +177,7 @@ test.describe("WrapSolModal — close button", () => {
     await enableE2eWallet(page);
     await openWrapModal(page);
 
-    // The close button is an SVG button in the modal header
-    await page.locator("[class*='z-\\[60\\]'] button").first().click();
+    await page.getByRole("button", { name: /^close$/i }).click();
     await expect(page.getByRole("heading", { name: /wrap sol/i })).not.toBeVisible({ timeout: 5_000 });
     expect(pageErrors).toEqual([]);
   });
