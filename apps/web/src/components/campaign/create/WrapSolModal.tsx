@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef } from "react";
 import { useWrapSol } from "@/hooks/useWrapSol";
+import { solscanTokenUrl } from "@/lib/sol/cluster";
 
 type Props = {
   isOpen: boolean;
@@ -74,7 +75,7 @@ export function WrapSolModal({ isOpen, onClose, onSuccess }: Props) {
         {/* Description */}
         <p className="mt-3 text-[13px] leading-5 text-[#6b7280]">
           SOL is automatically wrapped when creating a stream. Use this tool if you want to manually manage your{" "}
-          <a href="https://solscan.io/token/So11111111111111111111111111111111111111112?cluster=devnet" target="_blank" rel="noopener noreferrer" className="text-[#f97316] underline">wSOL</a>{" "}
+          <a href={solscanTokenUrl("So11111111111111111111111111111111111111112")} target="_blank" rel="noopener noreferrer" className="text-[#f97316] underline">wSOL</a>{" "}
           balance.
         </p>
 

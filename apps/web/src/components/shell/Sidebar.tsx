@@ -3,6 +3,8 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
+import { useNeedsActionCount } from "@/hooks/useNeedsActionCount";
+import { clusterLabel, clusterNetworkLabel } from "@/lib/sol/cluster";
 
 const NAV_ITEMS = [
   {
@@ -14,6 +16,16 @@ const NAV_ITEMS = [
         <rect x="14" y="3" width="7" height="7" rx="1" />
         <rect x="3" y="14" width="7" height="7" rx="1" />
         <rect x="14" y="14" width="7" height="7" rx="1" />
+      </svg>
+    ),
+  },
+  {
+    href: "/portfolio",
+    label: "Portfolio",
+    icon: (
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <rect x="2" y="7" width="20" height="14" rx="2" ry="2" />
+        <path d="M16 7V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v2" />
       </svg>
     ),
   },
@@ -45,6 +57,7 @@ const NAV_ITEMS = [
 function SidebarContent({ onNavClick }: { onNavClick?: () => void }) {
   const pathname = usePathname();
   const [mounted, setMounted] = useState(false);
+  const { count: needsActionCount, isLoading: needsActionLoading } = useNeedsActionCount();
 
   useEffect(() => {
     setMounted(true);
@@ -56,7 +69,7 @@ function SidebarContent({ onNavClick }: { onNavClick?: () => void }) {
         <img src="/brand/velthoryn-logo-sm.svg" alt="Velthoryn" className="h-8 w-8" />
         <span className="text-[15px] font-semibold tracking-tight text-white">Velthoryn</span>
         <span className="ml-auto rounded-full bg-emerald-500/15 px-2 py-0.5 text-[10px] font-medium text-emerald-400">
-          devnet
+          {clusterLabel().toLowerCase()}
         </span>
       </div>
 
@@ -83,6 +96,9 @@ function SidebarContent({ onNavClick }: { onNavClick?: () => void }) {
                     {item.icon}
                   </span>
                   {item.label}
+                  {item.href === "/campaigns" && needsActionCount > 0 && !needsActionLoading && (
+                    <span className="ml-auto h-2 w-2 rounded-full bg-amber-400" />
+                  )}
                 </Link>
               </li>
             );
@@ -92,7 +108,7 @@ function SidebarContent({ onNavClick }: { onNavClick?: () => void }) {
 
       <div className="border-t border-white/[0.06] px-4 py-4">
         <div className="rounded-lg bg-white/[0.03] px-3 py-2.5 text-[11px] text-[#555d73]">
-          Solana Devnet
+          {clusterNetworkLabel()}
           <span className="ml-1.5 inline-block h-1.5 w-1.5 rounded-full bg-emerald-400" />
         </div>
       </div>

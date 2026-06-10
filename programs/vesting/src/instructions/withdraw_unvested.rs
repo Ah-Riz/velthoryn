@@ -99,7 +99,7 @@ pub fn handler(ctx: Context<WithdrawUnvested>) -> Result<()> {
         require!(amount > 0, VestingError::NothingToClaim);
 
         let tree_key = ctx.accounts.vesting_tree.key();
-        let bump = ctx.bumps.vault_authority.expect("bump must exist when vault_authority is Some");
+        let bump = ctx.bumps.vault_authority.ok_or(VestingError::WrongVault)?;
         let signer_seeds: &[&[&[u8]]] = &[&[
             b"vault_authority",
             tree_key.as_ref(),

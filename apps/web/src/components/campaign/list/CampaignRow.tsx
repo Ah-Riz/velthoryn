@@ -1,5 +1,6 @@
 "use client";
 
+import type { ReactNode } from "react";
 import Link from "next/link";
 import type { StreamStatus } from "@/lib/vesting/list";
 import { RoleBadge } from "./RoleBadge";
@@ -22,6 +23,7 @@ type Props = {
   nextLabel: string;
   nextValue: string;
   createdAtLabel: string;
+  actionNote?: ReactNode;
 };
 
 export function CampaignRow({
@@ -41,6 +43,7 @@ export function CampaignRow({
   nextLabel,
   nextValue,
   createdAtLabel,
+  actionNote,
 }: Props) {
   const hasClaimable = claimableDisplay !== null && claimableDisplay !== undefined;
   const hasSecondaryAmount =
@@ -71,6 +74,7 @@ export function CampaignRow({
           <div>
             <p className="text-[16px] font-semibold text-white">{title}</p>
             <p className="mt-1 font-mono text-[12px] text-[#8b92a5]">{treeAddress}</p>
+            {actionNote ? <div className="mt-2">{actionNote}</div> : null}
           </div>
 
           <div className={`grid gap-x-6 gap-y-4 border-t border-white/[0.06] pt-4 sm:grid-cols-2 ${columnClass}`}>

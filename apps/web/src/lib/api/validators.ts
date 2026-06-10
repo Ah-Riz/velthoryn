@@ -26,7 +26,7 @@ export const leafSchema = z.object({
   startTime: numericString,
   cliffTime: numericString,
   endTime: numericString,
-  milestoneIdx: z.number().int().min(0).default(0),
+  milestoneIdx: z.number().int().min(0).max(255).default(0),
   proof: z
     .array(z.array(z.number().int().min(0).max(255)).length(32))
     .max(32),
@@ -48,9 +48,9 @@ export const campaignMetadataSchema = z.object({
 // ---------------------------------------------------------------------------
 
 export const createCampaignRequestSchema = z.object({
-  treeAddress: z.string().min(1),
-  creator: z.string().min(1),
-  mint: z.string().min(1),
+  treeAddress: base58String,
+  creator: base58String,
+  mint: base58String,
   campaignId: z.number().int().min(0),
   merkleRoot: z
     .string()
@@ -78,6 +78,7 @@ export const createRootVersionRequestSchema = z.object({
     .length(64)
     .regex(/^[0-9a-fA-F]{64}$/, "merkleRoot must be a 64-char hex string"),
   leafCount: z.number().int().min(1),
+  minCliffTime: z.number().int().positive(),
   leaves: z.array(leafSchema).min(1),
   ipfsCid: z.string().optional(),
 });
@@ -94,7 +95,7 @@ export const bulkRecipientSchema = z
     startTime: numericString,
     cliffTime: numericString,
     endTime: numericString,
-    milestoneIdx: z.number().int().min(0).default(0),
+    milestoneIdx: z.number().int().min(0).max(255).default(0),
   })
   .refine(
     (r) => {
@@ -177,7 +178,7 @@ const withdrawArgsSchema = z
     startTime: numericString,
     cliffTime: numericString,
     endTime: numericString,
-    milestoneIdx: z.number().int().min(0).default(0),
+    milestoneIdx: z.number().int().min(0).max(255).default(0),
   })
   .refine(
     (args) => {

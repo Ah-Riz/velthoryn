@@ -24,7 +24,7 @@ mod tests {
     // withdraw_unvested
     // =====================================================================
 
-    // Mollusk 0.13 Optional<T> account resolution limitation
+    // IGNORED: Mollusk 0.13.x limitation — Optional<T> account resolution. withdraw_unvested uses Option<Account> for SPL path. Tests withdraw_unvested happy path. Unblock when Mollusk supports Optional<T> resolution.
     #[ignore]
     #[test]
     fn test_withdraw_unvested_happy() {
@@ -89,7 +89,7 @@ mod tests {
         println!("withdraw_unvested compute_units: {}", result.compute_units_consumed);
     }
 
-    // Mollusk 0.13 Optional<T> account resolution limitation
+    // IGNORED: Mollusk 0.13.x limitation — Optional<T> account resolution. withdraw_unvested uses Option<Account> for SPL path. Tests withdraw_unvested error: not cancelled. Unblock when Mollusk supports Optional<T> resolution.
     #[ignore]
     #[test]
     fn test_withdraw_unvested_not_cancelled() {
@@ -124,7 +124,7 @@ mod tests {
         expect_error(&result, ERR_NOT_CANCELLED, "tree not cancelled");
     }
 
-    // Mollusk 0.13 Optional<T> account resolution limitation
+    // IGNORED: Mollusk 0.13.x limitation — Optional<T> account resolution. withdraw_unvested uses Option<Account> for SPL path. Tests withdraw_unvested error: grace period active. Unblock when Mollusk supports Optional<T> resolution.
     #[ignore]
     #[test]
     fn test_withdraw_unvested_grace_period_active() {

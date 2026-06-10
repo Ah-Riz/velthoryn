@@ -88,3 +88,59 @@ export function prepareCampaign(recipients: CampaignRecipient[]): PreparedCampai
     proofsRaw,
   };
 }
+
+// ---------------------------------------------------------------------------
+// PreparedRootRotation — output of prepareRootRotation()
+// Contains everything needed to call update_root on-chain.
+// ---------------------------------------------------------------------------
+export interface PreparedRootRotation {
+  root: Buffer;
+  rootHex: string;
+  leafCount: number;
+  /** Minimum cliff_time across all leaves (required for on-chain update_root). */
+  minCliffTime: BN;
+  leaves: VestingLeaf[];
+  proofs: number[][][];
+  proofsRaw: Buffer[][];
+}
+
+// ---------------------------------------------------------------------------
+// prepareRootRotation — builds a Merkle tree from new recipients for root
+// rotation.  Skips campaign-creation-specific fields (creator, mint, etc.).
+// Reuses VestingMerkleTree and computeMinCliffTime() internally.
+// ---------------------------------------------------------------------------
+export function prepareRootRotation(recipients: CampaignRecipient[]): PreparedRootRotation {
+  if (recipients.length === 0) {
+    throw new Error("Cannot prepare root rotation with zero recipients");
+  }
+
+  const leaves: VestingLeaf[] = recipients.map((r, i) => ({
+    leafIndex: i,
+    beneficiary: r.beneficiary,
+    amount: r.amount,
+    releaseType: r.releaseType,
+    startTime: r.startTime,
+    cliffTime: r.cliffTime,
+    endTime: r.endTime,
+    milestoneIdx: r.milestoneIdx,
+  }));
+
+  const tree = new VestingMerkleTree(leaves);
+
+  const proofsRaw: Buffer[][] = [];
+  const proofs: number[][][] = [];
+  for (let i = 0; i < leaves.length; i++) {
+    proofsRaw.push(tree.proof(i));
+    proofs.push(tree.proofAsArrays(i));
+  }
+
+  return {
+    root: tree.root,
+    rootHex: tree.rootHex,
+    leafCount: leaves.length,
+    minCliffTime: computeMinCliffTime(leaves),
+    leaves,
+    proofs,
+    proofsRaw,
+  };
+}

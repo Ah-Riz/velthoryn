@@ -1,6 +1,8 @@
 "use client";
 
-import { useState } from "react";
+// forwardRef added for CampaignStatusBanner integration — the banner's "Withdraw Unvested"
+// button triggers this component's click via ref. No behavioral changes to the button itself.
+import { forwardRef, useState } from "react";
 import { PublicKey, SystemProgram, Transaction } from "@solana/web3.js";
 import { type Program } from "@coral-xyz/anchor";
 import { TOKEN_PROGRAM_ID, getAssociatedTokenAddressSync } from "@solana/spl-token";
@@ -23,19 +25,22 @@ type Props = {
   toast: (msg: string, type?: "success" | "error" | "info") => void;
 };
 
-export function WithdrawUnvestedButton({
-  program,
-  publicKey,
-  treePubkey,
-  mint,
-  vaultAuthority,
-  vault,
-  cancelledAt,
-  isCreator,
-  nowTs,
-  onSuccess,
-  toast,
-}: Props) {
+export const WithdrawUnvestedButton = forwardRef<HTMLButtonElement, Props>(function WithdrawUnvestedButton(
+  {
+    program,
+    publicKey,
+    treePubkey,
+    mint,
+    vaultAuthority,
+    vault,
+    cancelledAt,
+    isCreator,
+    nowTs,
+    onSuccess,
+    toast,
+  },
+  ref,
+) {
   const { sendTransaction } = useWallet();
   const { connection } = useConnection();
   const queryClient = useQueryClient();
@@ -118,15 +123,19 @@ export function WithdrawUnvestedButton({
     );
   }
 
-  return (
-    <>
-      <button
-        onClick={() => setConfirmOpen(true)}
-        disabled={confirmOpen}
-        className="w-full rounded-xl border border-amber-500/20 py-2.5 text-[13px] font-medium text-amber-400 transition hover:border-amber-500/40 hover:bg-amber-500/5 disabled:cursor-not-allowed disabled:opacity-50"
-      >
-        Withdraw Unvested Tokens
-      </button>
+  // Grace-expired CTA lives in CampaignStatusBanner; keep a hidden trigger for ref.click().
+  if (grace.status === "grace_expired") {
+    return (
+      <>
+        <button
+          ref={ref}
+          type="button"
+          onClick={() => setConfirmOpen(true)}
+          disabled={confirmOpen}
+          className="hidden"
+          tabIndex={-1}
+          aria-hidden="true"
+        />
 
       {confirmOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
@@ -158,5 +167,8 @@ export function WithdrawUnvestedButton({
         </div>
       )}
     </>
-  );
-}
+    );
+  }
+
+  return null;
+});

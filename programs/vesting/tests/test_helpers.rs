@@ -522,7 +522,7 @@ impl ClaimRecordConfig {
         let account_bytes = serialize_claim_record(&cr_data);
 
         let cr_account = Account {
-            lamports: 1_000_000, // rent-exempt minimum
+            lamports: 2_000_000, // rent-exempt (129B data → 1.79M minimum at default rent rate)
             data: account_bytes,
             owner: program_id(),
             executable: false,

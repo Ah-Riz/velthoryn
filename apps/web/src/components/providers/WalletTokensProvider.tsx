@@ -26,7 +26,7 @@ function e2eMockTokensEnabled() {
     window.location.hostname === "localhost" ||
     window.location.hostname === "127.0.0.1";
 
-  return isLocalhost && window.localStorage.getItem("velthoryn:e2e-wallet") === "1";
+  return isLocalhost && window.localStorage?.getItem("velthoryn:e2e-wallet") === "1";
 }
 
 const e2eTokens: WalletTokenOption[] = [

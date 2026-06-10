@@ -16,6 +16,10 @@ Security review performed using Solana six-pattern checklist, manual instruction
 | **VEL-001** | HIGH | Double payout on stream campaigns via `withdraw → close_claim_record → withdraw` | **Fixed** — `total_entitled` set on first-touch in `withdraw`; `close_claim_record` requires `total_entitled > 0` |
 | **VEL-009** | LOW | Unbounded Merkle proof length in `claim` (CU griefing) | **Fixed** — `MAX_MERKLE_PROOF_LEN = 32` + `max_proof_len_for_leaf_count()` enforced on-chain; API validators cap at 32 |
 | **VEL-010** | LOW | Timing-unsafe admin API key comparison (`===` on strings) | **Fixed** — `verifyAdminKey` uses SHA-256 + `crypto.timingSafeEqual` |
+| **VEL-011** | MED | `StreamExpired` blocks multi-leaf claims after claiming larger leaf | **Fixed** — removed `fully_claimed` sub-condition in `claim.rs` |
+| **VEL-012** | MED | `milestoneIdx > 255` silently truncated by `writeUInt8` in leaf encoder | **Fixed** — `.max(255)` validation in Zod schemas |
+| **VEL-013** | LOW | Duplicate `(beneficiary, milestoneIdx)` causes permanent unclaimability | **Fixed** — prepare route rejects duplicates with 400 |
+| **VEL-014** | LOW | `total_entitled` stale after first claim — `close_claim_record` check imprecise | **Fixed** — accumulates for each milestone claim |
 
 **Toolchain:** `cargo audit` — 0 vulnerabilities; `cargo geiger` — 0 `unsafe` in vesting crate; `cargo tarpaulin` — 6.68% in-crate (instruction handlers exercised by TS integration tests). **Code maturity:** 2.8 / 4.0 (Trail of Bits framework).
 

@@ -51,6 +51,7 @@ export const campaigns = pgTable(
     index("idx_campaigns_creator").on(table.creator),
     index("idx_campaigns_mint").on(table.mint),
     index("idx_campaigns_merkle_root").on(table.merkleRoot),
+    index("idx_campaigns_created_at").on(table.createdAt),
   ],
 );
 
@@ -68,6 +69,7 @@ export const rootVersions = pgTable(
       .references(() => campaigns.id, { onDelete: "cascade" }),
     merkleRoot: text("merkle_root").notNull(),
     leafCount: integer("leaf_count").notNull(),
+    minCliffTime: bigint("min_cliff_time", { mode: "bigint" }).notNull(),
     ipfsCid: text("ipfs_cid"),
     version: integer("version").notNull(),
     createdAt: bigint("created_at", { mode: "bigint" }).notNull(),
@@ -106,6 +108,7 @@ export const leaves = pgTable(
       table.beneficiary,
       table.rootVersionId,
     ),
+    index("idx_leaves_release_type").on(table.releaseType),
   ],
 );
 
@@ -141,6 +144,7 @@ export const claimEvents = pgTable(
       table.beneficiary,
       table.campaignId,
     ),
+    index("idx_claim_events_block_time").on(table.blockTime),
   ],
 );
 
