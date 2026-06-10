@@ -6,6 +6,7 @@ import { useWalletTokens } from "@/hooks/useWalletTokens";
 import { useTokenMetadata } from "@/hooks/useTokenMetadata";
 import { useToast } from "@/components/shell/Toast";
 import { WRAPPED_SOL_MINT_ADDRESS } from "@/lib/sol/auto-wrap";
+import { solscanTokenUrl } from "@/lib/sol/cluster";
 import { WrapSolModal } from "./WrapSolModal";
 
 function shortenMint(addr: string) {
@@ -163,7 +164,7 @@ export function TokenPickerModal({
                   <div className="flex items-center gap-1">
                     <span className="truncate text-[11px] text-[#6b7280]">{token.name}</span>
                     <a
-                      href={`https://solscan.io/token/${token.mint}?cluster=devnet`}
+                      href={solscanTokenUrl(token.mint)}
                       target="_blank"
                       rel="noopener noreferrer"
                       onClick={(e) => e.stopPropagation()}
@@ -227,7 +228,7 @@ export function TokenPickerModal({
                 <div className="flex items-center gap-1">
                   <span className="truncate text-[11px] text-[#6b7280]">{shortenMint(token.mintAddress)}</span>
                   <a
-                    href={`https://solscan.io/token/${token.mintAddress}?cluster=devnet`}
+                    href={solscanTokenUrl(token.mintAddress)}
                     target="_blank"
                     rel="noopener noreferrer"
                     onClick={(e) => e.stopPropagation()}

@@ -3,6 +3,8 @@
  * See docs/ERROR_MAP.md for tutorial-name mapping.
  */
 
+import { cliUrlFlag } from "@/lib/sol/cluster";
+
 export const VESTING_ERROR_CODES = {
   EmptyRoot: 6000,
   EmptyCampaign: 6001,
@@ -142,19 +144,19 @@ export function formatVestingError(err: unknown): string {
     return "Insufficient SOL to create the recipient token account. Fund the recipient wallet with more SOL, then try claim again.";
   }
   if (raw.includes("AccountNotInitialized") && raw.includes("source_ata")) {
-    return "Your wallet does not have a token account for this mint. Create one with: spl-token create-account <MINT> --url devnet";
+    return `Your wallet does not have a token account for this mint. Create one with: spl-token create-account <MINT> --url ${cliUrlFlag()}`;
   }
   if (raw.includes("AccountNotInitialized")) {
     return "A required account is missing on-chain. The stream may not exist or was not funded.";
   }
   if (raw.includes("InsufficientFunds")) {
-    return "Insufficient SOL for transaction fees. Try: solana airdrop 2 --url devnet";
+    return `Insufficient SOL for transaction fees. Try: solana airdrop 2 --url ${cliUrlFlag()}`;
   }
   if (/custom program error: 0x1\b/.test(raw)) {
     return "Transaction failed: account already exists or insufficient funds. Try a different Campaign ID.";
   }
   if (/\b0x1\b/.test(raw) && !raw.includes("custom program error")) {
-    return "Insufficient SOL for transaction fees. Try: solana airdrop 2 --url devnet";
+    return `Insufficient SOL for transaction fees. Try: solana airdrop 2 --url ${cliUrlFlag()}`;
   }
   if (
     raw.includes("User rejected") ||

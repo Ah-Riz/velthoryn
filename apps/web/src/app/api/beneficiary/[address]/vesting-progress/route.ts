@@ -115,6 +115,7 @@ async function getVestingProgressHandler(
     const nextUnlock = computeNextUnlock(schedule, cancelledAt, now);
 
     return {
+      mint: row.mint,
       treeAddress: row.tree_address,
       metadata: row.metadata,
       leaf: {

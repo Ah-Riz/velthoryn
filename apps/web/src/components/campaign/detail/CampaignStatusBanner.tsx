@@ -1,6 +1,6 @@
 "use client";
 
-import { getGracePeriodState } from "@/lib/vesting/display";
+import { formatTokenAmount, getGracePeriodState } from "@/lib/vesting/display";
 import { GracePeriodCountdown } from "./GracePeriodCountdown";
 
 type CampaignStatusBannerProps = {
@@ -15,16 +15,6 @@ type CampaignStatusBannerProps = {
   mintDecimals?: number | null;
   isWithdrawn?: boolean;
 };
-
-function formatTokenAmount(raw: bigint, decimals: number | null | undefined): string {
-  if (decimals === null || decimals === undefined) return raw.toString();
-  if (decimals === 0) return raw.toLocaleString();
-  const divisor = 10n ** BigInt(decimals);
-  const whole = raw / divisor;
-  const frac = raw % divisor;
-  const fracStr = frac.toString().padStart(decimals, "0").slice(0, 4).replace(/0+$/, "");
-  return fracStr ? `${whole.toLocaleString()}.${fracStr}` : whole.toLocaleString();
-}
 
 export function CampaignStatusBanner({
   cancelledAtBigint,

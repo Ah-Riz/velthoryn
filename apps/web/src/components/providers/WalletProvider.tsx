@@ -9,11 +9,12 @@ import {
 import { WalletModalProvider } from "@solana/wallet-adapter-react-ui";
 import "@solana/wallet-adapter-react-ui/styles.css";
 import { Keypair, PublicKey, Transaction, VersionedTransaction } from "@solana/web3.js";
+import { defaultRpcUrl } from "@/lib/sol/cluster";
 
 // Phantom, Solflare, Backpack all implement wallet standard — auto-detected.
 // No need for @solana/wallet-adapter-wallets (omnibus with many outdated deps).
 const RAW_RPC_ENDPOINT =
-  process.env.NEXT_PUBLIC_RPC_ENDPOINT ?? "https://api.devnet.solana.com";
+  process.env.NEXT_PUBLIC_RPC_ENDPOINT ?? defaultRpcUrl();
 
 function resolveRpcEndpoint() {
   if (
@@ -21,7 +22,7 @@ function resolveRpcEndpoint() {
     RAW_RPC_ENDPOINT.includes("devnet.helius-rpc.com") &&
     process.env.NEXT_PUBLIC_USE_HELIUS_DEVNET !== "true"
   ) {
-    return "https://api.devnet.solana.com";
+    return defaultRpcUrl();
   }
 
   return RAW_RPC_ENDPOINT;

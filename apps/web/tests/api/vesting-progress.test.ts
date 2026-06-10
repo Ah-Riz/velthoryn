@@ -4,7 +4,7 @@ import { NextRequest } from "next/server";
 import { GET } from "@/app/api/beneficiary/[address]/vesting-progress/route";
 import { resetDb } from "../helpers/db";
 import { createCampaignViaPost, seedClaimEvent } from "../helpers/fixtures";
-import { makeUrl } from "../helpers/requests";
+import { makeUrl, MINT } from "../helpers/requests";
 import { resetRateLimitForTests } from "@/lib/api/rate-limit";
 import { resetRedisForTests } from "@/lib/api/redis";
 import { db } from "@/lib/db";
@@ -31,6 +31,7 @@ function makeContext(address: string) {
 
 type ProgressCampaign = {
   treeAddress: string;
+  mint: string;
   cancelledAt: string | null;
   progress: {
     totalEntitled: string;
@@ -119,6 +120,7 @@ describe("GET /api/beneficiary/:address/vesting-progress", () => {
     expect(res.status).toBe(200);
     expect(json.campaigns).toHaveLength(1);
     expect(json.campaigns[0]!.treeAddress).toBe(treeAddress);
+    expect(json.campaigns[0]!.mint).toBe(MINT);
 
     const progress = json.campaigns[0]!.progress;
     expect(progress.totalEntitled).toBe(amount);
