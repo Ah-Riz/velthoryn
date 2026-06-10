@@ -503,7 +503,12 @@ export default function DashboardPage() {
           </div>
 
           {/* Recent Activity */}
-          <ActivityFeed address={walletAddress!} limit={10} mintDecimals={activityMintDecimals} />
+          <ActivityFeed
+            address={walletAddress!}
+            limit={10}
+            mintDecimals={activityMintDecimals}
+            viewAllHref="/activity"
+          />
         </>
       )}
     </div>
