@@ -29,6 +29,7 @@ function ActivityFeedRow({
   return (
     <div className="flex items-start gap-3 py-3">
       <div
+        aria-hidden="true"
         className={`mt-0.5 flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-lg border border-[#222838] bg-[#161a25] text-[13px] ${config.color}`}
       >
         {config.icon}
@@ -51,6 +52,7 @@ function ActivityFeedRow({
             href={explorerUrl}
             target="_blank"
             rel="noopener noreferrer"
+            aria-label={`View transaction ${event.signature} on Solana Explorer`}
             className="transition hover:text-[#b4b9c5]"
           >
             {truncateSig(event.signature)}

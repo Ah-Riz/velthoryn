@@ -26,11 +26,13 @@ function StatCard({
   value,
   sub,
   accent,
+  loading,
 }: {
   label: string;
   value: string;
   sub?: string;
   accent?: boolean;
+  loading?: boolean;
 }) {
   return (
     <div className={`relative overflow-hidden rounded-2xl border bg-[#13161f] p-5 transition-colors ${accent ? "border-[#2e3648] hover:border-[#7c3aed]/40" : "border-[#222838] hover:border-[#2e3648]"}`}>
@@ -38,7 +40,11 @@ function StatCard({
         <div className="pointer-events-none absolute inset-0 rounded-2xl" style={{ background: "radial-gradient(ellipse at top right, rgba(124,58,237,0.10), transparent 70%)" }} />
       )}
       <div className="font-mono text-[10px] font-medium uppercase tracking-[0.16em] text-[#64748b]">{label}</div>
-      <div className={`mt-2 text-[28px] font-semibold leading-none tracking-tight ${accent ? "text-[#a78bfa]" : "text-[#e5e7eb]"}`}>{value}</div>
+      {loading ? (
+        <div className="mt-2 h-8 w-16 animate-pulse rounded-lg bg-[#1c2130]" />
+      ) : (
+        <div className={`mt-2 text-[28px] font-semibold leading-none tracking-tight ${accent ? "text-[#a78bfa]" : "text-[#e5e7eb]"}`}>{value}</div>
+      )}
       {sub && <div className="mt-1.5 font-mono text-[11px] text-[#64748b]">{sub}</div>}
     </div>
   );
@@ -260,27 +266,31 @@ export default function PortfolioPage() {
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
             <StatCard
               label="Total Entitled"
-              value={isLoading ? "..." : formatTokenAmount(summary?.totalEntitled ?? 0n, aggregateDecimals)}
+              value={formatTokenAmount(summary?.totalEntitled ?? 0n, aggregateDecimals)}
               sub={mixedMintAggregateSub(
                 mintAddresses.length,
                 summary ? `across ${summary.campaignCount} campaigns` : undefined,
               )}
+              loading={isLoading}
             />
             <StatCard
               label="Total Vested"
-              value={isLoading ? "..." : formatTokenAmount(summary?.totalVested ?? 0n, aggregateDecimals)}
+              value={formatTokenAmount(summary?.totalVested ?? 0n, aggregateDecimals)}
               sub={isLoading ? undefined : mixedMintAggregateSub(mintAddresses.length, `${vestedPercent}%`)}
+              loading={isLoading}
             />
             <StatCard
               label="Total Claimed"
-              value={isLoading ? "..." : formatTokenAmount(summary?.totalClaimed ?? 0n, aggregateDecimals)}
+              value={formatTokenAmount(summary?.totalClaimed ?? 0n, aggregateDecimals)}
               sub={isLoading ? undefined : mixedMintAggregateSub(mintAddresses.length, `${claimedPercent}%`)}
+              loading={isLoading}
             />
             <StatCard
               label="Claimable Now"
-              value={isLoading ? "..." : formatTokenAmount(summary?.totalClaimable ?? 0n, aggregateDecimals)}
+              value={formatTokenAmount(summary?.totalClaimable ?? 0n, aggregateDecimals)}
               sub={isLoading ? undefined : mixedMintAggregateSub(mintAddresses.length, `${claimablePercent}%`)}
               accent
+              loading={isLoading}
             />
           </div>
 

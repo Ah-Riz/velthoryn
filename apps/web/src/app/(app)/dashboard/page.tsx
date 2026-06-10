@@ -25,11 +25,13 @@ function StatCard({
   value,
   sub,
   accent,
+  loading,
 }: {
   label: string;
   value: string;
   sub?: string;
   accent?: boolean;
+  loading?: boolean;
 }) {
   return (
     <div className={`relative overflow-hidden rounded-2xl border bg-[#13161f] p-5 transition-colors ${accent ? "border-[#2e3648] hover:border-[#7c3aed]/40" : "border-[#222838] hover:border-[#2e3648]"}`}>
@@ -37,7 +39,11 @@ function StatCard({
         <div className="pointer-events-none absolute inset-0 rounded-2xl" style={{ background: "radial-gradient(ellipse at top right, rgba(124,58,237,0.10), transparent 70%)" }} />
       )}
       <div className="font-mono text-[10px] font-medium uppercase tracking-[0.16em] text-[#64748b]">{label}</div>
-      <div className={`mt-2 text-[28px] font-semibold leading-none tracking-tight ${accent ? "text-[#a78bfa]" : "text-[#e5e7eb]"}`}>{value}</div>
+      {loading ? (
+        <div className="mt-2 h-8 w-16 animate-pulse rounded-lg bg-[#1c2130]" />
+      ) : (
+        <div className={`mt-2 text-[28px] font-semibold leading-none tracking-tight ${accent ? "text-[#a78bfa]" : "text-[#e5e7eb]"}`}>{value}</div>
+      )}
       {sub && <div className="mt-1.5 font-mono text-[11px] text-[#64748b]">{sub}</div>}
     </div>
   );
@@ -387,18 +393,19 @@ export default function DashboardPage() {
 
           {/* Summary Stats */}
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            <StatCard label="Total Streams" value={isLoading ? "..." : String(counts.total)} sub="All campaigns" />
-            <StatCard label="Active" value={isLoading ? "..." : String(counts.active)} sub="Currently vesting" accent />
+            <StatCard label="Total Streams" value={String(counts.total)} sub="All campaigns" loading={isLoading} />
+            <StatCard label="Active" value={String(counts.active)} sub="Currently vesting" accent loading={isLoading} />
             <StatCard
               label="TVL"
-              value={isLoading ? "..." : formatTokenAmount(counts.tvl, tvlAggregateDecimals)}
+              value={formatTokenAmount(counts.tvl, tvlAggregateDecimals)}
               sub={mixedMintAggregateSub(senderMintAddresses.length, "Locked value")}
+              loading={isLoading}
             />
-            <StatCard label="As Sender" value={isLoading ? "..." : String(counts.sender)} sub="Streams you created" />
-            <StatCard label="As Recipient" value={isLoading ? "..." : String(counts.recipient)} sub="Streams you receive" />
+            <StatCard label="As Sender" value={String(counts.sender)} sub="Streams you created" loading={isLoading} />
+            <StatCard label="As Recipient" value={String(counts.recipient)} sub="Streams you receive" loading={isLoading} />
             <StatCard
               label="Claimable Now"
-              value={vestingLoading ? "..." : formatTokenAmount(claimableAmount, vestingAggregateDecimals)}
+              value={formatTokenAmount(claimableAmount, vestingAggregateDecimals)}
               sub={mixedMintAggregateSub(
                 vestingMintAddresses.length,
                 claimableStreams > 0
@@ -406,6 +413,7 @@ export default function DashboardPage() {
                   : "Ready to withdraw",
               )}
               accent
+              loading={vestingLoading}
             />
           </div>
 
@@ -429,8 +437,14 @@ export default function DashboardPage() {
                 ))}
               </div>
             ) : topVestingCampaigns.length === 0 ? (
-              <div className="rounded-2xl border border-[#222838] bg-[#13161f] p-5">
-                <p className="font-mono text-[12px] text-[#64748b]">No vesting streams yet.</p>
+              <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-[#222838] bg-[#13161f]/60 px-8 py-10 text-center">
+                <div className="flex h-10 w-10 items-center justify-center rounded-xl border border-[#222838] bg-[#161a25] text-[#64748b]">
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                    <polyline points="22 12 18 12 15 21 9 3 6 12 2 12" />
+                  </svg>
+                </div>
+                <p className="mt-3 text-[13px] font-medium text-[#b4b9c5]">No vesting streams yet</p>
+                <p className="mt-1 font-mono text-[11px] text-[#64748b]">Streams you receive will appear here</p>
               </div>
             ) : (
               <div className="grid gap-3 sm:grid-cols-2">
