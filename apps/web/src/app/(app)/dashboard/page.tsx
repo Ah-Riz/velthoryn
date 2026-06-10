@@ -8,6 +8,7 @@ import { useBeneficiaryCampaigns } from "@/hooks/useBeneficiaryCampaigns";
 import { useLocalCampaigns } from "@/hooks/useLocalCampaigns";
 import { useVestingProgressSummary } from "@/hooks/useVestingProgress";
 import { ActivityFeed } from "@/components/dashboard/ActivityFeed";
+import { StatCard } from "@/components/ui/StatCard";
 import { GracePeriodCountdown } from "@/components/campaign/detail/GracePeriodCountdown";
 import { getRecipientStreamStatus, getSenderStreamStatus } from "@/lib/vesting/list";
 import {
@@ -19,35 +20,6 @@ import {
 } from "@/lib/vesting/display";
 import { useMintDecimals } from "@/hooks/useMintDecimals";
 import { truncateAddress } from "@/lib/vesting/timeline-helpers";
-
-function StatCard({
-  label,
-  value,
-  sub,
-  accent,
-  loading,
-}: {
-  label: string;
-  value: string;
-  sub?: string;
-  accent?: boolean;
-  loading?: boolean;
-}) {
-  return (
-    <div className={`relative overflow-hidden rounded-2xl border bg-[#13161f] p-5 transition-colors ${accent ? "border-[#2e3648] hover:border-[#7c3aed]/40" : "border-[#222838] hover:border-[#2e3648]"}`}>
-      {accent && (
-        <div className="pointer-events-none absolute inset-0 rounded-2xl" style={{ background: "radial-gradient(ellipse at top right, rgba(124,58,237,0.10), transparent 70%)" }} />
-      )}
-      <div className="font-mono text-[10px] font-medium uppercase tracking-[0.16em] text-[#64748b]">{label}</div>
-      {loading ? (
-        <div className="mt-2 h-8 w-16 animate-pulse rounded-lg bg-[#1c2130]" />
-      ) : (
-        <div className={`mt-2 text-[28px] font-semibold leading-none tracking-tight ${accent ? "text-[#a78bfa]" : "text-[#e5e7eb]"}`}>{value}</div>
-      )}
-      {sub && <div className="mt-1.5 font-mono text-[11px] text-[#64748b]">{sub}</div>}
-    </div>
-  );
-}
 
 function ActionCard({
   href,

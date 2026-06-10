@@ -1,6 +1,7 @@
 # Week 8 -- Known Issues Report
 
 > Generated from bug audit of L1 and P0 fixes across SC, BE, FE, DB, Docs, Merkle, and Ops layers.
+> **Last updated: June 2026.** All 15 fixed issues verified on `dev_lana`. 12 known limitations remain documented with mitigations.
 
 ## Summary
 

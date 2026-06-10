@@ -23,7 +23,6 @@ import {
 } from "@/lib/stream/persist";
 import { CancelConfirmDialog } from "@/components/campaign/detail/CancelConfirmDialog";
 import { CampaignStatusBanner } from "@/components/campaign/detail/CampaignStatusBanner";
-
 import { MilestoneStatusBadge } from "@/components/campaign/detail/MilestoneStatusBadge";
 import { PauseToggleButton } from "@/components/campaign/detail/PauseToggleButton";
 import { TriggerMilestoneButton } from "@/components/campaign/detail/TriggerMilestoneButton";
@@ -33,6 +32,13 @@ import { CloseClaimRecordButton } from "@/components/campaign/detail/CloseClaimR
 import { WithdrawUnvestedButton } from "@/components/campaign/detail/WithdrawUnvestedButton";
 import { ClaimWithProofButton } from "@/components/campaign/detail/ClaimWithProofButton";
 import { VestingChart } from "@/components/campaign/detail/VestingChart";
+import { StatCard, StatCardSkeletonGroup } from "@/components/ui/StatCard";
+import { ProgressBar } from "@/components/ui/ProgressBar";
+import { Spinner } from "@/components/ui/Spinner";
+import { SectionHeader } from "@/components/ui/SectionHeader";
+import { FieldRow } from "@/components/ui/FieldRow";
+import { DetailRow } from "@/components/ui/DetailRow";
+import { RecipientListModal } from "@/components/campaign/detail/RecipientListModal";
 import { CampaignTimeline } from "@/components/campaign/detail/CampaignTimeline";
 import { useCampaignTimeline } from "@/hooks/useCampaignTimeline";
 import { useToast } from "@/components/shell/Toast";
@@ -109,6 +115,11 @@ type UrlScheduleLoadResult = {
 
 const ONCHAIN_TREE_FETCH_TIMEOUT_MS = 8000;
 const ONCHAIN_TREE_FETCH_TIMEOUT_MESSAGE = "Timed out fetching vesting tree";
+const E2E_MOCK_SEND_TX_KEY = "velthoryn:e2e-mock-send-tx";
+
+function isE2eMockSendTxEnabled() {
+  return typeof window !== "undefined" && window.localStorage.getItem(E2E_MOCK_SEND_TX_KEY) === "1";
+}
 
 function buildIndexedFallbackTreeState(detail: {
   creator: string;
@@ -1114,7 +1125,9 @@ export default function CampaignPage({ params }: { params: Promise<{ id: string 
         .instruction();
       const cancelTx = new Transaction().add(cancelIx);
       const sig = await sendTransaction(cancelTx, connection);
-      await connection.confirmTransaction(sig, "confirmed");
+      if (!isE2eMockSendTxEnabled()) {
+        await connection.confirmTransaction(sig, "confirmed");
+      }
 
       setTxStatus({ type: "success", sig });
       setCancelOpen(false);
@@ -1572,7 +1585,7 @@ export default function CampaignPage({ params }: { params: Promise<{ id: string 
         queryKey: ["claimRecord", treeAddress, beneficiaryKey],
       });
       void (async () => {
-        await fetch("/api/claims/sync", {
+        await fetch("/api/events/sync", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ signature: sig }),
@@ -1635,10 +1648,6 @@ export default function CampaignPage({ params }: { params: Promise<{ id: string 
       toast(msg, "error");
     }
   }
-
-  /* ================================================================ */
-  /*  RENDER                                                          */
-  /* ================================================================ */
 
   /* -- Loading state -- */
   if (loading) {
@@ -1758,25 +1767,25 @@ export default function CampaignPage({ params }: { params: Promise<{ id: string 
       <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_340px]">
         <div className="space-y-6">
           {isRecipientMetricsLoading ? (
-            <MetricSkeletonGroup />
+            <StatCardSkeletonGroup />
           ) : isRecipientView ? (
             <div className="space-y-4">
               <div className="grid gap-4 md:grid-cols-2">
-                <MetricCard label="Total Supply" value={formatTokenAmount(totalSupply)} />
-                <MetricCard label="Your Allocation" value={formatTokenAmount(displaySupply)} accent />
+                <StatCard label="Total Supply" value={formatTokenAmount(totalSupply)} />
+                <StatCard label="Your Allocation" value={formatTokenAmount(displaySupply)} accent />
               </div>
               <div className="grid gap-4 md:grid-cols-3">
-                <MetricCard label={claimedLabel} value={formatTokenAmount(displayClaimed)} />
-                <MetricCard label="Vested" value={vestedLabel} />
-                <MetricCard label={claimableLabel} value={formatTokenAmount(displayClaimable)} accent />
+                <StatCard label={claimedLabel} value={formatTokenAmount(displayClaimed)} />
+                <StatCard label="Vested" value={vestedLabel} />
+                <StatCard label={claimableLabel} value={formatTokenAmount(displayClaimable)} accent />
               </div>
             </div>
           ) : (
             <div className="grid grid-cols-2 gap-4 xl:grid-cols-4">
-              <MetricCard label="Total Supply" value={formatTokenAmount(totalSupply)} />
-              <MetricCard label={claimedLabel} value={formatTokenAmount(displayClaimed)} />
-              <MetricCard label="Vested" value={vestedLabel} />
-              <MetricCard label={claimableLabel} value={formatTokenAmount(displayClaimable)} accent />
+              <StatCard label="Total Supply" value={formatTokenAmount(totalSupply)} />
+              <StatCard label={claimedLabel} value={formatTokenAmount(displayClaimed)} />
+              <StatCard label="Vested" value={vestedLabel} />
+              <StatCard label={claimableLabel} value={formatTokenAmount(displayClaimable)} accent />
             </div>
           )}
 
@@ -1791,12 +1800,7 @@ export default function CampaignPage({ params }: { params: Promise<{ id: string 
                   <span>Vested</span>
                   <span className="font-medium text-white">{displayProgress}%</span>
                 </div>
-                <div className="h-2.5 overflow-hidden rounded-full bg-white/[0.05]">
-                  <div
-                    className="h-full rounded-full bg-white transition-all duration-500"
-                    style={{ width: `${Math.min(displayProgress, 100)}%` }}
-                  />
-                </div>
+                <ProgressBar percentage={displayProgress} colorClass="bg-white transition-all duration-500" trackClassName="bg-white/[0.05]" />
               </div>
             </div>
           )}
@@ -2312,290 +2316,5 @@ export default function CampaignPage({ params }: { params: Promise<{ id: string 
         viewer={publicKey?.toBase58()}
       />
     </div>
-  );
-}
-
-/* ================================================================== */
-/*  Sub-components                                                    */
-/* ================================================================== */
-
-function SectionHeader({
-  title,
-  caption,
-}: {
-  title: string;
-  caption: string;
-}) {
-  return (
-    <div>
-      <h2 className="text-[16px] font-semibold text-white">{title}</h2>
-      <p className="mt-1 text-[13px] text-[#8b92a5]">{caption}</p>
-    </div>
-  );
-}
-
-function FieldRow({
-  label,
-  input,
-}: {
-  label: string;
-  input: React.ReactNode;
-}) {
-  return (
-    <div>
-      <label className="mb-2 block text-[12px] font-medium text-[#8b92a5]">{label}</label>
-      {input}
-    </div>
-  );
-}
-
-/** Metric card used in the 4-card grid. */
-function MetricCard({
-  label,
-  value,
-  accent,
-}: {
-  label: string;
-  value: string;
-  accent?: boolean;
-}) {
-  return (
-    <div className="rounded-2xl border border-white/[0.06] bg-white/[0.02] p-5">
-      <p className="text-[11px] uppercase tracking-[0.12em] text-[#555d73]">{label}</p>
-      <p
-        className={`mt-2 text-2xl font-semibold ${
-          accent ? "text-violet-400" : "text-white"
-        }`}
-      >
-        {value}
-      </p>
-    </div>
-  );
-}
-
-function MetricSkeletonGroup() {
-  return (
-    <div className="space-y-4">
-      <div className="grid gap-4 md:grid-cols-2">
-        <MetricCardSkeleton />
-        <MetricCardSkeleton />
-      </div>
-      <div className="grid gap-4 md:grid-cols-3">
-        <MetricCardSkeleton />
-        <MetricCardSkeleton />
-        <MetricCardSkeleton />
-      </div>
-    </div>
-  );
-}
-
-function MetricCardSkeleton() {
-  return (
-    <div className="rounded-2xl border border-white/[0.06] bg-white/[0.02] p-5">
-      <div className="h-3 w-24 rounded bg-white/[0.06]" />
-      <div className="mt-3 h-8 w-28 rounded bg-white/[0.08]" />
-    </div>
-  );
-}
-
-/** Key-value row inside the Campaign Details card. */
-function DetailRow({
-  label,
-  value,
-  mono,
-}: {
-  label: string;
-  value: string;
-  mono?: boolean;
-}) {
-  return (
-    <div className="flex items-start justify-between gap-4">
-      <span className="shrink-0 text-[12px] text-[#555d73]">{label}</span>
-      <span
-        className={`text-right text-[13px] text-white ${mono ? "font-mono" : ""}`}
-        title={value}
-      >
-        {mono ? truncateAddress(value) : value}
-      </span>
-    </div>
-  );
-}
-
-function RecipientListModal({
-  isOpen,
-  onClose,
-  recipients,
-  mintDecimals,
-  viewer,
-}: {
-  isOpen: boolean;
-  onClose: () => void;
-  recipients: Array<{
-    beneficiary: string;
-    allocation: string;
-    leafCount: number;
-    claimedAmount: string;
-  }>;
-  mintDecimals: number | null;
-  viewer?: string;
-}) {
-  const [search, setSearch] = useState("");
-  const [copied, setCopied] = useState<string | null>(null);
-
-  if (!isOpen) return null;
-
-  const formatAmount = (raw: string) => {
-    const value = BigInt(raw);
-    if (mintDecimals === null) return value.toString();
-    if (mintDecimals === 0) return value.toLocaleString();
-    const divisor = 10n ** BigInt(mintDecimals);
-    const whole = value / divisor;
-    const frac = value % divisor;
-    const fracStr = frac.toString().padStart(mintDecimals, "0").slice(0, 4).replace(/0+$/, "");
-    return fracStr ? `${whole.toLocaleString()}.${fracStr}` : whole.toLocaleString();
-  };
-  const filteredRecipients = recipients.filter((recipient) =>
-    recipient.beneficiary.toLowerCase().includes(search.trim().toLowerCase()),
-  );
-
-  async function handleCopy(address: string) {
-    try {
-      await navigator.clipboard.writeText(address);
-      setCopied(address);
-      window.setTimeout(() => {
-        setCopied((current) => (current === address ? null : current));
-      }, 1500);
-    } catch {
-      setCopied(null);
-    }
-  }
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 px-4 backdrop-blur-sm">
-      <div className="w-full max-w-2xl rounded-3xl border border-white/[0.08] bg-[#0d1117] p-6 shadow-2xl">
-        <div className="flex items-start justify-between gap-4">
-          <div>
-            <h3 className="text-[20px] font-semibold text-white">Recipients</h3>
-            <p className="mt-1 text-[13px] text-[#8b92a5]">
-              Latest recipient list from the current campaign root.
-            </p>
-          </div>
-          <button
-            type="button"
-            onClick={onClose}
-            className="rounded-xl border border-white/[0.08] bg-white/[0.03] px-3 py-2 text-[12px] font-medium text-white transition hover:bg-white/[0.06]"
-          >
-            Close
-          </button>
-        </div>
-
-        <div className="mt-5">
-          <input
-            type="text"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search recipient wallet"
-            className="w-full rounded-2xl border border-white/[0.08] bg-[#11161f] px-4 py-3 text-[13px] text-white outline-none transition focus:border-white/20"
-          />
-        </div>
-
-        <div className="mt-5 max-h-[60vh] space-y-3 overflow-y-auto pr-1">
-          {filteredRecipients.map((recipient) => {
-            const allocation = BigInt(recipient.allocation);
-            const claimedAmount = BigInt(recipient.claimedAmount);
-            const fullyClaimed = claimedAmount >= allocation && allocation > 0n;
-            const partiallyClaimed = claimedAmount > 0n && claimedAmount < allocation;
-
-            return (
-            <div
-              key={recipient.beneficiary}
-              className="rounded-2xl border border-white/[0.06] bg-white/[0.02] px-4 py-4"
-            >
-              <div className="flex items-start justify-between gap-4">
-                <div className="min-w-0">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <p className="truncate font-mono text-[13px] text-white" title={recipient.beneficiary}>
-                      {recipient.beneficiary}
-                    </p>
-                    {viewer === recipient.beneficiary && (
-                      <span className="inline-flex items-center rounded-full border border-violet-500/20 bg-violet-500/10 px-2 py-0.5 text-[10px] font-medium text-violet-300">
-                        You
-                      </span>
-                    )}
-                    <span
-                      className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-medium ${
-                        fullyClaimed
-                          ? "border border-emerald-500/20 bg-emerald-500/10 text-emerald-300"
-                          : partiallyClaimed
-                            ? "border border-amber-500/20 bg-amber-500/10 text-amber-300"
-                            : "border border-white/[0.08] bg-white/[0.03] text-[#8b92a5]"
-                      }`}
-                    >
-                      {fullyClaimed ? "Fully claimed" : partiallyClaimed ? "Partially claimed" : "Unclaimed"}
-                    </span>
-                  </div>
-                  <p className="mt-2 text-[11px] text-[#6f7c95]">
-                    {recipient.leafCount} {recipient.leafCount === 1 ? "allocation" : "allocations"}
-                  </p>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => handleCopy(recipient.beneficiary)}
-                  className="shrink-0 rounded-xl border border-white/[0.08] bg-white/[0.03] px-3 py-2 text-[11px] font-medium text-white transition hover:bg-white/[0.06]"
-                >
-                  {copied === recipient.beneficiary ? "Copied" : "Copy"}
-                </button>
-              </div>
-
-              <div className="mt-4 grid gap-3 sm:grid-cols-2">
-                <div className="rounded-xl border border-white/[0.06] bg-[#11161f] px-3 py-3">
-                  <p className="text-[10px] uppercase tracking-[0.14em] text-[#6f7c95]">Allocation</p>
-                  <p className="mt-1.5 text-[14px] font-medium text-white">{formatAmount(recipient.allocation)}</p>
-                </div>
-                <div className="rounded-xl border border-white/[0.06] bg-[#11161f] px-3 py-3">
-                  <p className="text-[10px] uppercase tracking-[0.14em] text-[#6f7c95]">Claimed</p>
-                  <p className="mt-1.5 text-[14px] font-medium text-white">{formatAmount(recipient.claimedAmount)}</p>
-                </div>
-              </div>
-            </div>
-          )})}
-
-          {filteredRecipients.length === 0 && (
-            <div className="rounded-2xl border border-white/[0.06] bg-white/[0.02] px-4 py-8 text-center text-[13px] text-[#8b92a5]">
-              No recipient matched that wallet.
-            </div>
-          )}
-        </div>
-      </div>
-    </div>
-  );
-}
-
-/** Small animated spinner. */
-function Spinner({ size = 20 }: { size?: number }) {
-  return (
-    <svg
-      width={size}
-      height={size}
-      viewBox="0 0 24 24"
-      fill="none"
-      className="animate-spin"
-    >
-      <circle
-        cx="12"
-        cy="12"
-        r="10"
-        stroke="currentColor"
-        strokeWidth="2.5"
-        strokeLinecap="round"
-        className="opacity-20"
-      />
-      <path
-        d="M12 2a10 10 0 0 1 10 10"
-        stroke="currentColor"
-        strokeWidth="2.5"
-        strokeLinecap="round"
-      />
-    </svg>
   );
 }

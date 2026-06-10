@@ -1,171 +1,20 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import Link from "next/link";
 import { useWallet } from "@solana/wallet-adapter-react";
 import {
   useVestingProgressSummary,
   type VestingProgressCampaign,
 } from "@/hooks/useVestingProgress";
-import { StatusBadge } from "@/components/campaign/list/StatusBadge";
+import { CampaignCard, toCampaignCardData } from "@/components/campaign/CampaignCard";
 import {
-  formatCountdown,
   formatTokenAmount,
-  getVestingTypeBadgeColor,
-  getVestingTypeLabel,
   mixedMintAggregateSub,
 } from "@/lib/vesting/display";
 import { useMintDecimals } from "@/hooks/useMintDecimals";
-import { truncateAddress } from "@/lib/vesting/timeline-helpers";
-import type { StreamStatus } from "@/lib/vesting/list";
+import { StatCard } from "@/components/ui/StatCard";
 
 type SortKey = "claimable" | "progress" | "nextUnlock";
-
-function StatCard({
-  label,
-  value,
-  sub,
-  accent,
-  loading,
-}: {
-  label: string;
-  value: string;
-  sub?: string;
-  accent?: boolean;
-  loading?: boolean;
-}) {
-  return (
-    <div className={`relative overflow-hidden rounded-2xl border bg-[#13161f] p-5 transition-colors ${accent ? "border-[#2e3648] hover:border-[#7c3aed]/40" : "border-[#222838] hover:border-[#2e3648]"}`}>
-      {accent && (
-        <div className="pointer-events-none absolute inset-0 rounded-2xl" style={{ background: "radial-gradient(ellipse at top right, rgba(124,58,237,0.10), transparent 70%)" }} />
-      )}
-      <div className="font-mono text-[10px] font-medium uppercase tracking-[0.16em] text-[#64748b]">{label}</div>
-      {loading ? (
-        <div className="mt-2 h-8 w-16 animate-pulse rounded-lg bg-[#1c2130]" />
-      ) : (
-        <div className={`mt-2 text-[28px] font-semibold leading-none tracking-tight ${accent ? "text-[#a78bfa]" : "text-[#e5e7eb]"}`}>{value}</div>
-      )}
-      {sub && <div className="mt-1.5 font-mono text-[11px] text-[#64748b]">{sub}</div>}
-    </div>
-  );
-}
-
-function getCampaignStatus(campaign: VestingProgressCampaign): StreamStatus {
-  const claimable = BigInt(campaign.progress.claimable);
-  const entitled = BigInt(campaign.progress.totalEntitled);
-  const claimed = BigInt(campaign.progress.claimedSoFar);
-
-  if (entitled > 0n && claimed >= entitled) return "Claimed";
-  if (campaign.cancelledAt !== null) return "Cancelled";
-  if (campaign.paused) return "Paused";
-  if (claimable > 0n) return "Claimable";
-  if (campaign.leaf.releaseType === 2 && !campaign.milestoneReleased) return "Scheduled";
-  return "Active";
-}
-
-function formatNextUnlock(
-  campaign: VestingProgressCampaign,
-  nowTs: bigint,
-): string {
-  if (campaign.leaf.releaseType === 2 && !campaign.milestoneReleased) {
-    return "Milestone not released";
-  }
-  if (!campaign.progress.nextUnlock) return "Fully vested";
-  return formatCountdown(BigInt(campaign.progress.nextUnlock), nowTs);
-}
-
-function CampaignCard({
-  campaign,
-  nowTs,
-  fmtAmount,
-}: {
-  campaign: VestingProgressCampaign;
-  nowTs: bigint;
-  fmtAmount: (raw: bigint, campaign: VestingProgressCampaign) => string;
-}) {
-  const name =
-    campaign.metadata?.name ??
-    truncateAddress(campaign.treeAddress);
-  const status = getCampaignStatus(campaign);
-  const claimable = BigInt(campaign.progress.claimable);
-  const typeLabel = getVestingTypeLabel(campaign.leaf.releaseType);
-  const typeBadgeColor = getVestingTypeBadgeColor(campaign.leaf.releaseType);
-
-  return (
-    <Link
-      href={`/campaign/${campaign.treeAddress}`}
-      className="group block rounded-2xl border border-[#222838] bg-[#13161f] p-5 transition-all hover:border-[#7c3aed]/25 hover:bg-[#161a25]"
-    >
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h3 className="text-[15px] font-medium text-[#e5e7eb] transition-colors group-hover:text-[#a78bfa]">
-            {name}
-          </h3>
-        </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <span
-            className={`inline-flex items-center rounded-full border px-2.5 py-1 font-mono text-[10px] font-medium tracking-[0.08em] ${typeBadgeColor}`}
-          >
-            {typeLabel}
-          </span>
-          <StatusBadge status={status} />
-        </div>
-      </div>
-
-      <div className="mt-4">
-        <div className="flex items-center justify-between font-mono text-[10px] text-[#64748b]">
-          <span>PROGRESS</span>
-          <span>{campaign.progress.progressPercent.toFixed(1)}%</span>
-        </div>
-        <div className="mt-1.5 h-1 overflow-hidden rounded-full bg-[#222838]">
-          <div
-            className="h-full rounded-full transition-all duration-500 ease-out"
-            style={{
-              width: `${Math.min(100, campaign.progress.progressPercent)}%`,
-              background: claimable > 0n
-                ? "linear-gradient(90deg, #7c3aed, #14f1d9)"
-                : status === "Claimed"
-                  ? "#0ea5e9"
-                  : "#7c3aed",
-            }}
-          />
-        </div>
-      </div>
-
-      <div className="mt-4 grid gap-x-6 gap-y-2 border-t border-[#1c2130] pt-4 sm:grid-cols-2 lg:grid-cols-4">
-        <div>
-          <div className="font-mono text-[10px] uppercase tracking-[0.14em] text-[#64748b]">Entitled</div>
-          <div className="mt-1 text-[13px] font-medium text-[#e5e7eb]">{fmtAmount(BigInt(campaign.progress.totalEntitled), campaign)}</div>
-        </div>
-        <div>
-          <div className="font-mono text-[10px] uppercase tracking-[0.14em] text-[#64748b]">Vested</div>
-          <div className="mt-1 text-[13px] font-medium text-[#e5e7eb]">{fmtAmount(BigInt(campaign.progress.vestedSoFar), campaign)}</div>
-        </div>
-        <div>
-          <div className="font-mono text-[10px] uppercase tracking-[0.14em] text-[#64748b]">Claimed</div>
-          <div className="mt-1 text-[13px] font-medium text-[#e5e7eb]">{fmtAmount(BigInt(campaign.progress.claimedSoFar), campaign)}</div>
-        </div>
-        <div>
-          <div className="font-mono text-[10px] uppercase tracking-[0.14em] text-[#64748b]">Claimable</div>
-          <div className={`mt-1 text-[13px] font-medium ${claimable > 0n ? "text-[#14f1d9]" : "text-[#e5e7eb]"}`}>
-            {fmtAmount(claimable, campaign)}
-          </div>
-        </div>
-      </div>
-
-      <div className="mt-4 flex items-center justify-between">
-        <span className="font-mono text-[10px] text-[#64748b]">
-          Next: {formatNextUnlock(campaign, nowTs)}
-        </span>
-        {claimable > 0n && (
-          <span className="font-mono text-[11px] font-medium text-[#14f1d9]">
-            Claim →
-          </span>
-        )}
-      </div>
-    </Link>
-  );
-}
 
 function PortfolioSkeleton() {
   return (
@@ -334,9 +183,7 @@ export default function PortfolioPage() {
                 {sortedCampaigns.map((campaign) => (
                   <CampaignCard
                     key={`${campaign.treeAddress}-${campaign.leaf.leafIndex}`}
-                    campaign={campaign}
-                    nowTs={nowTs}
-                    fmtAmount={fmtAmount}
+                    campaign={toCampaignCardData(campaign, nowTs, fmtAmount)}
                   />
                 ))}
               </div>

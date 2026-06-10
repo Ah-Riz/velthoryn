@@ -13,6 +13,7 @@ import { expect, test } from "@playwright/test";
 import { collectRelevantPageErrors } from "./pageErrors";
 import {
   enableE2eWallet,
+  enableMockOnChainTransactions,
   gotoWithRetry,
   mockCampaignApi,
   mockProofApi,
@@ -224,6 +225,10 @@ test.describe("Multi-leaf claim journey", () => {
   test("clicking Claim Tokens shows Claiming loading state", async ({ page }) => {
     const pastCliff = now() - 86400;
 
+    await enableMockOnChainTransactions(page);
+    await page.route("**/api/events/sync", async (route) => {
+      await route.fulfill({ json: { processed: 1 }, status: 200 });
+    });
     await mockProofApi(page, ADDR, [{
       leafIndex: 0,
       beneficiary: creatorWallet,
@@ -240,7 +245,7 @@ test.describe("Multi-leaf claim journey", () => {
 
     // Wait for violet Claim button to appear
     const claimBtn = page.getByRole("button", { name: /claim.*tokens/i });
-    await expect(claimBtn).toBeVisible({ timeout: 25_000 });
+    await expect(claimBtn).toBeEnabled({ timeout: 25_000 });
     await claimBtn.click();
 
     // ClaimWithProofButton: setLoading(true) → button shows "Claiming..."

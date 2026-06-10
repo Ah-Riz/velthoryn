@@ -10,11 +10,16 @@ import { expect, test } from "@playwright/test";
 import { collectRelevantPageErrors } from "./pageErrors";
 import {
   enableE2eWallet,
+  enableMockOnChainTransactions,
   gotoWithRetry,
   mockCampaignApi,
+  mockCampaignListApis,
+  waitForCampaignListMocks,
   mockProofApi,
   injectStreamSchedule,
   creatorWallet,
+  recipientWallet,
+  nativeSolMint,
 } from "./helpers";
 
 const ADDR = "9WzDXwBbmkg8ZTbNMqUxvQRAyrZzDsGYdLVL9zYtAWWM";
@@ -478,6 +483,306 @@ test.describe("Root Rotation (Allocation Editor)", () => {
     await gotoWithRetry(page, `/campaign/${ADDR}`);
 
     await expect(page.getByRole("link", { name: /open allocation editor/i })).not.toBeVisible({ timeout: 20_000 });
+    expect(pageErrors).toEqual([]);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Clawback UI — grace period banners (US-1)
+// ---------------------------------------------------------------------------
+
+const multiLeafRecipients = [
+  { beneficiary: creatorWallet, allocation: "500000000", leafCount: 1, claimedAmount: "0" },
+  { beneficiary: "3coyVxLQYHdQ6MNQRRdm2KuCABJopxPfo9XuQeosUmf3", allocation: "300000000", leafCount: 1, claimedAmount: "0" },
+  { beneficiary: "11111111111111111111111111111113", allocation: "200000000", leafCount: 1, claimedAmount: "0" },
+];
+
+test.describe("Clawback UI", () => {
+  test("cancel campaign shows amber grace banner", async ({ page }) => {
+    const pageErrors = collectRelevantPageErrors(page);
+    await enableE2eWallet(page);
+    await enableMockOnChainTransactions(page);
+    await mockCampaignApi(page, ADDR, {
+      leafCount: 3,
+      cancellable: true,
+      cancelledAt: null,
+      recipients: multiLeafRecipients,
+    });
+    await gotoWithRetry(page, `/campaign/${ADDR}`);
+
+    const cancelBtn = page.getByRole("button", { name: /cancel campaign/i });
+    await expect(cancelBtn).toBeVisible({ timeout: 20_000 });
+    await cancelBtn.click();
+
+    await expect(page.getByText(/cancel this vesting/i)).toBeVisible();
+    await page.getByRole("button", { name: /cancel stream/i }).click();
+
+    const banner = page
+      .locator('[class*="border-amber-500"]')
+      .filter({ hasText: /Grace period expires in/i });
+    await expect(banner).toBeVisible({ timeout: 20_000 });
+    await expect(banner.getByText(/remaining/i)).toBeVisible();
+    expect(pageErrors).toEqual([]);
+  });
+
+  test("grace period countdown updates", async ({ page }) => {
+    const frozenNow = new Date("2026-06-09T12:00:00Z");
+    await page.clock.install({ time: frozenNow });
+
+    const pageErrors = collectRelevantPageErrors(page);
+    await enableE2eWallet(page);
+
+    const cancelledAt = Math.floor(frozenNow.getTime() / 1000) - 86400;
+    const graceEnd = cancelledAt + 86400 * 7;
+    const nowSec = Math.floor(frozenNow.getTime() / 1000);
+
+    await mockCampaignApi(page, ADDR, {
+      cancelledAt,
+      gracePeriod: {
+        end: String(graceEnd),
+        remaining: String(graceEnd - nowSec),
+        isExpired: false,
+      },
+    });
+    await gotoWithRetry(page, `/campaign/${ADDR}`);
+
+    const banner = page
+      .locator('[class*="border-amber-500"]')
+      .filter({ hasText: /Grace period expires in/i });
+    const countdown = banner.getByText(/remaining/i);
+    await expect(countdown).toBeVisible({ timeout: 20_000 });
+
+    const initialText = await countdown.textContent();
+    expect(initialText).toBeTruthy();
+
+    await page.clock.fastForward(61_000);
+
+    await expect(countdown).not.toHaveText(initialText!);
+    expect(pageErrors).toEqual([]);
+  });
+
+  test("grace expired shows red withdraw banner", async ({ page }) => {
+    const pageErrors = collectRelevantPageErrors(page);
+    await enableE2eWallet(page);
+
+    const cancelledAt = now() - 86400 * 8; // 8 days ago, grace (7 days) expired
+    await mockCampaignApi(page, ADDR, {
+      cancelledAt,
+      totalClaimed: "0",
+      gracePeriod: { end: String(cancelledAt + 86400 * 7), remaining: "0", isExpired: true },
+    });
+    await gotoWithRetry(page, `/campaign/${ADDR}`);
+
+    const banner = page
+      .locator('[class*="border-red-500"]')
+      .filter({ hasText: /Grace period has expired/i });
+    await expect(banner).toBeVisible({ timeout: 20_000 });
+    await expect(banner.getByRole("button", { name: /withdraw unvested/i })).toBeVisible();
+    expect(pageErrors).toEqual([]);
+  });
+
+  test("after withdrawal shows green settled banner", async ({ page }) => {
+    const pageErrors = collectRelevantPageErrors(page);
+    await enableE2eWallet(page);
+
+    const cancelledAt = now() - 86400 * 8; // cancelled + grace expired
+    await page.addInitScript((data: { key: string }) => {
+      window.localStorage.setItem(data.key, "1");
+    }, { key: `velthoryn:stream-settled:${ADDR}` });
+    await mockCampaignApi(page, ADDR, {
+      cancelledAt,
+      totalClaimed: "0",
+      gracePeriod: { end: String(cancelledAt + 86400 * 7), remaining: "0", isExpired: true },
+    });
+    await gotoWithRetry(page, `/campaign/${ADDR}`);
+
+    const banner = page
+      .locator('[class*="border-emerald-500"]')
+      .filter({ hasText: /Campaign settled/i });
+    await expect(banner).toBeVisible({ timeout: 20_000 });
+    await expect(banner.getByText(/withdrawn/i)).toBeVisible();
+    expect(pageErrors).toEqual([]);
+  });
+
+  test("non-creator sees no clawback banners", async ({ page }) => {
+    const pageErrors = collectRelevantPageErrors(page);
+    await page.addInitScript((publicKey: string) => {
+      window.localStorage.setItem("velthoryn:e2e-wallet", "1");
+      window.localStorage.setItem("velthoryn:e2e-public-key", publicKey);
+    }, recipientWallet);
+
+    const cancelledAt = now() - 86400; // grace still active — creator would see amber banner
+    await mockCampaignApi(page, ADDR, {
+      cancelledAt,
+      leafCount: 3,
+      recipients: multiLeafRecipients,
+      gracePeriod: {
+        end: String(cancelledAt + 86400 * 7),
+        remaining: String(86400 * 6),
+        isExpired: false,
+      },
+    });
+    await gotoWithRetry(page, `/campaign/${ADDR}`);
+
+    await expect(
+      page.locator('[class*="border-amber-500"]').filter({ hasText: /Grace period expires in/i }),
+    ).not.toBeVisible({ timeout: 20_000 });
+    await expect(
+      page.locator('[class*="border-red-500"]').filter({ hasText: /Grace period has expired/i }),
+    ).not.toBeVisible();
+    await expect(
+      page.locator('[class*="border-emerald-500"]').filter({ hasText: /Campaign settled/i }),
+    ).not.toBeVisible();
+    await expect(page.getByRole("button", { name: /cancel campaign/i })).not.toBeVisible();
+    await expect(page.getByRole("button", { name: /cancel stream/i })).not.toBeVisible();
+    await expect(page.getByRole("button", { name: /withdraw unvested/i })).not.toBeVisible();
+    expect(pageErrors).toEqual([]);
+  });
+
+  test("needs action tab shows correct campaigns", async ({ page }) => {
+    const pageErrors = collectRelevantPageErrors(page);
+    const pastCliff = now() - 86400;
+    const futureCliff = now() + 86400 * 30;
+    const cancelledAt = now() - 86400;
+
+    const cancelledSenderAddr = "SendCancel11111111111111111111111111111111";
+    const activeSenderAddr = "SendActive111111111111111111111111111111111";
+    const claimableRecipientAddr = "RecvClaim1111111111111111111111111111111";
+    const scheduledRecipientAddr = "RecvSched11111111111111111111111111111111";
+
+    await enableE2eWallet(page);
+    await mockCampaignListApis(page, {
+      senderCampaigns: [
+        {
+          treeAddress: cancelledSenderAddr,
+          creator: creatorWallet,
+          mint: nativeSolMint,
+          campaignId: 101,
+          leafCount: 2,
+          totalSupply: 1_000_000_000,
+          totalClaimed: 0,
+          cancellable: true,
+          paused: false,
+          cancelledAt,
+          createdAt: now() - 86400 * 10,
+          metadata: { name: "Cancelled Sender Campaign" },
+        },
+        {
+          treeAddress: activeSenderAddr,
+          creator: creatorWallet,
+          mint: nativeSolMint,
+          campaignId: 102,
+          leafCount: 1,
+          totalSupply: 500_000_000,
+          totalClaimed: 0,
+          cancellable: true,
+          paused: false,
+          cancelledAt: null,
+          createdAt: now() - 86400 * 5,
+          metadata: { name: "Active Sender Campaign" },
+        },
+      ],
+      recipientCampaigns: [
+        {
+          treeAddress: claimableRecipientAddr,
+          creator: recipientWallet,
+          mint: nativeSolMint,
+          campaignId: 201,
+          totalSupply: "1000000000",
+          leafCount: 1,
+          paused: false,
+          cancelledAt: null,
+          createdAt: now() - 86400 * 3,
+          metadata: { name: "Claimable Recipient Stream" },
+          myClaimed: "0",
+          myLeaf: {
+            leafIndex: 0,
+            amount: "1000000000",
+            releaseType: 0,
+            startTime: 0,
+            cliffTime: pastCliff,
+            endTime: pastCliff,
+            milestoneIdx: 0,
+          },
+        },
+        {
+          treeAddress: scheduledRecipientAddr,
+          creator: recipientWallet,
+          mint: nativeSolMint,
+          campaignId: 202,
+          totalSupply: "1000000000",
+          leafCount: 1,
+          paused: false,
+          cancelledAt: null,
+          createdAt: now() - 86400 * 2,
+          metadata: { name: "Scheduled Recipient Stream" },
+          myClaimed: "0",
+          myLeaf: {
+            leafIndex: 0,
+            amount: "1000000000",
+            releaseType: 0,
+            startTime: 0,
+            cliffTime: futureCliff,
+            endTime: futureCliff,
+            milestoneIdx: 0,
+          },
+        },
+      ],
+    });
+    await gotoWithRetry(page, "/campaigns");
+    await waitForCampaignListMocks(page);
+
+    await expect(page.getByRole("button", { name: /^all\b/i })).toBeVisible({ timeout: 20_000 });
+    await expect(page.getByText(/loading streams/i)).not.toBeVisible({ timeout: 20_000 });
+
+    const needsActionTab = page.getByRole("button", { name: /needs action/i });
+    await expect(needsActionTab).toContainText("(2)");
+    await needsActionTab.click();
+
+    await expect(page.getByText("Cancelled Sender Campaign")).toBeVisible({ timeout: 20_000 });
+    await expect(page.getByText("Claimable Recipient Stream")).toBeVisible();
+    await expect(page.getByText(cancelledSenderAddr)).toBeVisible();
+    await expect(page.getByText(claimableRecipientAddr)).toBeVisible();
+    await expect(page.getByText("Active Sender Campaign")).not.toBeVisible();
+    await expect(page.getByText("Scheduled Recipient Stream")).not.toBeVisible();
+    await expect(page.getByText(activeSenderAddr)).not.toBeVisible();
+    await expect(page.getByText(scheduledRecipientAddr)).not.toBeVisible();
+    expect(pageErrors).toEqual([]);
+  });
+
+  test("sidebar shows amber dot when action needed", async ({ page }) => {
+    const pageErrors = collectRelevantPageErrors(page);
+    const cancelledAt = now() - 86400;
+    const cancelledSenderAddr = "SendCancel11111111111111111111111111111111";
+
+    await enableE2eWallet(page);
+    await mockCampaignListApis(page, {
+      senderCampaigns: [
+        {
+          treeAddress: cancelledSenderAddr,
+          creator: creatorWallet,
+          mint: nativeSolMint,
+          campaignId: 101,
+          leafCount: 2,
+          totalSupply: 1_000_000_000,
+          totalClaimed: 0,
+          cancellable: true,
+          paused: false,
+          cancelledAt,
+          createdAt: now() - 86400 * 10,
+          metadata: { name: "Cancelled Sender Campaign" },
+        },
+      ],
+      recipientCampaigns: [],
+    });
+    await gotoWithRetry(page, "/dashboard");
+    await waitForCampaignListMocks(page);
+
+    const campaignsLink = page.getByRole("link", { name: "My Campaigns", exact: true });
+    await expect(campaignsLink).toBeVisible({ timeout: 20_000 });
+    await expect(
+      campaignsLink.locator("span.ml-auto.h-2.w-2.rounded-full.bg-amber-400"),
+    ).toBeVisible({ timeout: 20_000 });
     expect(pageErrors).toEqual([]);
   });
 });
