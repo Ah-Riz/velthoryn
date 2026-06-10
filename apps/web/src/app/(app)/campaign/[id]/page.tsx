@@ -23,6 +23,7 @@ import {
 } from "@/lib/stream/persist";
 import { CancelConfirmDialog } from "@/components/campaign/detail/CancelConfirmDialog";
 import { CampaignStatusBanner } from "@/components/campaign/detail/CampaignStatusBanner";
+
 import { MilestoneStatusBadge } from "@/components/campaign/detail/MilestoneStatusBadge";
 import { PauseToggleButton } from "@/components/campaign/detail/PauseToggleButton";
 import { TriggerMilestoneButton } from "@/components/campaign/detail/TriggerMilestoneButton";
@@ -32,13 +33,6 @@ import { CloseClaimRecordButton } from "@/components/campaign/detail/CloseClaimR
 import { WithdrawUnvestedButton } from "@/components/campaign/detail/WithdrawUnvestedButton";
 import { ClaimWithProofButton } from "@/components/campaign/detail/ClaimWithProofButton";
 import { VestingChart } from "@/components/campaign/detail/VestingChart";
-import { StatCard, StatCardSkeletonGroup } from "@/components/ui/StatCard";
-import { ProgressBar } from "@/components/ui/ProgressBar";
-import { Spinner } from "@/components/ui/Spinner";
-import { SectionHeader } from "@/components/ui/SectionHeader";
-import { FieldRow } from "@/components/ui/FieldRow";
-import { DetailRow } from "@/components/ui/DetailRow";
-import { RecipientListModal } from "@/components/campaign/detail/RecipientListModal";
 import { CampaignTimeline } from "@/components/campaign/detail/CampaignTimeline";
 import { useCampaignTimeline } from "@/hooks/useCampaignTimeline";
 import { useToast } from "@/components/shell/Toast";
@@ -59,6 +53,31 @@ import {
   canRotateRoot,
   canWithdrawUnvested,
 } from "@/lib/campaign/authority";
+import { Card, CardContent } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { Skeleton } from "@/components/ui/skeleton";
+import { Progress } from "@/components/ui/progress";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+} from "@/components/ui/dialog";
+import { cn } from "@/lib/utils";
 
 /* ------------------------------------------------------------------ */
 /*  Types                                                             */
@@ -115,11 +134,6 @@ type UrlScheduleLoadResult = {
 
 const ONCHAIN_TREE_FETCH_TIMEOUT_MS = 8000;
 const ONCHAIN_TREE_FETCH_TIMEOUT_MESSAGE = "Timed out fetching vesting tree";
-const E2E_MOCK_SEND_TX_KEY = "velthoryn:e2e-mock-send-tx";
-
-function isE2eMockSendTxEnabled() {
-  return typeof window !== "undefined" && window.localStorage.getItem(E2E_MOCK_SEND_TX_KEY) === "1";
-}
 
 function buildIndexedFallbackTreeState(detail: {
   creator: string;
@@ -1125,9 +1139,7 @@ export default function CampaignPage({ params }: { params: Promise<{ id: string 
         .instruction();
       const cancelTx = new Transaction().add(cancelIx);
       const sig = await sendTransaction(cancelTx, connection);
-      if (!isE2eMockSendTxEnabled()) {
-        await connection.confirmTransaction(sig, "confirmed");
-      }
+      await connection.confirmTransaction(sig, "confirmed");
 
       setTxStatus({ type: "success", sig });
       setCancelOpen(false);
@@ -1585,7 +1597,7 @@ export default function CampaignPage({ params }: { params: Promise<{ id: string 
         queryKey: ["claimRecord", treeAddress, beneficiaryKey],
       });
       void (async () => {
-        await fetch("/api/events/sync", {
+        await fetch("/api/claims/sync", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ signature: sig }),
@@ -1649,33 +1661,37 @@ export default function CampaignPage({ params }: { params: Promise<{ id: string 
     }
   }
 
+  /* ================================================================ */
+  /*  RENDER                                                          */
+  /* ================================================================ */
+
   /* -- Loading state -- */
   if (loading) {
     return (
-      <div className="mx-auto max-w-5xl animate-pulse space-y-6">
-        {/* Header */}
+      <div className="mx-auto max-w-5xl space-y-6">
         <div className="space-y-2">
-          <div className="h-7 w-1/3 rounded-full bg-white/[0.06]" />
-          <div className="h-4 w-1/4 rounded-full bg-white/[0.04]" />
+          <Skeleton className="h-7 w-1/3" />
+          <Skeleton className="h-4 w-1/4" />
         </div>
-        {/* Metrics row */}
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {[...Array(6)].map((_, i) => (
-            <div key={i} className="rounded-2xl border border-white/[0.06] bg-white/[0.02] p-5">
-              <div className="h-3 w-1/2 rounded-full bg-white/[0.06]" />
-              <div className="mt-3 h-6 w-2/3 rounded-full bg-white/[0.06]" />
-            </div>
+            <Card key={i}>
+              <CardContent className="p-5">
+                <Skeleton className="h-3 w-1/2" />
+                <Skeleton className="mt-3 h-6 w-2/3" />
+              </CardContent>
+            </Card>
           ))}
         </div>
-        {/* Progress bar */}
-        <div className="rounded-2xl border border-white/[0.06] bg-white/[0.02] p-5">
-          <div className="h-3 w-1/4 rounded-full bg-white/[0.06]" />
-          <div className="mt-4 h-2 rounded-full bg-white/[0.06]" />
-        </div>
-        {/* Action buttons */}
+        <Card>
+          <CardContent className="p-5">
+            <Skeleton className="h-3 w-1/4" />
+            <Skeleton className="mt-4 h-2 w-full" />
+          </CardContent>
+        </Card>
         <div className="flex gap-3">
-          <div className="h-10 w-32 rounded-xl bg-white/[0.06]" />
-          <div className="h-10 w-28 rounded-xl bg-white/[0.06]" />
+          <Skeleton className="h-10 w-32 rounded-xl" />
+          <Skeleton className="h-10 w-28 rounded-xl" />
         </div>
       </div>
     );
@@ -1706,44 +1722,50 @@ export default function CampaignPage({ params }: { params: Promise<{ id: string 
 
   return (
     <div className="mx-auto max-w-6xl space-y-6 pb-12">
-      <div className="rounded-2xl border border-white/[0.08] bg-[#0d1117] p-6">
-        <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-          <div>
-            <h1 className="text-[24px] font-semibold text-white">{pageTitle}</h1>
-            <p className="mt-2 max-w-3xl text-[14px] text-[#8b92a5]">
-              {pageDescription}
-            </p>
-          </div>
-          <div className="flex flex-wrap gap-2">
-            <span
-              className={`inline-flex items-center rounded-full border px-3 py-1 text-[12px] font-medium ${statusBadgeClass}`}
-            >
-              {statusLabel}
-            </span>
-            <span
-              className={`inline-flex items-center rounded-full border px-3 py-1 text-[12px] font-medium ${getVestingTypeBadgeColor(releaseType)}`}
-            >
-              {getVestingTypeLabel(releaseType)}
-            </span>
-            {isCliff && cliffTime && nowTs < cliffTsBigint && (
-              <span className="inline-flex items-center rounded-full border border-amber-500/20 bg-amber-500/10 px-3 py-1 text-[12px] font-medium text-amber-400">
-                Unlocks in {formatCountdown(cliffTsBigint, nowTs)}
-              </span>
-            )}
-            {isMilestone && (
-              <span
-                className={`inline-flex items-center rounded-full border px-3 py-1 text-[12px] font-medium ${
-                  milestoneTriggered
-                    ? "border-emerald-500/20 bg-emerald-500/10 text-emerald-400"
-                    : "border-white/[0.08] bg-white/[0.02] text-[#8b92a5]"
-                }`}
+      <Card className="rounded-2xl p-6">
+        <CardContent className="p-0">
+          <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+            <div>
+              <h1 className="text-[24px] font-semibold text-foreground">{pageTitle}</h1>
+              <p className="mt-2 max-w-3xl text-[14px] text-muted-foreground">
+                {pageDescription}
+              </p>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <Badge
+                variant="outline"
+                className={cn("h-auto rounded-full px-3 py-1 text-[12px] font-medium", statusBadgeClass)}
               >
-                {milestoneLifecycleLabel}
-              </span>
-            )}
+                {statusLabel}
+              </Badge>
+              <Badge
+                variant="outline"
+                className={cn("h-auto rounded-full px-3 py-1 text-[12px] font-medium", getVestingTypeBadgeColor(releaseType))}
+              >
+                {getVestingTypeLabel(releaseType)}
+              </Badge>
+              {isCliff && cliffTime && nowTs < cliffTsBigint && (
+                <Badge variant="outline" className="h-auto rounded-full border-amber-500/20 bg-amber-500/10 px-3 py-1 text-[12px] font-medium text-amber-400">
+                  Unlocks in {formatCountdown(cliffTsBigint, nowTs)}
+                </Badge>
+              )}
+              {isMilestone && (
+                <Badge
+                  variant="outline"
+                  className={cn(
+                    "h-auto rounded-full px-3 py-1 text-[12px] font-medium",
+                    milestoneTriggered
+                      ? "border-emerald-500/20 bg-emerald-500/10 text-emerald-400"
+                      : "border-white/[0.08] bg-white/[0.02] text-muted-foreground",
+                  )}
+                >
+                  {milestoneLifecycleLabel}
+                </Badge>
+              )}
+            </div>
           </div>
-        </div>
-      </div>
+        </CardContent>
+      </Card>
 
       <CampaignStatusBanner
         cancelledAtBigint={cancelledAtBigint}
@@ -1767,42 +1789,44 @@ export default function CampaignPage({ params }: { params: Promise<{ id: string 
       <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_340px]">
         <div className="space-y-6">
           {isRecipientMetricsLoading ? (
-            <StatCardSkeletonGroup />
+            <MetricSkeletonGroup />
           ) : isRecipientView ? (
             <div className="space-y-4">
               <div className="grid gap-4 md:grid-cols-2">
-                <StatCard label="Total Supply" value={formatTokenAmount(totalSupply)} />
-                <StatCard label="Your Allocation" value={formatTokenAmount(displaySupply)} accent />
+                <MetricCard label="Total Supply" value={formatTokenAmount(totalSupply)} />
+                <MetricCard label="Your Allocation" value={formatTokenAmount(displaySupply)} accent />
               </div>
               <div className="grid gap-4 md:grid-cols-3">
-                <StatCard label={claimedLabel} value={formatTokenAmount(displayClaimed)} />
-                <StatCard label="Vested" value={vestedLabel} />
-                <StatCard label={claimableLabel} value={formatTokenAmount(displayClaimable)} accent />
+                <MetricCard label={claimedLabel} value={formatTokenAmount(displayClaimed)} />
+                <MetricCard label="Vested" value={vestedLabel} />
+                <MetricCard label={claimableLabel} value={formatTokenAmount(displayClaimable)} accent />
               </div>
             </div>
           ) : (
             <div className="grid grid-cols-2 gap-4 xl:grid-cols-4">
-              <StatCard label="Total Supply" value={formatTokenAmount(totalSupply)} />
-              <StatCard label={claimedLabel} value={formatTokenAmount(displayClaimed)} />
-              <StatCard label="Vested" value={vestedLabel} />
-              <StatCard label={claimableLabel} value={formatTokenAmount(displayClaimable)} accent />
+              <MetricCard label="Total Supply" value={formatTokenAmount(totalSupply)} />
+              <MetricCard label={claimedLabel} value={formatTokenAmount(displayClaimed)} />
+              <MetricCard label="Vested" value={vestedLabel} />
+              <MetricCard label={claimableLabel} value={formatTokenAmount(displayClaimable)} accent />
             </div>
           )}
 
           {!isMilestone && cliffTime && endTime && (
-            <div className="rounded-2xl border border-white/[0.06] bg-white/[0.02] p-5">
-              <SectionHeader
-                title="Progress"
-                caption={scheduleSummary}
-              />
-              <div className="mt-4 space-y-2">
-                <div className="flex items-center justify-between text-[12px] text-[#8b92a5]">
-                  <span>Vested</span>
-                  <span className="font-medium text-white">{displayProgress}%</span>
+            <Card className="rounded-2xl">
+              <CardContent className="p-5">
+                <SectionHeader
+                  title="Progress"
+                  caption={scheduleSummary}
+                />
+                <div className="mt-4 space-y-2">
+                  <div className="flex items-center justify-between text-[12px] text-muted-foreground">
+                    <span>Vested</span>
+                    <span className="font-medium text-foreground">{displayProgress}%</span>
+                  </div>
+                  <Progress value={Math.min(displayProgress, 100)} className="h-2.5" />
                 </div>
-                <ProgressBar percentage={displayProgress} colorClass="bg-white transition-all duration-500" trackClassName="bg-white/[0.05]" />
-              </div>
-            </div>
+              </CardContent>
+            </Card>
           )}
 
           {/* Vesting Curve Chart */}
@@ -1835,184 +1859,194 @@ export default function CampaignPage({ params }: { params: Promise<{ id: string 
 
           <CampaignTimeline treeAddress={treeAddress} mintDecimals={mintDecimals} />
 
-          <div className="rounded-2xl border border-white/[0.06] bg-white/[0.02] p-5">
-            <SectionHeader
-              title="Details"
-              caption={detailsCaption}
-            />
-            <div className="mt-5 grid gap-3">
-              <DetailRow label="Tree Address" value={treeAddress} mono />
-              <DetailRow label="Creator" value={treeState.creator.toBase58()} mono />
-              <DetailRow label="Mint" value={mintLabel ?? treeState.mint.toBase58()} mono={mintLabel === null || mintLabel === treeState.mint.toBase58()} />
-              {expectedBeneficiary && !isMultiWallet && (
-                <DetailRow label="Beneficiary" value={expectedBeneficiary} mono />
-              )}
-              {isMultiWallet && (
-                <div className="rounded-xl border border-white/[0.06] bg-[#11161f] px-4 py-4">
-                  <div className="flex items-start justify-between gap-4">
-                    <div>
-                      <p className="text-[11px] uppercase tracking-[0.14em] text-[#6f7c95]">Recipients</p>
-                      <p className="mt-2 text-[14px] font-medium text-white">
-                        {campaignRecipients.length || treeState.leafCount} wallets in this campaign
-                      </p>
-                      <div className="mt-3 flex flex-wrap gap-2">
-                        {campaignRecipients.slice(0, 3).map((recipient) => (
-                          <span
-                            key={recipient.beneficiary}
-                            className="inline-flex items-center rounded-full border border-white/[0.08] bg-white/[0.03] px-3 py-1 text-[11px] font-mono text-[#cfd6e4]"
-                          >
-                            {truncateAddress(recipient.beneficiary)}
-                          </span>
-                        ))}
-                        {campaignRecipients.length > 3 && (
-                          <span className="inline-flex items-center rounded-full border border-white/[0.08] bg-white/[0.03] px-3 py-1 text-[11px] text-[#8b92a5]">
-                            +{campaignRecipients.length - 3} more
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => setRecipientsOpen(true)}
-                      className="shrink-0 rounded-xl border border-white/[0.08] bg-white/[0.03] px-3 py-2 text-[12px] font-medium text-white transition hover:bg-white/[0.06]"
-                    >
-                      View All
-                    </button>
-                  </div>
-                </div>
-              )}
-              <DetailRow label="Campaign ID" value={treeState.campaignId.toString()} />
-              <DetailRow label="Created" value={formatDate(treeState.createdAt.toNumber())} />
-            </div>
-          </div>
-
-          <div className="rounded-2xl border border-white/[0.06] bg-white/[0.02] p-5">
-            <div className="flex items-start justify-between gap-4">
+          <Card className="rounded-2xl">
+            <CardContent className="p-5">
               <SectionHeader
-                title={scheduleSectionTitle}
-                caption={scheduleSectionCaption}
+                title="Details"
+                caption={detailsCaption}
               />
-              {isSingleLeaf && scheduleLocked && (
-                <button
-                  type="button"
-                  onClick={() => setShowManualSchedule(true)}
-                  className="text-[12px] font-medium text-white underline underline-offset-4"
-                >
-                  Advanced / Manual
-                </button>
-              )}
-              {isSingleLeaf && showManualSchedule && (
-                <button
-                  type="button"
-                  onClick={() => setShowManualSchedule(false)}
-                  className="text-[12px] font-medium text-[#8b92a5] underline underline-offset-4"
-                >
-                  Back to Loaded Schedule
-                </button>
-              )}
-            </div>
-
-            {proofQuery.isLoading && isSingleLeaf && (
-              <p className="mt-4 text-[12px] text-[#8b92a5]">Loading schedule...</p>
-            )}
-
-            {!showReadOnlySchedule && (
-              <div className="mt-4 rounded-xl border border-amber-500/20 bg-amber-500/5 px-4 py-3 text-[12px] leading-6 text-amber-200">
-                Editing these values does not change the campaign on-chain. They are only used locally to reconstruct a single-stream claim if the loaded schedule is unavailable.
-              </div>
-            )}
-
-            {showReadOnlySchedule ? (
               <div className="mt-5 grid gap-3">
-                <DetailRow label="Vesting Type" value={getVestingTypeLabel(releaseType)} />
-                <DetailRow label="Start Time" value={startTime ? formatDate(datetimeLocalToUnix(startTime)) : "—"} />
-                <DetailRow label={isMilestone ? "Unlock Time" : isCliff ? "Unlock Time" : "Cliff Time"} value={cliffTime ? formatDate(datetimeLocalToUnix(cliffTime)) : "—"} />
-                <DetailRow label="End Time" value={endTime ? formatDate(datetimeLocalToUnix(endTime)) : "—"} />
-                {isMilestone && <DetailRow label="Milestone Index" value={milestoneIdx} />}
+                <DetailRow label="Tree Address" value={treeAddress} mono />
+                <DetailRow label="Creator" value={treeState.creator.toBase58()} mono />
+                <DetailRow label="Mint" value={mintLabel ?? treeState.mint.toBase58()} mono={mintLabel === null || mintLabel === treeState.mint.toBase58()} />
+                {expectedBeneficiary && !isMultiWallet && (
+                  <DetailRow label="Beneficiary" value={expectedBeneficiary} mono />
+                )}
+                {isMultiWallet && (
+                  <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] px-4 py-4">
+                    <div className="flex items-start justify-between gap-4">
+                      <div>
+                        <p className="text-[11px] uppercase tracking-[0.14em] text-muted-foreground">Recipients</p>
+                        <p className="mt-2 text-[14px] font-medium text-foreground">
+                          {campaignRecipients.length || treeState.leafCount} wallets in this campaign
+                        </p>
+                        <div className="mt-3 flex flex-wrap gap-2">
+                          {campaignRecipients.slice(0, 3).map((recipient) => (
+                            <Badge
+                              key={recipient.beneficiary}
+                              variant="outline"
+                              className="h-auto rounded-full border-white/[0.08] bg-white/[0.03] px-3 py-1 font-mono text-[11px] text-foreground"
+                            >
+                              {truncateAddress(recipient.beneficiary)}
+                            </Badge>
+                          ))}
+                          {campaignRecipients.length > 3 && (
+                            <Badge variant="outline" className="h-auto rounded-full border-white/[0.08] bg-white/[0.03] px-3 py-1 text-[11px] text-muted-foreground">
+                              +{campaignRecipients.length - 3} more
+                            </Badge>
+                          )}
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setRecipientsOpen(true)}
+                        className="shrink-0 rounded-xl border border-white/[0.08] bg-white/[0.03] px-3 py-2 text-[12px] font-medium text-foreground transition hover:bg-white/[0.06]"
+                      >
+                        View All
+                      </button>
+                    </div>
+                  </div>
+                )}
+                <DetailRow label="Campaign ID" value={treeState.campaignId.toString()} />
+                <DetailRow label="Created" value={formatDate(treeState.createdAt.toNumber())} />
               </div>
-            ) : (
-              <div className="mt-5 space-y-4">
-                <FieldRow
-                  label="Vesting Type"
-                  input={(
-                    <select
-                      value={releaseType}
-                      onChange={(e) => setReleaseType(Number(e.target.value))}
-                      disabled={scheduleLocked}
-                      className="w-full rounded-xl border border-white/[0.08] bg-[#11161f] px-4 py-3 text-[13px] text-white outline-none transition focus:border-white/20 disabled:opacity-50"
-                    >
-                      <option value={0}>Cliff</option>
-                      <option value={1}>Linear</option>
-                      <option value={2}>Milestone</option>
-                    </select>
-                  )}
+            </CardContent>
+          </Card>
+
+          <Card className="rounded-2xl">
+            <CardContent className="p-5">
+              <div className="flex items-start justify-between gap-4">
+                <SectionHeader
+                  title={scheduleSectionTitle}
+                  caption={scheduleSectionCaption}
                 />
-
-                <div className="grid gap-4 md:grid-cols-3">
-                  <FieldRow
-                    label="Start Time"
-                    input={(
-                      <input
-                        type="datetime-local"
-                        value={startTime}
-                        onChange={(e) => setStartTime(e.target.value)}
-                        disabled={scheduleLocked}
-                        className="w-full rounded-xl border border-white/[0.08] bg-[#11161f] px-4 py-3 text-[13px] text-white outline-none transition focus:border-white/20 disabled:opacity-50"
-                      />
-                    )}
-                  />
-                  <FieldRow
-                    label={isMilestone ? "Unlock Time" : isCliff ? "Unlock Time" : "Cliff Time"}
-                    input={(
-                      <input
-                        type="datetime-local"
-                        value={cliffTime}
-                        onChange={(e) => setCliffTime(e.target.value)}
-                        disabled={scheduleLocked}
-                        className="w-full rounded-xl border border-white/[0.08] bg-[#11161f] px-4 py-3 text-[13px] text-white outline-none transition focus:border-white/20 disabled:opacity-50"
-                      />
-                    )}
-                  />
-                  <FieldRow
-                    label="End Time"
-                    input={(
-                      <input
-                        type="datetime-local"
-                        value={endTime}
-                        onChange={(e) => setEndTime(e.target.value)}
-                        disabled={scheduleLocked}
-                        className="w-full rounded-xl border border-white/[0.08] bg-[#11161f] px-4 py-3 text-[13px] text-white outline-none transition focus:border-white/20 disabled:opacity-50"
-                      />
-                    )}
-                  />
-                </div>
-
-                {isMilestone && (
-                  <FieldRow
-                    label="Milestone Index"
-                    input={(
-                      <input
-                        type="number"
-                        min="0"
-                        max="255"
-                        value={milestoneIdx}
-                        onChange={(e) => setMilestoneIdx(e.target.value)}
-                        disabled={scheduleLocked}
-                        className="w-full rounded-xl border border-white/[0.08] bg-[#11161f] px-4 py-3 text-[13px] text-white outline-none transition focus:border-white/20 disabled:opacity-50"
-                      />
-                    )}
-                  />
+                {isSingleLeaf && scheduleLocked && (
+                  <button
+                    type="button"
+                    onClick={() => setShowManualSchedule(true)}
+                    className="text-[12px] font-medium text-foreground underline underline-offset-4"
+                  >
+                    Advanced / Manual
+                  </button>
+                )}
+                {isSingleLeaf && showManualSchedule && (
+                  <button
+                    type="button"
+                    onClick={() => setShowManualSchedule(false)}
+                    className="text-[12px] font-medium text-muted-foreground underline underline-offset-4"
+                  >
+                    Back to Loaded Schedule
+                  </button>
                 )}
               </div>
-            )}
-          </div>
+
+              {proofQuery.isLoading && isSingleLeaf && (
+                <p className="mt-4 text-[12px] text-muted-foreground">Loading schedule...</p>
+              )}
+
+              {!showReadOnlySchedule && (
+                <div className="mt-4 rounded-xl border border-amber-500/20 bg-amber-500/5 px-4 py-3 text-[12px] leading-6 text-amber-200">
+                  Editing these values does not change the campaign on-chain. They are only used locally to reconstruct a single-stream claim if the loaded schedule is unavailable.
+                </div>
+              )}
+
+              {showReadOnlySchedule ? (
+                <div className="mt-5 grid gap-3">
+                  <DetailRow label="Vesting Type" value={getVestingTypeLabel(releaseType)} />
+                  <DetailRow label="Start Time" value={startTime ? formatDate(datetimeLocalToUnix(startTime)) : "—"} />
+                  <DetailRow label={isMilestone ? "Unlock Time" : isCliff ? "Unlock Time" : "Cliff Time"} value={cliffTime ? formatDate(datetimeLocalToUnix(cliffTime)) : "—"} />
+                  <DetailRow label="End Time" value={endTime ? formatDate(datetimeLocalToUnix(endTime)) : "—"} />
+                  {isMilestone && <DetailRow label="Milestone Index" value={milestoneIdx} />}
+                </div>
+              ) : (
+                <div className="mt-5 space-y-4">
+                  <FieldRow
+                    label="Vesting Type"
+                    input={(
+                      <Select
+                        value={String(releaseType)}
+                        onValueChange={(v) => setReleaseType(Number(v))}
+                        disabled={scheduleLocked}
+                      >
+                        <SelectTrigger className="w-full">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="0">Cliff</SelectItem>
+                          <SelectItem value="1">Linear</SelectItem>
+                          <SelectItem value="2">Milestone</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    )}
+                  />
+
+                  <div className="grid gap-4 md:grid-cols-3">
+                    <FieldRow
+                      label="Start Time"
+                      input={(
+                        <input
+                          type="datetime-local"
+                          value={startTime}
+                          onChange={(e) => setStartTime(e.target.value)}
+                          disabled={scheduleLocked}
+                          className="w-full rounded-xl border border-white/[0.08] bg-[#11161f] px-4 py-3 text-[13px] text-white outline-none transition focus:border-white/20 disabled:opacity-50"
+                        />
+                      )}
+                    />
+                    <FieldRow
+                      label={isMilestone ? "Unlock Time" : isCliff ? "Unlock Time" : "Cliff Time"}
+                      input={(
+                        <input
+                          type="datetime-local"
+                          value={cliffTime}
+                          onChange={(e) => setCliffTime(e.target.value)}
+                          disabled={scheduleLocked}
+                          className="w-full rounded-xl border border-white/[0.08] bg-[#11161f] px-4 py-3 text-[13px] text-white outline-none transition focus:border-white/20 disabled:opacity-50"
+                        />
+                      )}
+                    />
+                    <FieldRow
+                      label="End Time"
+                      input={(
+                        <input
+                          type="datetime-local"
+                          value={endTime}
+                          onChange={(e) => setEndTime(e.target.value)}
+                          disabled={scheduleLocked}
+                          className="w-full rounded-xl border border-white/[0.08] bg-[#11161f] px-4 py-3 text-[13px] text-white outline-none transition focus:border-white/20 disabled:opacity-50"
+                        />
+                      )}
+                    />
+                  </div>
+
+                  {isMilestone && (
+                    <FieldRow
+                      label="Milestone Index"
+                      input={(
+                        <input
+                          type="number"
+                          min="0"
+                          max="255"
+                          value={milestoneIdx}
+                          onChange={(e) => setMilestoneIdx(e.target.value)}
+                          disabled={scheduleLocked}
+                          className="w-full rounded-xl border border-white/[0.08] bg-[#11161f] px-4 py-3 text-[13px] text-white outline-none transition focus:border-white/20 disabled:opacity-50"
+                        />
+                      )}
+                    />
+                  )}
+                </div>
+              )}
+            </CardContent>
+          </Card>
         </div>
 
         <div className="space-y-6">
-          <div
+          <Card
             id="campaign-actions"
-            className="rounded-2xl border border-white/[0.06] bg-white/[0.02] p-5 lg:sticky lg:top-6"
+            className="rounded-2xl lg:sticky lg:top-6"
           >
+          <CardContent className="p-5">
             <SectionHeader
               title="Actions"
               caption={actionsCaption}
@@ -2219,38 +2253,40 @@ export default function CampaignPage({ params }: { params: Promise<{ id: string 
               )}
 
               {canShowRootRotation && (
-                <div className="rounded-2xl border border-white/[0.06] bg-white/[0.02] p-5">
-                  <div className="space-y-2">
-                    <p className="text-[11px] uppercase tracking-[0.18em] text-[#6f7c95]">Advanced Admin</p>
-                    <h3 className="text-[15px] font-medium text-white">Allocation Editor</h3>
-                    <p className="text-[13px] leading-6 text-[#8b92a5]">
-                      Update the recipient list for this campaign without creating a new one. Use this only when you need to correct future allocations.
-                    </p>
-                  </div>
-                  <div className="mt-4 grid gap-3 md:grid-cols-2">
-                    <div className="rounded-xl border border-white/[0.06] bg-[#11161f] px-4 py-3">
-                      <p className="text-[11px] uppercase tracking-[0.18em] text-[#6f7c95]">Current Root</p>
-                      <p className="mt-2 font-mono text-[12px] text-white">{currentMerkleRootHex ? `${currentMerkleRootHex.slice(0, 10)}...${currentMerkleRootHex.slice(-8)}` : "—"}</p>
+                <Card className="rounded-2xl">
+                  <CardContent className="p-5">
+                    <div className="space-y-1">
+                      <p className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">Advanced Admin</p>
+                      <h3 className="text-[15px] font-medium text-foreground">Allocation Editor</h3>
+                      <p className="text-[13px] leading-6 text-muted-foreground">
+                        Update the recipient list for this campaign without creating a new one. Use this only when you need to correct future allocations.
+                      </p>
                     </div>
-                    <div className="rounded-xl border border-white/[0.06] bg-[#11161f] px-4 py-3">
-                      <p className="text-[11px] uppercase tracking-[0.18em] text-[#6f7c95]">Current Version</p>
-                      <p className="mt-2 text-[13px] text-white">v{rootVersions[0]?.version ?? 1} · {treeState.leafCount} leaves</p>
+                    <div className="mt-4 grid gap-3 md:grid-cols-2">
+                      <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] px-4 py-3">
+                        <p className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">Current Root</p>
+                        <p className="mt-2 font-mono text-[12px] text-foreground">{currentMerkleRootHex ? `${currentMerkleRootHex.slice(0, 10)}...${currentMerkleRootHex.slice(-8)}` : "—"}</p>
+                      </div>
+                      <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] px-4 py-3">
+                        <p className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">Current Version</p>
+                        <p className="mt-2 text-[13px] text-foreground">v{rootVersions[0]?.version ?? 1} · {treeState.leafCount} leaves</p>
+                      </div>
                     </div>
-                  </div>
-                  <a
-                    href={`/campaign/${treeAddress}/allocations`}
-                    className="mt-4 inline-flex w-full items-center justify-center rounded-xl border border-white/[0.08] bg-white px-4 py-3 text-[13px] font-medium text-[#0d1117] transition hover:opacity-90"
-                  >
-                    Open Allocation Editor
-                  </a>
-                </div>
+                    <a
+                      href={`/campaign/${treeAddress}/allocations`}
+                      className="mt-4 inline-flex w-full items-center justify-center rounded-xl border border-white/[0.08] bg-white px-4 py-3 text-[13px] font-medium text-[#0d1117] transition hover:opacity-90"
+                    >
+                      Open Allocation Editor
+                    </a>
+                  </CardContent>
+                </Card>
               )}
             </div>
 
             {txStatus.type === "success" && (
               <div className="mt-5 rounded-xl border border-emerald-500/20 bg-emerald-500/5 p-4">
                 <p className="text-[12px] font-medium text-emerald-400">Transaction submitted.</p>
-                <p className="mt-2 break-all font-mono text-[11px] text-[#8b92a5]">{txStatus.sig}</p>
+                <p className="mt-2 break-all font-mono text-[11px] text-muted-foreground">{txStatus.sig}</p>
                 {isWrappedSolStream && (
                   <div className="mt-3 flex items-center gap-2 rounded-lg border border-amber-500/20 bg-amber-500/5 p-3">
                     <span className="text-[12px] text-amber-300">Claimed tokens are in wSOL.</span>
@@ -2265,7 +2301,8 @@ export default function CampaignPage({ params }: { params: Promise<{ id: string 
                 )}
               </div>
             )}
-          </div>
+          </CardContent>
+          </Card>
         </div>
       </div>
 
@@ -2316,5 +2353,291 @@ export default function CampaignPage({ params }: { params: Promise<{ id: string 
         viewer={publicKey?.toBase58()}
       />
     </div>
+  );
+}
+
+/* ================================================================== */
+/*  Sub-components                                                    */
+/* ================================================================== */
+
+function SectionHeader({
+  title,
+  caption,
+}: {
+  title: string;
+  caption: string;
+}) {
+  return (
+    <div>
+      <h2 className="text-[16px] font-semibold text-white">{title}</h2>
+      <p className="mt-1 text-[13px] text-[#8b92a5]">{caption}</p>
+    </div>
+  );
+}
+
+function FieldRow({
+  label,
+  input,
+}: {
+  label: string;
+  input: React.ReactNode;
+}) {
+  return (
+    <div>
+      <label className="mb-2 block text-[12px] font-medium text-[#8b92a5]">{label}</label>
+      {input}
+    </div>
+  );
+}
+
+/** Metric card used in the 4-card grid. */
+function MetricCard({
+  label,
+  value,
+  accent,
+}: {
+  label: string;
+  value: string;
+  accent?: boolean;
+}) {
+  return (
+    <Card className="rounded-2xl">
+      <CardContent className="p-5">
+        <p className="text-[11px] uppercase tracking-[0.12em] text-muted-foreground">{label}</p>
+        <p className={cn("mt-2 text-2xl font-semibold tabular-nums", accent ? "text-violet-400" : "text-foreground")}>
+          {value}
+        </p>
+      </CardContent>
+    </Card>
+  );
+}
+
+function MetricSkeletonGroup() {
+  return (
+    <div className="space-y-4">
+      <div className="grid gap-4 md:grid-cols-2">
+        <MetricCardSkeleton />
+        <MetricCardSkeleton />
+      </div>
+      <div className="grid gap-4 md:grid-cols-3">
+        <MetricCardSkeleton />
+        <MetricCardSkeleton />
+        <MetricCardSkeleton />
+      </div>
+    </div>
+  );
+}
+
+function MetricCardSkeleton() {
+  return (
+    <Card className="rounded-2xl">
+      <CardContent className="p-5">
+        <Skeleton className="h-3 w-24" />
+        <Skeleton className="mt-3 h-8 w-28" />
+      </CardContent>
+    </Card>
+  );
+}
+
+/** Key-value row inside the Campaign Details card. */
+function DetailRow({
+  label,
+  value,
+  mono,
+}: {
+  label: string;
+  value: string;
+  mono?: boolean;
+}) {
+  return (
+    <div className="flex items-start justify-between gap-4">
+      <span className="shrink-0 text-[12px] text-muted-foreground">{label}</span>
+      {mono ? (
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <span className="cursor-default text-right font-mono text-[13px] text-foreground">
+              {truncateAddress(value)}
+            </span>
+          </TooltipTrigger>
+          <TooltipContent side="left">
+            <p className="max-w-xs break-all font-mono text-[11px]">{value}</p>
+          </TooltipContent>
+        </Tooltip>
+      ) : (
+        <span className="text-right text-[13px] text-foreground">{value}</span>
+      )}
+    </div>
+  );
+}
+
+function RecipientListModal({
+  isOpen,
+  onClose,
+  recipients,
+  mintDecimals,
+  viewer,
+}: {
+  isOpen: boolean;
+  onClose: () => void;
+  recipients: Array<{
+    beneficiary: string;
+    allocation: string;
+    leafCount: number;
+    claimedAmount: string;
+  }>;
+  mintDecimals: number | null;
+  viewer?: string;
+}) {
+  const [search, setSearch] = useState("");
+  const [copied, setCopied] = useState<string | null>(null);
+
+  const formatAmount = (raw: string) => {
+    const value = BigInt(raw);
+    if (mintDecimals === null) return value.toString();
+    if (mintDecimals === 0) return value.toLocaleString();
+    const divisor = 10n ** BigInt(mintDecimals);
+    const whole = value / divisor;
+    const frac = value % divisor;
+    const fracStr = frac.toString().padStart(mintDecimals, "0").slice(0, 4).replace(/0+$/, "");
+    return fracStr ? `${whole.toLocaleString()}.${fracStr}` : whole.toLocaleString();
+  };
+  const filteredRecipients = recipients.filter((recipient) =>
+    recipient.beneficiary.toLowerCase().includes(search.trim().toLowerCase()),
+  );
+
+  async function handleCopy(address: string) {
+    try {
+      await navigator.clipboard.writeText(address);
+      setCopied(address);
+      window.setTimeout(() => {
+        setCopied((current) => (current === address ? null : current));
+      }, 1500);
+    } catch {
+      setCopied(null);
+    }
+  }
+
+  return (
+    <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
+      <DialogContent className="max-w-2xl gap-0 p-0">
+        <DialogHeader className="p-6 pb-4">
+          <DialogTitle className="text-[20px] font-semibold">Recipients</DialogTitle>
+          <DialogDescription>
+            Latest recipient list from the current campaign root.
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="px-6 pb-4">
+          <input
+            type="text"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Search recipient wallet"
+            className="w-full rounded-2xl border border-white/[0.08] bg-[#11161f] px-4 py-3 text-[13px] text-white outline-none transition focus:border-white/20"
+          />
+        </div>
+
+        <ScrollArea className="max-h-[60vh] px-6 pb-6">
+          <div className="space-y-3 pr-1">
+            {filteredRecipients.map((recipient) => {
+              const allocation = BigInt(recipient.allocation);
+              const claimedAmount = BigInt(recipient.claimedAmount);
+              const fullyClaimed = claimedAmount >= allocation && allocation > 0n;
+              const partiallyClaimed = claimedAmount > 0n && claimedAmount < allocation;
+
+              return (
+                <Card key={recipient.beneficiary} className="rounded-2xl">
+                  <CardContent className="p-4">
+                    <div className="flex items-start justify-between gap-4">
+                      <div className="min-w-0">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <p className="truncate font-mono text-[13px] text-foreground" title={recipient.beneficiary}>
+                            {recipient.beneficiary}
+                          </p>
+                          {viewer === recipient.beneficiary && (
+                            <Badge variant="outline" className="h-auto rounded-full border-violet-500/20 bg-violet-500/10 px-2 py-0.5 text-[10px] font-medium text-violet-300">
+                              You
+                            </Badge>
+                          )}
+                          <Badge
+                            variant="outline"
+                            className={cn(
+                              "h-auto rounded-full px-2 py-0.5 text-[10px] font-medium",
+                              fullyClaimed
+                                ? "border-emerald-500/20 bg-emerald-500/10 text-emerald-300"
+                                : partiallyClaimed
+                                  ? "border-amber-500/20 bg-amber-500/10 text-amber-300"
+                                  : "border-white/[0.08] bg-white/[0.03] text-muted-foreground",
+                            )}
+                          >
+                            {fullyClaimed ? "Fully claimed" : partiallyClaimed ? "Partially claimed" : "Unclaimed"}
+                          </Badge>
+                        </div>
+                        <p className="mt-2 text-[11px] text-muted-foreground">
+                          {recipient.leafCount} {recipient.leafCount === 1 ? "allocation" : "allocations"}
+                        </p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => handleCopy(recipient.beneficiary)}
+                        className="shrink-0 rounded-xl border border-white/[0.08] bg-white/[0.03] px-3 py-2 text-[11px] font-medium text-foreground transition hover:bg-white/[0.06]"
+                      >
+                        {copied === recipient.beneficiary ? "Copied" : "Copy"}
+                      </button>
+                    </div>
+
+                    <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                      <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] px-3 py-3">
+                        <p className="text-[10px] uppercase tracking-[0.14em] text-muted-foreground">Allocation</p>
+                        <p className="mt-1.5 text-[14px] font-medium tabular-nums text-foreground">{formatAmount(recipient.allocation)}</p>
+                      </div>
+                      <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] px-3 py-3">
+                        <p className="text-[10px] uppercase tracking-[0.14em] text-muted-foreground">Claimed</p>
+                        <p className="mt-1.5 text-[14px] font-medium tabular-nums text-foreground">{formatAmount(recipient.claimedAmount)}</p>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              );
+            })}
+
+            {filteredRecipients.length === 0 && (
+              <div className="rounded-2xl border border-white/[0.06] bg-white/[0.02] px-4 py-8 text-center text-[13px] text-muted-foreground">
+                No recipient matched that wallet.
+              </div>
+            )}
+          </div>
+        </ScrollArea>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+/** Small animated spinner. */
+function Spinner({ size = 20 }: { size?: number }) {
+  return (
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
+      fill="none"
+      className="animate-spin"
+    >
+      <circle
+        cx="12"
+        cy="12"
+        r="10"
+        stroke="currentColor"
+        strokeWidth="2.5"
+        strokeLinecap="round"
+        className="opacity-20"
+      />
+      <path
+        d="M12 2a10 10 0 0 1 10 10"
+        stroke="currentColor"
+        strokeWidth="2.5"
+        strokeLinecap="round"
+      />
+    </svg>
   );
 }

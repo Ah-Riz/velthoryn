@@ -1,6 +1,15 @@
 "use client";
 
 import { useState } from "react";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 
 type Props = {
   isOpen: boolean;
@@ -47,8 +56,6 @@ export function CancelConfirmDialog({
     isInstantRefundEligible ? "refund" : "instant",
   );
 
-  if (!isOpen) return null;
-
   function fmt(raw: bigint): string {
     const dec = mintDecimals ?? (raw > 1_000_000_000n ? 9 : raw > 1_000_000n ? 6 : 0);
     if (dec === 0) return raw.toLocaleString();
@@ -92,212 +99,203 @@ export function CancelConfirmDialog({
   }
 
   const confirmLabel = activeLoading
-    ? effectiveMode === "refund"
-      ? "Refunding..."
-      : "Cancelling..."
+    ? effectiveMode === "refund" ? "Refunding..." : "Cancelling..."
     : effectiveMode === "refund"
       ? "Instant Refund"
       : effectiveMode === "instant" && showSingleToggle
         ? "Cancel & Settle"
         : "Cancel Stream";
 
-  const confirmButtonClass =
-    effectiveMode === "refund"
-      ? "flex-1 rounded-xl bg-amber-600 py-2.5 text-[13px] font-medium text-white transition hover:bg-amber-500 disabled:opacity-50"
-      : "flex-1 rounded-xl bg-red-600 py-2.5 text-[13px] font-medium text-white transition hover:bg-red-500 disabled:opacity-50";
-
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
-      <div className="mx-4 w-full max-w-md space-y-5 rounded-2xl border border-white/[0.08] bg-[#0d1017] p-6">
-        <h3 className="text-[15px] font-semibold text-red-400">
-          {effectiveMode === "refund"
-            ? "Instant refund this campaign?"
-            : "Cancel this vesting stream?"}
-        </h3>
+    <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
+      <DialogContent className="max-w-md border-white/[0.08] bg-[#0d1017]" showCloseButton={false}>
+        <DialogHeader>
+          <DialogTitle className={effectiveMode === "refund" ? "text-amber-400" : "text-red-400"}>
+            {effectiveMode === "refund"
+              ? "Instant refund this campaign?"
+              : "Cancel this vesting stream?"}
+          </DialogTitle>
+        </DialogHeader>
 
-        {/* Toggle tabs — show when multiple modes available */}
-        {showRefundToggle && (
-          <div className="flex gap-1 rounded-lg border border-white/[0.08] bg-white/[0.02] p-1">
-            <button
-              type="button"
-              onClick={() => setMode("refund")}
-              className={`flex-1 rounded-md px-3 py-1.5 text-[12px] font-medium transition ${
-                effectiveMode === "refund"
-                  ? "bg-amber-500/20 text-amber-300"
-                  : "text-[#8b92a5] hover:text-white"
-              }`}
-            >
-              Instant Refund
-            </button>
-            <button
-              type="button"
-              onClick={() => setMode("grace")}
-              className={`flex-1 rounded-md px-3 py-1.5 text-[12px] font-medium transition ${
-                effectiveMode === "grace"
-                  ? "bg-white/[0.08] text-white"
-                  : "text-[#8b92a5] hover:text-white"
-              }`}
-            >
-              Grace Period
-            </button>
-          </div>
-        )}
-
-        {showSingleToggle && !showRefundToggle && (
-          <div className="flex gap-1 rounded-lg border border-white/[0.08] bg-white/[0.02] p-1">
-            <button
-              type="button"
-              onClick={() => setMode("instant")}
-              disabled={instantDisabled}
-              className={`flex-1 rounded-md px-3 py-1.5 text-[12px] font-medium transition ${
-                effectiveMode === "instant"
-                  ? "bg-white/[0.08] text-white"
-                  : "text-[#8b92a5] hover:text-white"
-              } ${instantDisabled ? "cursor-not-allowed opacity-40" : ""}`}
-            >
-              Instant Settle
-            </button>
-            <button
-              type="button"
-              onClick={() => setMode("grace")}
-              className={`flex-1 rounded-md px-3 py-1.5 text-[12px] font-medium transition ${
-                effectiveMode === "grace"
-                  ? "bg-white/[0.08] text-white"
-                  : "text-[#8b92a5] hover:text-white"
-              }`}
-            >
-              Grace Period
-            </button>
-          </div>
-        )}
-
-        {showSingleToggle && !showRefundToggle && instantDisabled && (
-          <p className="text-[11px] text-amber-400">
-            Instant Settle unavailable — schedule parameters not loaded. Load from URL or enter manually first.
-          </p>
-        )}
-
-        {/* Instant Refund content */}
-        {effectiveMode === "refund" && (
-          <>
-            <p className="text-[13px] text-[#8b92a5]">
-              This campaign has not started yet. All funds will be returned to you
-              instantly in a single transaction. No grace period needed.
-            </p>
-
-            <div className="space-y-3 text-[13px]">
-              <div className="flex justify-between">
-                <span className="text-[#8b92a5]">Campaign total supply</span>
-                <span className="font-medium text-white">{fmt(totalSupply)} tokens</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-[#8b92a5]">Returned to you</span>
-                <span className="font-medium text-emerald-400">{fmt(totalSupply)} tokens</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-[#8b92a5]">To recipients</span>
-                <span className="font-medium text-[#555d73]">0 tokens</span>
-              </div>
+        <div className="space-y-4">
+          {/* Mode toggle: refund vs grace */}
+          {showRefundToggle && (
+            <div className="flex gap-1 rounded-lg border border-white/[0.08] bg-white/[0.02] p-1">
+              <button
+                type="button"
+                onClick={() => setMode("refund")}
+                className={`flex-1 rounded-md px-3 py-1.5 text-[12px] font-medium transition ${
+                  effectiveMode === "refund"
+                    ? "bg-amber-500/20 text-amber-300"
+                    : "text-[#8b92a5] hover:text-white"
+                }`}
+              >
+                Instant Refund
+              </button>
+              <button
+                type="button"
+                onClick={() => setMode("grace")}
+                className={`flex-1 rounded-md px-3 py-1.5 text-[12px] font-medium transition ${
+                  effectiveMode === "grace"
+                    ? "bg-white/[0.08] text-white"
+                    : "text-[#8b92a5] hover:text-white"
+                }`}
+              >
+                Grace Period
+              </button>
             </div>
+          )}
 
-            <div className="rounded-xl border border-emerald-500/20 bg-emerald-500/5 px-4 py-3 text-[12px] leading-6 text-emerald-300">
-              No vesting has started — all funds are returned immediately with no grace period.
+          {/* Mode toggle: instant settle vs grace */}
+          {showSingleToggle && !showRefundToggle && (
+            <div className="flex gap-1 rounded-lg border border-white/[0.08] bg-white/[0.02] p-1">
+              <button
+                type="button"
+                onClick={() => setMode("instant")}
+                disabled={instantDisabled}
+                className={`flex-1 rounded-md px-3 py-1.5 text-[12px] font-medium transition ${
+                  effectiveMode === "instant" ? "bg-white/[0.08] text-white" : "text-[#8b92a5] hover:text-white"
+                } ${instantDisabled ? "cursor-not-allowed opacity-40" : ""}`}
+              >
+                Instant Settle
+              </button>
+              <button
+                type="button"
+                onClick={() => setMode("grace")}
+                className={`flex-1 rounded-md px-3 py-1.5 text-[12px] font-medium transition ${
+                  effectiveMode === "grace" ? "bg-white/[0.08] text-white" : "text-[#8b92a5] hover:text-white"
+                }`}
+              >
+                Grace Period
+              </button>
             </div>
+          )}
 
-            <p className="text-[11px] text-[#555d73]">
-              This is irreversible. The campaign will be marked as refunded and cannot be reactivated.
+          {showSingleToggle && !showRefundToggle && instantDisabled && (
+            <p className="text-[11px] text-amber-400">
+              Instant Settle unavailable — schedule parameters not loaded. Load from URL or enter manually first.
             </p>
-          </>
-        )}
+          )}
 
-        {/* Grace Period content */}
-        {effectiveMode === "grace" && (
-          <>
-            <p className="text-[13px] text-[#8b92a5]">
-              This action is irreversible. Vesting will freeze at the current moment.
-              Recipients can still claim tokens vested up to now.
-            </p>
-
-            <div className="space-y-3 text-[13px]">
-              <div className="flex justify-between">
-                <span className="text-[#8b92a5]">Already claimed</span>
-                <span className="font-medium text-white">{fmt(totalClaimed)} tokens</span>
+          {/* Refund content */}
+          {effectiveMode === "refund" && (
+            <>
+              <p className="text-[13px] text-[#8b92a5]">
+                This campaign has not started yet. All funds will be returned to you
+                instantly in a single transaction. No grace period needed.
+              </p>
+              <div className="space-y-3 text-[13px]">
+                <div className="flex justify-between">
+                  <span className="text-[#8b92a5]">Campaign total supply</span>
+                  <span className="font-medium text-white">{fmt(totalSupply)} tokens</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-[#8b92a5]">Returned to you</span>
+                  <span className="font-medium text-emerald-400">{fmt(totalSupply)} tokens</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-[#8b92a5]">To recipients</span>
+                  <span className="font-medium text-[#555d73]">0 tokens</span>
+                </div>
               </div>
-              <div className="flex justify-between">
-                <span className="text-[#8b92a5]">Unclaimed vested (claimable by recipient)</span>
-                <span className="font-medium text-emerald-400">~{fmt(unclaimedVested)} tokens</span>
+              <div className="rounded-xl border border-emerald-500/20 bg-emerald-500/5 px-4 py-3 text-[12px] leading-6 text-emerald-300">
+                No vesting has started — all funds are returned immediately with no grace period.
               </div>
-              <div className="flex justify-between">
-                <span className="text-[#8b92a5]">Unvested (recoverable after 7-day grace)</span>
-                <span className="font-medium text-amber-400">~{fmt(returnedToCreator)} tokens</span>
+              <p className="text-[11px] text-[#555d73]">
+                This is irreversible. The campaign will be marked as refunded and cannot be reactivated.
+              </p>
+            </>
+          )}
+
+          {/* Grace period content */}
+          {effectiveMode === "grace" && (
+            <>
+              <p className="text-[13px] text-[#8b92a5]">
+                This action is irreversible. Vesting will freeze at the current moment.
+                Recipients can still claim tokens vested up to now.
+              </p>
+              <div className="space-y-3 text-[13px]">
+                <div className="flex justify-between">
+                  <span className="text-[#8b92a5]">Already claimed</span>
+                  <span className="font-medium text-white">{fmt(totalClaimed)} tokens</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-[#8b92a5]">Unclaimed vested (claimable by recipient)</span>
+                  <span className="font-medium text-emerald-400">~{fmt(unclaimedVested)} tokens</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-[#8b92a5]">Unvested (recoverable after 7-day grace)</span>
+                  <span className="font-medium text-amber-400">~{fmt(returnedToCreator)} tokens</span>
+                </div>
               </div>
-            </div>
+              <p className="text-[11px] text-[#555d73]">
+                Unvested tokens are NOT returned immediately. Use &quot;Withdraw Unvested&quot; after the 7-day grace period.
+              </p>
+            </>
+          )}
 
-            <p className="text-[11px] text-[#555d73]">
-              Unvested tokens are NOT returned immediately. Use &quot;Withdraw Unvested&quot; after the 7-day grace period.
-            </p>
-          </>
-        )}
-
-        {/* Instant Settle content (single-stream only) */}
-        {effectiveMode === "instant" && showSingleToggle && (
-          <>
-            <p className="text-[13px] text-[#8b92a5]">
-              Settle immediately in one transaction. Vested tokens go to the beneficiary,
-              remaining tokens return to you. No grace period.
-            </p>
-
-            <div className="space-y-3 text-[13px]">
-              <div className="flex justify-between">
-                <span className="text-[#8b92a5]">To beneficiary (vested)</span>
-                <span className="font-medium text-emerald-400">~{fmt(unclaimedVested + totalClaimed)}</span>
+          {/* Instant settle content */}
+          {effectiveMode === "instant" && showSingleToggle && (
+            <>
+              <p className="text-[13px] text-[#8b92a5]">
+                Settle immediately in one transaction. Vested tokens go to the beneficiary,
+                remaining tokens return to you. No grace period.
+              </p>
+              <div className="space-y-3 text-[13px]">
+                <div className="flex justify-between">
+                  <span className="text-[#8b92a5]">To beneficiary (vested)</span>
+                  <span className="font-medium text-emerald-400">~{fmt(unclaimedVested + totalClaimed)}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-[#8b92a5]">Returned to you (unvested)</span>
+                  <span className="font-medium text-amber-400">~{fmt(returnedToCreator)}</span>
+                </div>
               </div>
-              <div className="flex justify-between">
-                <span className="text-[#8b92a5]">Returned to you (unvested)</span>
-                <span className="font-medium text-amber-400">~{fmt(returnedToCreator)}</span>
-              </div>
-            </div>
+              {beneficiaryUnknown && onManualBeneficiaryChange && (
+                <div className="space-y-2">
+                  <p className="text-[11px] text-amber-400">
+                    Beneficiary not found in indexed data. Enter the wallet address:
+                  </p>
+                  <Input
+                    type="text"
+                    value={manualBeneficiary ?? ""}
+                    onChange={(e) => onManualBeneficiaryChange(e.target.value)}
+                    placeholder="Beneficiary wallet address"
+                    className="font-mono text-[12px]"
+                  />
+                </div>
+              )}
+              <p className="text-[11px] text-[#555d73]">
+                This is irreversible. Tokens are distributed atomically in a single transaction.
+              </p>
+            </>
+          )}
+        </div>
 
-            {beneficiaryUnknown && onManualBeneficiaryChange && (
-              <div className="space-y-2">
-                <p className="text-[11px] text-amber-400">
-                  Beneficiary not found in indexed data. Enter the wallet address:
-                </p>
-                <input
-                  type="text"
-                  value={manualBeneficiary ?? ""}
-                  onChange={(e) => onManualBeneficiaryChange(e.target.value)}
-                  placeholder="Beneficiary wallet address"
-                  className="w-full rounded-lg border border-white/[0.08] bg-[#11161f] px-3 py-2 font-mono text-[12px] text-white outline-none placeholder:text-[#555d73] focus:border-white/20"
-                />
-              </div>
-            )}
-
-            <p className="text-[11px] text-[#555d73]">
-              This is irreversible. Tokens are distributed atomically in a single transaction.
-            </p>
-          </>
-        )}
-
-        <div className="flex gap-3 pt-2">
-          <button
+        <DialogFooter className="border-none bg-transparent p-0 pt-2" showCloseButton={false}>
+          <Button
             type="button"
+            variant="outline"
             onClick={onClose}
             disabled={!!activeLoading}
-            className="flex-1 rounded-xl border border-white/[0.08] py-2.5 text-[13px] text-[#8b92a5] transition hover:bg-white/[0.04] disabled:opacity-50"
+            className="flex-1"
           >
             Go Back
-          </button>
-          <button
+          </Button>
+          <Button
             type="button"
             onClick={handleConfirmClick}
             disabled={confirmDisabled}
-            className={confirmButtonClass}
+            className={`flex-1 ${
+              effectiveMode === "refund"
+                ? "bg-amber-600 text-white hover:bg-amber-500"
+                : "bg-red-600 text-white hover:bg-red-500"
+            }`}
           >
             {confirmLabel}
-          </button>
-        </div>
-      </div>
-    </div>
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }

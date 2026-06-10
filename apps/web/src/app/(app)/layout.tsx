@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { Sidebar } from "@/components/shell/Sidebar";
 import { AppHeader } from "@/components/shell/AppHeader";
-import { ToastProvider } from "@/components/shell/Toast";
+import { Toaster } from "@/components/ui/sonner";
 import { PendingCampaignIndexer } from "@/components/providers/PendingCampaignIndexer";
 
 const SIDEBAR_KEY = "velthoryn:sidebar-collapsed";
@@ -26,7 +26,8 @@ export default function AppShellLayout({ children }: { children: React.ReactNode
   };
 
   return (
-    <ToastProvider>
+    <>
+      <Toaster position="bottom-right" />
       <PendingCampaignIndexer />
       <div className="flex min-h-screen bg-[#0b0d12]">
         <Sidebar
@@ -46,6 +47,6 @@ export default function AppShellLayout({ children }: { children: React.ReactNode
           </main>
         </div>
       </div>
-    </ToastProvider>
+    </>
   );
 }
