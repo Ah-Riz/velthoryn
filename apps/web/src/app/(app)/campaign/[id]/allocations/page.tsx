@@ -69,7 +69,7 @@ export default function CampaignAllocationsPage({
     setError(null);
     try {
       const treePubkey = new PublicKey(treeAddress);
-      const account = await withTimeout(
+      const account = await withTimeout<any>(
         (program.account as any).vestingTree.fetch(treePubkey),
         ONCHAIN_TREE_FETCH_TIMEOUT_MS,
         ONCHAIN_TREE_FETCH_TIMEOUT_MESSAGE,
