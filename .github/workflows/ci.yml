@@ -167,4 +167,7 @@ jobs:
           TEST_SKIP_BUILD: "1"
           TEST_RESET_VALIDATOR: "1"
           CARGO_TARGET_DIR: ${{ github.workspace }}/target
+          # Flow 4 clawback withdraw can flake with "transaction already been processed"
+          # when the RPC retries a tx that already landed (Anchor sendAndConfirm).
+          MOCHA_RETRIES: "2"
         run: pnpm test:localnet
