@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import Link from "next/link";
 import { useWallet } from "@solana/wallet-adapter-react";
 import { useCampaignList } from "@/hooks/useCampaignList";
@@ -35,14 +35,14 @@ function ActionCard({
   return (
     <Link
       href={href}
-      className="group flex items-start gap-4 rounded-2xl border border-[#222838] bg-[#13161f] p-5 transition-all hover:border-[#7c3aed]/30 hover:bg-[#161a25]"
+      className="group flex items-start gap-3 sm:gap-4 rounded-xl sm:rounded-2xl border border-[#222838] bg-[#13161f] p-3.5 sm:p-5 transition-all hover:border-[#7c3aed]/30 hover:bg-[#161a25]"
     >
-      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-[#7c3aed]/20 bg-[#7c3aed]/10 text-[#a78bfa] transition-all group-hover:border-[#7c3aed]/40 group-hover:bg-[#7c3aed]/20">
+      <div className="flex h-8 w-8 sm:h-10 sm:w-10 shrink-0 items-center justify-center rounded-lg sm:rounded-xl border border-[#7c3aed]/20 bg-[#7c3aed]/10 text-[#a78bfa] transition-all group-hover:border-[#7c3aed]/40 group-hover:bg-[#7c3aed]/20">
         {icon}
       </div>
-      <div className="flex-1">
-        <div className="text-[14px] font-medium text-[#e5e7eb]">{title}</div>
-        <div className="mt-1 text-[12px] text-[#64748b]">{description}</div>
+      <div className="flex-1 min-w-0">
+        <div className="text-[13px] sm:text-[14px] font-medium text-[#e5e7eb]">{title}</div>
+        <div className="mt-0.5 sm:mt-1 text-[11px] sm:text-[12px] text-[#64748b]">{description}</div>
       </div>
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="mt-0.5 shrink-0 text-[#64748b] transition-transform group-hover:translate-x-0.5">
         <polyline points="9 18 15 12 9 6" />
@@ -243,10 +243,10 @@ export default function DashboardPage() {
   const claimableStreams = vestingSummary?.claimableCampaigns ?? counts.claimableCount;
 
   return (
-    <div className="mx-auto max-w-5xl space-y-8">
+    <div className="mx-auto max-w-5xl space-y-5 sm:space-y-8">
       <div>
         <div className="mb-2 font-mono text-[11px] font-medium uppercase tracking-[0.18em] text-[#7c3aed]/70">Overview</div>
-        <h1 className="text-[28px] font-semibold tracking-tight text-[#e5e7eb]">Dashboard</h1>
+        <h1 className="text-[22px] sm:text-[28px] font-semibold tracking-tight text-[#e5e7eb]">Dashboard</h1>
         <p className="mt-1 font-mono text-[12px] text-[#64748b]">
           {publicKey
             ? `${publicKey.toBase58().slice(0, 4)}...${publicKey.toBase58().slice(-4)}`
@@ -272,20 +272,20 @@ export default function DashboardPage() {
           {claimableStreams > 0 && (
             <Link
               href="/portfolio"
-              className="flex items-center gap-3 rounded-2xl border border-[#14f1d9]/20 bg-[#14f1d9]/[0.04] p-5 transition-all hover:border-[#14f1d9]/35 hover:bg-[#14f1d9]/[0.06]"
+              className="flex items-center gap-2.5 sm:gap-3 rounded-xl sm:rounded-2xl border border-[#14f1d9]/20 bg-[#14f1d9]/[0.04] p-3.5 sm:p-5 transition-all hover:border-[#14f1d9]/35 hover:bg-[#14f1d9]/[0.06]"
             >
-              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-[#14f1d9]/20 bg-[#14f1d9]/10 text-[#14f1d9]">
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <div className="flex h-8 w-8 sm:h-10 sm:w-10 shrink-0 items-center justify-center rounded-lg sm:rounded-xl border border-[#14f1d9]/20 bg-[#14f1d9]/10 text-[#14f1d9]">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="sm:h-5 sm:w-5">
                   <path d="M22 11.08V12a10 10 0 11-5.93-9.14" />
                   <polyline points="22 4 12 14.01 9 11.01" />
                 </svg>
               </div>
-              <div className="flex-1">
-                <p className="text-[14px] font-medium text-[#14f1d9]">
+              <div className="flex-1 min-w-0">
+                <p className="text-[13px] sm:text-[14px] font-medium text-[#14f1d9]">
                   {claimableStreams} stream{claimableStreams > 1 ? "s" : ""} ready to claim
                 </p>
-                <p className="font-mono text-[11px] text-[#64748b]">
-                  {formatTokenAmount(claimableAmount, vestingAggregateDecimals)} tokens available for withdrawal
+                <p className="font-mono text-[10px] sm:text-[11px] text-[#64748b] truncate">
+                  {formatTokenAmount(claimableAmount, vestingAggregateDecimals)} tokens available
                 </p>
               </div>
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="shrink-0 text-[#64748b]">
@@ -383,7 +383,7 @@ export default function DashboardPage() {
           </div>
 
           {/* Summary Stats */}
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          <div className="grid grid-cols-2 gap-2 sm:gap-4 lg:grid-cols-3">
             <StatCard label="Total Streams" value={String(counts.total)} sub="All campaigns" loading={countLoading} />
             <StatCard label="Active" value={String(counts.active)} sub="Currently vesting" accent loading={countLoading} />
             <StatCard
@@ -438,53 +438,11 @@ export default function DashboardPage() {
                 <p className="mt-1 font-mono text-[11px] text-[#64748b]">Streams you receive will appear here</p>
               </div>
             ) : (
-              <div className="grid gap-3 sm:grid-cols-2">
-                {topVestingCampaigns.map((campaign) => {
-                  const name =
-                    campaign.metadata?.name ?? truncateAddress(campaign.treeAddress);
-                  const vestedSoFar = BigInt(campaign.progress.vestedSoFar);
-                  const totalEntitled = BigInt(campaign.progress.totalEntitled);
-                  const claimable = BigInt(campaign.progress.claimable);
-                  const nextUnlockLabel =
-                    campaign.leaf.releaseType === 2 && !campaign.milestoneReleased
-                      ? "Milestone not released"
-                      : campaign.progress.nextUnlock
-                        ? formatCountdown(BigInt(campaign.progress.nextUnlock), nowTs)
-                        : "Complete";
-
-                  return (
-                    <Link
-                      key={`${campaign.treeAddress}-${campaign.leaf.leafIndex}`}
-                      href={`/campaign/${campaign.treeAddress}`}
-                      className="rounded-2xl border border-[#222838] bg-[#13161f] p-4 transition-all hover:border-[#7c3aed]/25 hover:bg-[#161a25]"
-                    >
-                      <div className="flex items-center justify-between gap-2">
-                        <span className="truncate text-[14px] font-medium text-[#e5e7eb]">{name}</span>
-                        <span className="shrink-0 font-mono text-[10px] tracking-[0.1em] text-[#64748b]">
-                          {getVestingTypeLabel(campaign.leaf.releaseType)}
-                        </span>
-                      </div>
-                      <div className="mt-3">
-                        <div className="h-1 overflow-hidden rounded-full bg-[#222838]">
-                          <div
-                            className="h-full rounded-full transition-all duration-500 ease-out"
-                            style={{
-                              width: `${Math.min(100, campaign.progress.progressPercent)}%`,
-                              background: claimable > 0n
-                                ? "linear-gradient(90deg, #7c3aed, #14f1d9)"
-                                : "#7c3aed",
-                            }}
-                          />
-                        </div>
-                        <div className="mt-2 font-mono text-[10px] text-[#64748b]">
-                          {fmtAmount(vestedSoFar, campaign)} / {fmtAmount(totalEntitled, campaign)} vested
-                          {" · "}Next: {nextUnlockLabel}
-                        </div>
-                      </div>
-                    </Link>
-                  );
-                })}
-              </div>
+              <VestingProgressGrid
+                campaigns={topVestingCampaigns}
+                fmtAmount={fmtAmount}
+                nowTs={nowTs}
+              />
             )}
           </div>
 
@@ -498,5 +456,82 @@ export default function DashboardPage() {
         </>
       )}
     </div>
+  );
+}
+
+const MOBILE_VESTING_LIMIT = 2;
+
+function VestingProgressGrid({
+  campaigns,
+  fmtAmount,
+  nowTs,
+}: {
+  campaigns: ReturnType<typeof useVestingProgressSummary>["campaigns"];
+  fmtAmount: (raw: bigint, campaign: ReturnType<typeof useVestingProgressSummary>["campaigns"][number]) => string;
+  nowTs: bigint;
+}) {
+  const [expanded, setExpanded] = useState(false);
+  const showExpand = campaigns.length > MOBILE_VESTING_LIMIT;
+
+  return (
+    <>
+      <div className="grid gap-3 sm:grid-cols-2">
+        {campaigns.map((campaign, idx) => {
+          const name = campaign.metadata?.name ?? truncateAddress(campaign.treeAddress);
+          const vestedSoFar = BigInt(campaign.progress.vestedSoFar);
+          const totalEntitled = BigInt(campaign.progress.totalEntitled);
+          const claimable = BigInt(campaign.progress.claimable);
+          const nextUnlockLabel =
+            campaign.leaf.releaseType === 2 && !campaign.milestoneReleased
+              ? "Milestone not released"
+              : campaign.progress.nextUnlock
+                ? formatCountdown(BigInt(campaign.progress.nextUnlock), nowTs)
+                : "Complete";
+
+          return (
+            <Link
+              key={`${campaign.treeAddress}-${campaign.leaf.leafIndex}`}
+              href={`/campaign/${campaign.treeAddress}`}
+              className={`rounded-xl border border-[#222838] bg-[#13161f] p-3 sm:rounded-2xl sm:p-4 transition-all hover:border-[#7c3aed]/25 hover:bg-[#161a25] ${
+                !expanded && showExpand && idx >= MOBILE_VESTING_LIMIT ? "hidden sm:block" : ""
+              }`}
+            >
+              <div className="flex items-center justify-between gap-2">
+                <span className="truncate text-[13px] sm:text-[14px] font-medium text-[#e5e7eb]">{name}</span>
+                <span className="shrink-0 font-mono text-[10px] tracking-[0.1em] text-[#64748b]">
+                  {getVestingTypeLabel(campaign.leaf.releaseType)}
+                </span>
+              </div>
+              <div className="mt-2 sm:mt-3">
+                <div className="h-1 overflow-hidden rounded-full bg-[#222838]">
+                  <div
+                    className="h-full rounded-full transition-all duration-500 ease-out"
+                    style={{
+                      width: `${Math.min(100, campaign.progress.progressPercent)}%`,
+                      background: claimable > 0n
+                        ? "linear-gradient(90deg, #7c3aed, #14f1d9)"
+                        : "#7c3aed",
+                    }}
+                  />
+                </div>
+                <div className="mt-1.5 sm:mt-2 font-mono text-[10px] text-[#64748b]">
+                  {fmtAmount(vestedSoFar, campaign)} / {fmtAmount(totalEntitled, campaign)} vested
+                  {" · "}Next: {nextUnlockLabel}
+                </div>
+              </div>
+            </Link>
+          );
+        })}
+      </div>
+      {showExpand && !expanded && (
+        <button
+          type="button"
+          onClick={() => setExpanded(true)}
+          className="mt-2 w-full rounded-xl border border-dashed border-[#222838] py-2 text-center font-mono text-[11px] text-[#64748b] transition hover:border-[#7c3aed]/30 hover:text-violet-400 sm:hidden"
+        >
+          Show {campaigns.length - MOBILE_VESTING_LIMIT} more streams
+        </button>
+      )}
+    </>
   );
 }

@@ -434,11 +434,11 @@ export default function CampaignsPage() {
 
   return (
     <div className="mx-auto max-w-6xl space-y-6 pb-12">
-      <div className="rounded-2xl border border-[#222838] bg-[#13161f] p-6">
-        <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+      <div className="rounded-xl sm:rounded-2xl border border-[#222838] bg-[#13161f] p-4 sm:p-6">
+        <div className="flex flex-col gap-3 sm:gap-4 lg:flex-row lg:items-end lg:justify-between">
           <div>
             <div className="mb-2 font-mono text-[11px] font-medium uppercase tracking-[0.18em] text-[#7c3aed]/70">Streams</div>
-            <h1 className="text-[28px] font-semibold tracking-tight text-[#e5e7eb]">Vesting Streams</h1>
+            <h1 className="text-[22px] sm:text-[28px] font-semibold tracking-tight text-[#e5e7eb]">Vesting Streams</h1>
             <p className="mt-1 font-mono text-[12px] text-[#64748b]">
               Track streams you received and streams you created.
             </p>

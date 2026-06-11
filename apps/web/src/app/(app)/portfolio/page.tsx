@@ -97,10 +97,10 @@ export default function PortfolioPage() {
       : "0.0";
 
   return (
-    <div className="mx-auto max-w-5xl space-y-8">
+    <div className="mx-auto max-w-5xl space-y-5 sm:space-y-8">
       <div>
         <div className="mb-2 font-mono text-[11px] font-medium uppercase tracking-[0.18em] text-[#7c3aed]/70">Recipient</div>
-        <h1 className="text-[28px] font-semibold tracking-tight text-[#e5e7eb]">Portfolio</h1>
+        <h1 className="text-[22px] sm:text-[28px] font-semibold tracking-tight text-[#e5e7eb]">Portfolio</h1>
         <p className="mt-1 font-mono text-[12px] text-[#64748b]">Your vesting portfolio at a glance</p>
       </div>
 
@@ -119,7 +119,7 @@ export default function PortfolioPage() {
         </div>
       ) : (
         <>
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          <div className="grid grid-cols-2 gap-2 sm:gap-4 lg:grid-cols-4">
             <StatCard
               label="Total Entitled"
               value={formatTokenAmount(summary?.totalEntitled ?? 0n, aggregateDecimals)}
@@ -184,7 +184,7 @@ export default function PortfolioPage() {
                 </p>
               </div>
             ) : (
-              <div className="grid gap-4">
+              <div className="grid gap-3 sm:gap-4">
                 {sortedCampaigns.map((campaign) => (
                   <CampaignCard
                     key={`${campaign.treeAddress}-${campaign.leaf.leafIndex}`}

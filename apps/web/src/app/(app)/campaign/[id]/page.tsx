@@ -1792,18 +1792,18 @@ export default function CampaignPage({ params }: { params: Promise<{ id: string 
             <MetricSkeletonGroup />
           ) : isRecipientView ? (
             <div className="space-y-3">
-              <div className="grid gap-3 grid-cols-2">
+              <div className="grid gap-2 sm:gap-3 grid-cols-2">
                 <MetricCard label="Total Supply" value={formatTokenAmount(totalSupply)} />
                 <MetricCard label="Your Allocation" value={formatTokenAmount(displaySupply)} accent />
               </div>
-              <div className="grid gap-3 grid-cols-2 md:grid-cols-3">
+              <div className="grid gap-2 sm:gap-3 grid-cols-2 md:grid-cols-3">
                 <MetricCard label={claimedLabel} value={formatTokenAmount(displayClaimed)} />
                 <MetricCard label="Vested" value={vestedLabel} />
                 <MetricCard label={claimableLabel} value={formatTokenAmount(displayClaimable)} accent />
               </div>
             </div>
           ) : (
-            <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
+            <div className="grid grid-cols-2 gap-2 sm:gap-3 lg:grid-cols-4">
               <MetricCard label="Total Supply" value={formatTokenAmount(totalSupply)} />
               <MetricCard label={claimedLabel} value={formatTokenAmount(displayClaimed)} />
               <MetricCard label="Vested" value={vestedLabel} />
