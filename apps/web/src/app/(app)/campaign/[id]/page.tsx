@@ -1721,26 +1721,26 @@ export default function CampaignPage({ params }: { params: Promise<{ id: string 
   if (!treeState) return null;
 
   return (
-    <div className="mx-auto max-w-6xl space-y-6 pb-12">
-      <Card className="rounded-xl px-5 py-4">
+    <div className="mx-auto max-w-6xl space-y-4 sm:space-y-6 pb-8 sm:pb-12">
+      <Card className="rounded-xl px-3.5 py-3 sm:px-5 sm:py-4">
         <CardContent className="p-0">
-          <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
-            <div>
-              <h1 className="text-[20px] font-semibold text-foreground sm:text-[22px]">{pageTitle}</h1>
-              <p className="mt-2 max-w-3xl text-[14px] text-muted-foreground">
+          <div className="flex flex-col gap-2.5 sm:gap-3 lg:flex-row lg:items-start lg:justify-between">
+            <div className="min-w-0">
+              <h1 className="text-[18px] sm:text-[22px] font-semibold text-foreground truncate">{pageTitle}</h1>
+              <p className="mt-1 sm:mt-2 max-w-3xl text-[13px] sm:text-[14px] text-muted-foreground">
                 {pageDescription}
               </p>
             </div>
-            <div className="flex flex-wrap gap-2">
+            <div className="flex flex-wrap gap-1.5 sm:gap-2">
               <Badge
                 variant="outline"
-                className={cn("h-auto rounded-full px-3 py-1 text-[12px] font-medium", statusBadgeClass)}
+                className={cn("h-auto rounded-full px-2 py-0.5 sm:px-3 sm:py-1 text-[11px] sm:text-[12px] font-medium", statusBadgeClass)}
               >
                 {statusLabel}
               </Badge>
               <Badge
                 variant="outline"
-                className={cn("h-auto rounded-full px-3 py-1 text-[12px] font-medium", getVestingTypeBadgeColor(releaseType))}
+                className={cn("h-auto rounded-full px-2 py-0.5 sm:px-3 sm:py-1 text-[11px] sm:text-[12px] font-medium", getVestingTypeBadgeColor(releaseType))}
               >
                 {getVestingTypeLabel(releaseType)}
               </Badge>
@@ -1786,8 +1786,8 @@ export default function CampaignPage({ params }: { params: Promise<{ id: string 
         </div>
       )}
 
-      <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_340px]">
-        <div className="space-y-6">
+      <div className="grid gap-4 sm:gap-6 lg:grid-cols-[minmax(0,1fr)_340px]">
+        <div className="space-y-4 sm:space-y-6">
           {isRecipientMetricsLoading ? (
             <MetricSkeletonGroup />
           ) : isRecipientView ? (
@@ -1860,12 +1860,12 @@ export default function CampaignPage({ params }: { params: Promise<{ id: string 
           <CampaignTimeline treeAddress={treeAddress} mintDecimals={mintDecimals} />
 
           <Card className="rounded-xl">
-            <CardContent className="px-4 py-3">
+            <CardContent className="px-3.5 py-3 sm:px-4">
               <SectionHeader
                 title="Details"
                 caption={detailsCaption}
               />
-              <div className="mt-3 grid gap-2.5">
+              <div className="mt-2.5 sm:mt-3 grid gap-2 sm:gap-2.5">
                 <DetailRow label="Tree Address" value={treeAddress} mono />
                 <DetailRow label="Creator" value={treeState.creator.toBase58()} mono />
                 <DetailRow label="Mint" value={mintLabel ?? treeState.mint.toBase58()} mono={mintLabel === null || mintLabel === treeState.mint.toBase58()} />
@@ -1913,9 +1913,9 @@ export default function CampaignPage({ params }: { params: Promise<{ id: string 
             </CardContent>
           </Card>
 
-          <Card className="rounded-2xl">
-            <CardContent className="p-5">
-              <div className="flex items-start justify-between gap-4">
+          <Card className="rounded-xl">
+            <CardContent className="px-3.5 py-3 sm:px-5 sm:py-4">
+              <div className="flex items-start justify-between gap-3 sm:gap-4">
                 <SectionHeader
                   title={scheduleSectionTitle}
                   caption={scheduleSectionCaption}
@@ -2041,19 +2041,19 @@ export default function CampaignPage({ params }: { params: Promise<{ id: string 
           </Card>
         </div>
 
-        <div className="space-y-6">
+        <div className="space-y-4 sm:space-y-6">
           <Card
             id="campaign-actions"
-            className="rounded-2xl lg:sticky lg:top-6"
+            className="rounded-xl lg:sticky lg:top-6"
           >
-          <CardContent className="p-5">
+          <CardContent className="px-3.5 py-3 sm:p-5">
             <SectionHeader
               title="Actions"
               caption={actionsCaption}
             />
 
             {scheduleSource === "url" && (
-              <div className="mt-5 rounded-xl border border-amber-500/20 bg-amber-500/5 px-4 py-3 text-[12px] leading-6 text-amber-300">
+              <div className="mt-3 sm:mt-5 rounded-xl border border-amber-500/20 bg-amber-500/5 px-3 py-2.5 sm:px-4 sm:py-3 text-[11px] sm:text-[12px] leading-5 sm:leading-6 text-amber-300">
                 <strong>Unverified:</strong> Schedule parameters were loaded from the URL. Values shown (including claimable amount) may not reflect actual on-chain state.
               </div>
             )}
@@ -2070,7 +2070,7 @@ export default function CampaignPage({ params }: { params: Promise<{ id: string 
               </div>
             )}
 
-            <div className="mt-5 space-y-4">
+            <div className="mt-3 sm:mt-5 space-y-3 sm:space-y-4">
               {isMultiRecipient && program && !claimFundingDisabledReason ? (
                 <ClaimWithProofButton
                   program={program}
@@ -2450,12 +2450,12 @@ function DetailRow({
   mono?: boolean;
 }) {
   return (
-    <div className="flex items-start justify-between gap-4">
-      <span className="shrink-0 text-[12px] text-muted-foreground">{label}</span>
+    <div className="flex items-start justify-between gap-3 sm:gap-4">
+      <span className="shrink-0 text-[11px] sm:text-[12px] text-muted-foreground">{label}</span>
       {mono ? (
         <Tooltip>
           <TooltipTrigger asChild>
-            <span className="cursor-default text-right font-mono text-[13px] text-foreground">
+            <span className="cursor-default text-right font-mono text-[12px] sm:text-[13px] text-foreground truncate max-w-[140px] sm:max-w-none">
               {truncateAddress(value)}
             </span>
           </TooltipTrigger>
@@ -2464,7 +2464,7 @@ function DetailRow({
           </TooltipContent>
         </Tooltip>
       ) : (
-        <span className="text-right text-[13px] text-foreground">{value}</span>
+        <span className="text-right text-[12px] sm:text-[13px] text-foreground">{value}</span>
       )}
     </div>
   );

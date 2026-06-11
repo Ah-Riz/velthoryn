@@ -473,9 +473,9 @@ export default function CampaignsPage() {
         </div>
       ) : (
         <>
-          <div className="rounded-2xl border border-[#222838] bg-[#13161f] p-4">
-            <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-              <div className="flex flex-wrap gap-2">
+          <div className="rounded-xl sm:rounded-2xl border border-[#222838] bg-[#13161f] p-3 sm:p-4">
+            <div className="flex flex-col gap-3 sm:gap-4 lg:flex-row lg:items-center lg:justify-between">
+              <div className="flex flex-wrap gap-1.5 sm:gap-2">
                 {TABS.map((tab) => {
                   const active = activeTab === tab.key;
                   return (
@@ -483,7 +483,7 @@ export default function CampaignsPage() {
                       key={tab.key}
                       type="button"
                       onClick={() => setActiveTab(tab.key)}
-                      className={`rounded-full px-4 py-2 font-mono text-[11px] transition ${
+                      className={`rounded-full px-3 py-1.5 sm:px-4 sm:py-2 font-mono text-[11px] transition ${
                         active
                           ? "border border-[#7c3aed]/40 bg-[#7c3aed]/15 text-[#a78bfa]"
                           : "border border-[#222838] bg-transparent text-[#64748b] hover:border-[#2e3648] hover:text-[#b4b9c5]"
@@ -601,7 +601,7 @@ export default function CampaignsPage() {
               />
             )
           ) : (
-            <div className="space-y-4">
+            <div className="space-y-3 sm:space-y-4">
               {filteredRows.map((row) => {
                 const decimals = mintDecimals[row.mint];
                 const amountDisplay = decimals !== undefined

@@ -59,25 +59,25 @@ export function CampaignRow({
   return (
     <Link
       href={`/campaign/${treeAddress}`}
-      className="block rounded-2xl border border-[#222838] bg-[#13161f] p-5 transition-all hover:border-[#7c3aed]/25 hover:bg-[#161a25]"
+      className="block rounded-xl sm:rounded-2xl border border-[#222838] bg-[#13161f] p-3.5 sm:p-5 transition-all hover:border-[#7c3aed]/25 hover:bg-[#161a25]"
     >
-      <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
-        <div className="space-y-4">
-          <div className="flex flex-wrap items-center gap-2">
+      <div className="flex flex-col gap-3 sm:gap-5 lg:flex-row lg:items-start lg:justify-between">
+        <div className="space-y-2.5 sm:space-y-4 min-w-0">
+          <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
             <RoleBadge role={role} />
             <StatusBadge status={status} />
-            <span className="inline-flex items-center rounded-full border border-[#222838] bg-[#161a25] px-2.5 py-1 font-mono text-[10px] tracking-[0.08em] text-[#64748b]">
+            <span className="inline-flex items-center rounded-full border border-[#222838] bg-[#161a25] px-2 py-0.5 sm:px-2.5 sm:py-1 font-mono text-[10px] tracking-[0.08em] text-[#64748b]">
               {typeLabel}
             </span>
           </div>
 
-          <div>
-            <p className="text-[16px] font-semibold text-[#e5e7eb]">{title}</p>
-            <p className="mt-1 font-mono text-[11px] text-[#64748b]">{treeAddress}</p>
-            {actionNote ? <div className="mt-2">{actionNote}</div> : null}
+          <div className="min-w-0">
+            <p className="text-[14px] sm:text-[16px] font-semibold text-[#e5e7eb] truncate">{title}</p>
+            <p className="mt-0.5 sm:mt-1 font-mono text-[10px] sm:text-[11px] text-[#64748b] truncate">{treeAddress}</p>
+            {actionNote ? <div className="mt-1.5 sm:mt-2">{actionNote}</div> : null}
           </div>
 
-          <div className={`grid gap-x-6 gap-y-4 border-t border-[#1c2130] pt-4 sm:grid-cols-2 ${columnClass}`}>
+          <div className={`grid gap-x-4 sm:gap-x-6 gap-y-2.5 sm:gap-y-4 border-t border-[#1c2130] pt-2.5 sm:pt-4 grid-cols-2 sm:grid-cols-2 ${columnClass}`}>
             <InfoBlock label={amountLabel} value={amountDisplay} tone="primary" />
             {hasSecondaryAmount ? (
               <InfoBlock label={secondaryAmountLabel} value={secondaryAmountDisplay} />
@@ -91,7 +91,7 @@ export function CampaignRow({
 
         <div className="text-left lg:text-right">
           <p className="font-mono text-[10px] uppercase tracking-[0.14em] text-[#64748b]">Created</p>
-          <p className="mt-1 text-[13px] text-[#b4b9c5]">{createdAtLabel}</p>
+          <p className="mt-0.5 sm:mt-1 text-[12px] sm:text-[13px] text-[#b4b9c5]">{createdAtLabel}</p>
         </div>
       </div>
     </Link>
@@ -117,15 +117,15 @@ function InfoBlock({
         : "text-[#b4b9c5]";
   const valueClass =
     tone === "primary"
-      ? "text-[15px] font-semibold"
+      ? "text-[13px] sm:text-[15px] font-semibold"
       : tone === "accent"
-        ? "text-[15px] font-semibold"
-        : "text-[13px] font-medium";
+        ? "text-[13px] sm:text-[15px] font-semibold"
+        : "text-[12px] sm:text-[13px] font-medium";
 
   return (
     <div className="min-w-0">
-      <p className="font-mono text-[10px] uppercase tracking-[0.14em] text-[#64748b]">{label}</p>
-      <p className={`mt-1.5 truncate ${valueClass} ${toneClass} ${mono ? "font-mono" : ""}`} title={value}>
+      <p className="font-mono text-[9px] sm:text-[10px] uppercase tracking-[0.14em] text-[#64748b]">{label}</p>
+      <p className={`mt-1 sm:mt-1.5 truncate ${valueClass} ${toneClass} ${mono ? "font-mono" : ""}`} title={value}>
         {value}
       </p>
     </div>
