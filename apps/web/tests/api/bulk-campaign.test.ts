@@ -356,4 +356,43 @@ describe("POST /api/campaigns/import", () => {
     expect(typeof json.recipients[0].amount).toBe("string");
     expect(json.recipients[0].amount).toBe("1000000");
   });
+
+  it("returns per-row error for duplicate cliff rows for same beneficiary (Known Issue #29)", async () => {
+    const csv = [
+      "beneficiary,amount,releaseType,startTime,cliffTime,endTime,milestoneIdx",
+      `${BENEFICIARY},1000000,0,1700000000,1731536000,1731536000,0`,
+      `${BENEFICIARY},2000000,0,1700000000,1731536000,1731536000,0`,
+      `${OTHER_BENEFICIARY},3000000,1,1700000000,1700000000,1731536000,0`,
+    ].join("\n");
+
+    const req = await makeImportRequest(csv);
+    const res = await postImport(req);
+    const json = await res.json();
+
+    expect(res.status).toBe(200);
+    expect(json.totalRows).toBe(3);
+    expect(json.validRows).toBe(2);
+    expect(json.recipients).toHaveLength(2);
+    const dupErrors = json.errors.filter((e: { row: number }) => e.row === 3);
+    expect(dupErrors.length).toBeGreaterThanOrEqual(1);
+    expect(dupErrors[0].message).toMatch(/Known Issue #29/);
+    expect(dupErrors[0].message).toContain(BENEFICIARY);
+  });
+
+  it("allows cliff + milestone rows for same beneficiary in CSV import", async () => {
+    const csv = [
+      "beneficiary,amount,releaseType,startTime,cliffTime,endTime,milestoneIdx",
+      `${BENEFICIARY},1000000,0,1700000000,1731536000,1731536000,0`,
+      `${BENEFICIARY},2000000,2,1700000000,1731536000,1731536000,1`,
+    ].join("\n");
+
+    const req = await makeImportRequest(csv);
+    const res = await postImport(req);
+    const json = await res.json();
+
+    expect(res.status).toBe(200);
+    expect(json.validRows).toBe(2);
+    expect(json.recipients).toHaveLength(2);
+    expect(json.errors).toHaveLength(0);
+  });
 });

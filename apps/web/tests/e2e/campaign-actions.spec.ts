@@ -16,6 +16,7 @@ import {
   mockCampaignListApis,
   waitForCampaignListMocks,
   mockProofApi,
+  mockSolanaRpcGetAccountInfoNull,
   injectStreamSchedule,
   creatorWallet,
   recipientWallet,
@@ -312,6 +313,10 @@ test.describe("Campaign status badges", () => {
 // ---------------------------------------------------------------------------
 
 test.describe("ClaimWithProofButton (multi-leaf claim)", () => {
+  test.beforeEach(async ({ page }) => {
+    await mockSolanaRpcGetAccountInfoNull(page);
+  });
+
   test("Claim Tokens button visible when proof data available for wallet", async ({ page }) => {
     const pageErrors = collectRelevantPageErrors(page);
     await enableE2eWallet(page);
@@ -361,6 +366,10 @@ test.describe("ClaimWithProofButton (multi-leaf claim)", () => {
 // ---------------------------------------------------------------------------
 
 test.describe("Single-leaf claim button", () => {
+  test.beforeEach(async ({ page }) => {
+    await mockSolanaRpcGetAccountInfoNull(page);
+  });
+
   test("Claim button enabled when cliff passed (localSchedule injected)", async ({ page }) => {
     const pageErrors = collectRelevantPageErrors(page);
     const pastCliff = now() - 86400;

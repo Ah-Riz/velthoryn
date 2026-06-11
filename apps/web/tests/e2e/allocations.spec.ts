@@ -14,11 +14,16 @@ import {
   gotoWithRetry,
   mockCampaignApi,
   mockProofApi,
+  mockSolanaRpcGetAccountInfoNull,
   creatorWallet,
   recipientWallet,
 } from "./helpers";
 
 const ADDR = "9WzDXwBbmkg8ZTbNMqUxvQRAyrZzDsGYdLVL9zYtAWWM";
+
+test.beforeEach(async ({ page }) => {
+  await mockSolanaRpcGetAccountInfoNull(page);
+});
 const now = () => Math.floor(Date.now() / 1000);
 const pastCliff = () => now() - 86400 * 7;
 

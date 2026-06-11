@@ -2,7 +2,7 @@
 
 **Scope:** BE-DB-SC-Merkle (backend API, Postgres/indexer, Solana program, Merkle client). Frontend UI is in scope where I implemented F2/F3 dashboard and clawback surfaces directly.
 
-**This week (chronological):** Week 7 report review + backlog analysis → exploration (Mollusk tests, BE infra, security/ops) → **Mollusk 0.13.1 bump + 18 IGNORED comment standardization** → **production code quality sweep (`.expect()` → `.ok_or()`, clippy suppressions 4→2, unused import fix)** → **CU budget audit (8 new benchmarks, 12/18 handlers measured)** → **multisig setup docs + devnet test script** → **mainnet readiness checklist** → **CI hardening (Mollusk + proptest + cargo audit)** → **Week 8 L1/P0 fixes (8 issues: root rotation minCliffTime, API auth, base58 validation, race condition 409, migration 0010, PDA seed docs)** → **Week 8 QA sweep (7 bugs found & fixed across SC/BE/FE)** → **Transparency Dashboard UI (F2: dashboard rewrite, portfolio page, activity feed, hooks)** → **Auto Clawback UI surfaces (F3: banner, countdown, sidebar badge, needs-action tab, dashboard section)** → **Cron reverted to daily (Vercel Hobby limitation)** → **UI primitive extraction + infra hardening** (`4a3e7a0`: shared components, migrations 0002–0005, E2E mock send-tx, claims/sync admin-only, trust-boundary docs, pending-work audit).
+**This week (chronological):** Week 7 report review + backlog analysis → exploration (Mollusk tests, BE infra, security/ops) → **Mollusk 0.13.1 bump + 18 IGNORED comment standardization** → **production code quality sweep (`.expect()` → `.ok_or()`, clippy suppressions 4→2, unused import fix)** → **CU budget audit (8 new benchmarks, 12/18 handlers measured)** → **multisig setup docs + devnet test script** → **mainnet readiness checklist** → **CI hardening (Mollusk + proptest + cargo audit)** → **Week 8 L1/P0 fixes (8 issues: root rotation minCliffTime, API auth, base58 validation, race condition 409, migration 0010, PDA seed docs)** → **Week 8 QA sweep (7 bugs found & fixed across SC/BE/FE)** → **Transparency Dashboard UI (F2: dashboard rewrite, portfolio page, activity feed, hooks)** → **Auto Clawback UI surfaces (F3: banner, countdown, sidebar badge, needs-action tab, dashboard section)** → **Cron reverted to daily (Vercel Hobby limitation)** → **UI primitive extraction + infra hardening** (`4a3e7a0`: shared components, migrations 0002–0005, E2E mock send-tx, claims/sync admin-only, trust-boundary docs, pending-work audit) → **Week 8 gap closure** (`6433974` + `week8-gap-closure-lana` spec): BE validation for KI#29, k6 load scripts, rate-limit baselines, CU re-audit, BE/SC doc pass, spec checkbox cleanup, **Lana protocol docs realignment** (PRD/PDD/TDD → Phase 4 / BE-SC-Merkle canonical story), **`/spec-verify` passed** → **Late CI/E2E hardening (Jun 11):** Flow 4 duplicate-tx tolerance + mocha retries (`7efe0f6`); localnet RPC pinned in `test-localnet.sh` (`e20f219`); allocations page 8s on-chain fetch timeout + indexed API fallback (`5d17905`); Playwright `mockSolanaRpcGetAccountInfoNull` stub for allocation/claim/user-journey specs; TypeScript build fix for allocations page (`f16d736`) — **Lint + Web CI green**.
 
 ---
 
@@ -27,15 +27,25 @@
 | **Docs** | Mainnet readiness checklist | `docs/MAINNET_CHECKLIST.md` — 5 sections (~60 checkboxes): pre-deployment, security, infrastructure, deployment procedure, rollback |
 | **Docs** | Multisig setup runbook | `docs/operations/multisig-setup.md` — Squads v4 2-of-3 multisig procedure with CLI commands, verification steps, rollback |
 | **Docs** | API trust boundaries | `docs/API_TRUST_BOUNDARIES.md` (165 lines) — full route table: Public / Wallet Auth / Admin / Removed tiers |
-| **Docs** | Pending work audit | `docs/PENDING_WORK.md` — 86-item spec audit; 5 gaps closed 2026-06-10, 11 real gaps remain |
-| **Docs** | Known issue #29 design | `docs/KNOWN_ISSUE_29_DESIGN.md` (279 lines) — per-leaf tracking proposal for multi-leaf non-milestone undercount |
-| **Docs** | Backup/restore runbook | `docs/operations/backup-restore.md` — expanded procedure |
-| **Docs** | SC docs refreshed | `SECURITY.md`, `PDD_LANA.md`, `TDD_LANA.md`, `AUDIT_REPORT.md`, `MATURITY_REPORT.md` updated in `4a3e7a0` |
-| **Docs** | Docs index (uncommitted) | `docs/README.md` — navigation index with canonical `API_TRUST_BOUNDARIES.md` link |
+| **Docs** | Pending work audit | `docs/PENDING_WORK.md` — 86 items audited; **~4 real gaps** remain (SC #29 on-chain, Ops Sentry, 2 FE) |
+| **Docs** | Known issue #29 design + BE enforcement | `docs/KNOWN_ISSUE_29_DESIGN.md` §6 + `SECURITY.md` — prepare/import reject multi cliff/linear per beneficiary |
+| **Docs** | Backup/restore runbook | `docs/operations/backup-restore.md` — verified complete; staging drill pending |
+| **Docs** | SC + BE docs refreshed | `SECURITY.md`, `PDD_LANA.md`, `TDD_LANA.md`, `AUDIT_REPORT.md`, `MATURITY_REPORT.md`, `BACKEND_API.md`, `TESTING.md` |
+| **Docs** | Lana protocol docs realigned | `PRD_LANA.md`, `PDD_LANA.md`, `TDD_LANA.md` — Phase 4 status, Stream PDA mapping table (§2.4), PDD §1.4 stream model, TDD external-test-matrix appendix |
+| **Docs** | Test count single source of truth | `DEVNET_TEST_RESULTS.md` summary reconciled (98 passing, 1 pending); README + TDD cite it instead of hardcoded counts |
+| **Docs** | Docs index | `docs/README.md` — k6 section, `DEVNET_TEST_RESULTS.md` in planning table, Lana doc cross-refs |
+| **BE** | Known Issue #29 API validation | `prepare/route.ts` + `import/route.ts` — reject 2+ cliff/linear leaves per beneficiary; 4 tests in `bulk-campaign.test.ts` |
+| **BE** | k6 load test suite | `prepare-load.js`, `proof-load.js`, `spike-load.js` + `run-load-test.sh` (`api\|prepare\|proof\|spike\|all`); baselines in `TESTING.md` §k6 |
+| **BE** | Rate limits tuned from baselines | prepare 10/min, proof + campaigns GET 60/min — documented with smoke p95 rationale |
+| **Specs** | `week8-gap-closure-lana` complete | 34/34 tasks `[x]`; `verification.md` verdict ✅ spec satisfied |
+| **Specs** | Checkbox cleanup | `production-security-ops`, `bulk-send`, `sc-remediation` batch-verified; `native-sol-vesting` FE items left for Geral |
 | **Scripts** | Devnet multisig test script | `scripts/test-multisig-transfer.sh` — generates fresh keypair, deploys, transfers authority, verifies, restores on cleanup |
 | **CI** | Mollusk tests in CI | `ci.yml` — runs 72 active Mollusk tests across 8 test files after anchor build |
 | **CI** | Proptest in CI | `ci.yml` — runs `cargo test --lib` (31 tests including 18 proptest properties) |
 | **CI** | Cargo audit in CI | `ci.yml` — installs and runs `cargo audit` before build |
+| **CI** | Web CI / Lint build green | `allocations/page.tsx` — `withTimeout<any>` matches campaign detail pattern; fixes `account is of type 'unknown'` in `next build` |
+| **CI** | Localnet RPC pinning | `scripts/test-localnet.sh` + `Anchor.toml` — integration tests use validator RPC even when provider cluster is devnet (`e20f219`) |
+| **CI** | Flow 4 flake hardening | `tests/week7-integration-flow.spec.ts` — tolerates "transaction already been processed" when balances reflect success; mocha retries in `ci.yml` (`7efe0f6`) |
 | **QA** | 15 bugs found & fixed | 8 L1/P0 (auth, minCliffTime, base58, 409 race, migrations) + 7 QA sweep (2 P0, 3 P1, 2 P2 across SC/BE/FE) |
 | **QA** | ClaimWithProofButton milestone fix | `ClaimWithProofButton.tsx` — milestone leaves use on-chain `milestoneBitmap` instead of greedy `claimedAmount` allocation |
 | **QA** | claim.rs StreamExpired fix | `claim.rs:149` — removed `fully_claimed` sub-condition that blocked multi-leaf claims |
@@ -62,36 +72,37 @@
 | **FE** | Needs Action tab (F3) | Campaigns list `action` tab — filters sender-cancelled + recipient-claimable campaigns |
 | **FE** | Dashboard Needs Attention (F3) | Dashboard section with per-campaign grace period countdown + alert cards |
 | **FE** | Shared UI primitives extracted | 8 components: `StatCard`, `ProgressBar`, `SectionHeader`, `FieldRow`, `DetailRow`, `Spinner` (`components/ui/`), `CampaignCard`, `RecipientListModal` — dashboard/portfolio/campaign detail refactored |
+| **FE** | Allocations page on-chain resilience | `campaign/[id]/allocations/page.tsx` — 8s `withTimeout` on `vestingTree.fetch`, silent fallback to `useCampaignDetail` indexed data (`5d17905`) |
 | **Tests** | Clawback API test suite | `apps/web/tests/api/clawback.test.ts` (681 lines) — cancel campaign (6), withdraw unvested (5), cancel stream (7), milestone release (5) |
 | **Tests** | Clawback component tests | `CampaignStatusBanner.test.ts` (85 lines, 7 states), `GracePeriodCountdown.test.ts` (60 lines) |
 | **Tests** | Campaign-actions E2E suite | `tests/e2e/campaign-actions.spec.ts` (825 lines, **33 tests**) — pause/unpause, cancel stream/campaign, instant refund, withdraw, milestone release, clawback banners, needs-action tab, sidebar badge |
 | **Tests** | E2E mock send-tx helper | `WalletProvider.tsx` + `tests/e2e/helpers.ts` — `enableMockOnChainTransactions()` returns fixed sig for cancel flows without validator |
 | **Tests** | E2E campaign list mocking | `mockCampaignListApis()` in `helpers.ts` — routes sender/recipient list APIs for campaigns page tests |
+| **Tests** | Allocations E2E suite | `tests/e2e/allocations.spec.ts` — **14 tests** (editor UI, validation, update flow) |
+| **Tests** | E2E Solana RPC stub | `helpers.ts` — `mockSolanaRpcGetAccountInfoNull()` returns null immediately; wired in allocations, campaign-actions, user-journey specs to avoid devnet RPC hangs in Playwright CI |
+| **Ops** | Production auth smoke | `docs/operations/verification-log.md` — curl against `velthoryn.site` returns HTTP 401 without admin key |
 | **Ops** | Cron schedule reverted | `vercel.json` — `*/5 * * * *` → `0 0 * * *` (daily). Vercel Hobby plan only supports daily crons |
 
 ### Incomplete / deferred
 
 | Item | Owner | Notes |
 |------|-------|-------|
-| k6 load test expansion | Lana | Existing `api-load.js` covers basic endpoints; prepare/proof/spike scripts deferred |
 | Mollusk 0.14+ upgrade | Lana | Blocked upstream; would unblock 18 ignored tests + 5 SPL handler tests |
 | Sentry DSN in production | Ops | Scaffolding complete; needs `NEXT_PUBLIC_SENTRY_DSN` in Vercel env vars |
 | Monitoring dashboard | Ops | Grafana/PagerDuty — infra, not code |
 | External audit engagement | Ops | Firms identified (Halborn/OtterSec/Sec3); budget $15-40K; not an engineering task |
 | FE: native SOL + instant refund | Geral | BE exposes fields + tx builders; T19/T20 native paths done |
-| Rate limiting | — | ALREADY DONE (Upstash Redis + in-memory fallback, per-route limits, all 25 routes wired) |
+| Rate limiting | — | DONE — Upstash + in-memory fallback; limits tuned from k6 baselines (`TESTING.md` §k6) |
 | API versioning | — | ALREADY DONE (`X-API-Version: 1` header on all responses) |
 | Cron 5-min sync | Ops | Reverted to daily; Vercel Hobby limitation. Paid plan needed for `*/5 * * * *` |
-| CI migration strategy | Lana | Switch CI from `drizzle-kit push` to `drizzle-kit migrate` — `db:migrate` script exists, 0000–0008 files present |
 | Clawback E2E (responsive) | Lana | 33 campaign-actions tests done; 7 deferred responsive/layout cases per spec |
-| Known issue #29 | Lana | Multi-leaf non-milestone `claimed_amount` undercount — needs breaking on-chain per-leaf tracking; design doc written |
-| Docs polish (uncommitted) | Lana | `README.md`, `BACKEND_API.md`, `FE_INTEGRATION.md`, `TESTING.md`, `TRANSPARENCY_DASHBOARD.md` — auth/sync clarifications pending commit |
+| Known issue #29 (on-chain fix) | Lana | Breaking on-chain per-leaf tracking still deferred; **BE mitigation active** — prepare + import routes reject multi cliff/linear leaves per beneficiary |
 
 ---
 
 ## Gaps closed vs gaps remaining
 
-Source: `docs/PENDING_WORK.md` (refreshed 2026-06-10). **86 items audited** — 5 closed this week in `4a3e7a0`, 62 are spec-checkbox cleanup only (code already done), **11 real gaps remain**, 8 blocked/deferred.
+Source: `docs/PENDING_WORK.md` (refreshed 2026-06-11). **86 items audited** — ~17 closed this week, spec-checkbox batch done (code was already shipped), **~4 real gaps remain** (SC #29 on-chain, 2 FE, 1 Ops), **8 blocked/deferred**.
 
 ### Closed this week (2026-06-10)
 
@@ -103,18 +114,42 @@ Source: `docs/PENDING_WORK.md` (refreshed 2026-06-10). **86 items audited** — 
 | 9 | Trust boundary document | `docs/API_TRUST_BOUNDARIES.md` — full route table |
 | 16 | Component extraction | 8 shared UI components; dashboard 481→461 lines, portfolio 331→191 lines |
 
+### Closed in gap-closure sweep (2026-06-11)
+
+| # | Task | Resolution |
+|---|------|------------|
+| 4 | Token-2022 mint guard verified | T71 in `vesting.supplementary.spec.ts` (62 passing) |
+| 5 | Clock pause→cancel→claim test hardened | `vesting.clock.spec.ts` — 14 passing |
+| 6 | EXPLOIT 12 label in security test | `security.spec.ts` — 11 passing, exploit explicitly labeled |
+| 7 | Out-of-order milestone E2E verified | `vesting.supplementary.spec.ts` — 0→2→1 succeeds |
+| 13 | CI migration strategy | `.github/workflows/` use `pnpm db:migrate`; BACKEND_API.md updated |
+| 14 | k6 load test expansion | `prepare-load.js`, `proof-load.js`, `spike-load.js`, `run-load-test.sh all` |
+| 15 | Rate limit tuning | Limits documented in TESTING.md §k6; smoke p95 validates current limits |
+| 19 | CU budget re-audit | Mollusk benchmarks re-run; CU_BUDGET.md updated (9 active + 1 ignored) |
+| 8 (mitigation) | Known Issue #29 BE enforcement | `prepare` + `import` routes + `bulk-campaign.test.ts`; `KNOWN_ISSUE_29_DESIGN.md` §6 |
+| 10 | SC documentation audit | 5 SC docs verified against post-`4a3e7a0` program state |
+| 11 | Backup runbook | `operations/backup-restore.md` verified; staging drill blocked on access |
+| — | Lana protocol docs (US-7) | PRD/PDD/TDD Phase 4 realignment, Stream PDA mapping, TDD stale notes removed |
+| — | Spec checkbox cleanup | `production-security-ops`, `bulk-send`, `sc-remediation` tasks marked `[x]` with evidence |
+| — | Ops verification tests | `ops-verification.test.ts` — pool, sync_state, txn rollback, RLS, BigInt route guard |
+
+### Closed late Jun 11
+
+| Task | Resolution |
+|------|------------|
+| Web CI / Lint build failure | `withTimeout<any>` on allocations page on-chain fetch |
+| Playwright E2E devnet hangs | `mockSolanaRpcGetAccountInfoNull` + allocations page timeout/fallback |
+| Localnet CI cluster drift | `test-localnet.sh` exports `ANCHOR_PROVIDER_URL` / wallet; `Anchor.toml` default back to localnet |
+| Flow 4 integration flake | Duplicate-tx tolerance + retries in `week7-integration-flow.spec.ts` |
+| Ops verification T13–T15 | `ops-verification.test.ts` — sync checkpoint, txn rollback, BigInt route scan (`55ea778`) |
+
 ### Still open (real code work)
 
 | Priority | # | Task | Notes |
 |----------|---|------|-------|
-| 🔴 High | 4 | Token-2022 mint guard verification | `UnsupportedMint` exists; verify constraint in `create_campaign.rs` / `create_stream.rs` |
-| 🔴 High | 5 | Dedicated clock-based pause→cancel→claim test | Concept in supplementary; dedicated `vesting.clock` test partially hardened |
-| 🔴 High | 6 | EXPLOIT 12 label in security test | Concept exists; explicit tag missing |
-| 🔴 High | 7 | Out-of-order milestone E2E | ts-mocha: claim milestones 0→2→1 |
-| 🔴 High | 8 | Known issue #29 per-leaf tracking | Breaking on-chain change; design doc done |
-| 🔴 High | 10–11 | SC docs + backup runbook verification | Partially done; needs final pass |
-| 🔴 High | 12–13 | Sentry DSN + CI migrate strategy | Ops / infra |
-| 🟡 Medium | 14–15, 17–19 | k6 expansion, rate tuning, responsive E2E, native SOL E2E, CU re-audit | Production polish |
+| 🔴 High | 8 | Known issue #29 on-chain fix | Breaking change still deferred; **BE mitigated** at prepare + import; FE validation pending (Geral) |
+| 🔴 High | 12 | Sentry DSN + prod deploy | Ops — `NEXT_PUBLIC_SENTRY_DSN` in Vercel; `velthoryn.vercel.app` currently down |
+| 🟡 Medium | 17–18 | Responsive E2E, native SOL E2E | FE — deferred to Geral |
 
 ### Blocked / deferred (no code path yet)
 
@@ -124,7 +159,7 @@ Mollusk 0.14+, SPL handler tests, cron 5-min sync (Vercel paid), external audit,
 
 ## Blockers — What's stuck or what you need
 
-**No blockers in BE-DB-SC-Merkle.** All Week 8 tasks complete or deferred with clear owners.
+**No blockers in BE-DB-SC-Merkle engineering.** `week8-gap-closure-lana` spec complete (34/34, `/spec-verify` ✅). Remaining items are Ops (Sentry, prod redeploy) or Geral (FE).
 
 | Dependency | Who | What |
 |------------|-----|------|
@@ -158,9 +193,15 @@ Mollusk 0.14+, SPL handler tests, cron 5-min sync (Vercel paid), external audit,
 | FE unit tests (new) | 0 | **+3** (clawback API 681 lines, serialize-bigint 5 tests, MilestoneReleasePanel +6 tests) |
 | FE component tests (new) | 0 | **+2** (CampaignStatusBanner, GracePeriodCountdown) |
 | E2E tests (campaign-actions) | 0 | **33** tests in 825-line suite |
-| Pending-work gaps closed | — | **5** of 86 audited items (`4a3e7a0`) |
-| Rate limiting | Thought incomplete | **ALREADY DONE** |
-| API versioning | Thought incomplete | **ALREADY DONE** |
+| E2E tests (allocations) | 0 | **14** tests in `allocations.spec.ts` |
+| Pending-work gaps closed | — | **~17** of 86 audited items (`4a3e7a0` + gap-closure spec) |
+| k6 load scripts | 1 (`api-load.js`) | **+3** (prepare, proof, spike) + orchestrator `all` mode |
+| BE API tests (KI#29) | — | **+4** in `bulk-campaign.test.ts` |
+| Web Vitest (full suite) | — | **924** passed (73 files; includes API + ops-verification) |
+| Spec tasks (`week8-gap-closure-lana`) | — | **34/34** complete; `/spec-verify` ✅ |
+| SC integration (devnet+bankrun) | — | **98 passing, 1 pending** per `DEVNET_TEST_RESULTS.md` |
+| Rate limiting | Thought incomplete | **DONE** — tuned from k6 baselines |
+| API versioning | Thought incomplete | **DONE** |
 
 ---
 
@@ -169,28 +210,36 @@ Mollusk 0.14+, SPL handler tests, cron 5-min sync (Vercel paid), external audit,
 ### SC — Solana Program
 - [ ] **Upgrade Mollusk 0.14+** — when available, activates 18 ignored tests + enables SPL handler tests
 - [ ] **SPL handler tests** — claim/withdraw SPL path, create_stream SPL, create_campaign SPL, fund_campaign SPL
-- [ ] **Formal CU budget audit** — re-measure with mainnet cluster parameters, set `compute_budget` limits
 - [ ] **External audit** — engage firm after ops budget approval
-- [ ] **Multi-leaf non-milestone tracking (Known Issue #29)** — per-leaf tracking (breaking on-chain change); design in `docs/KNOWN_ISSUE_29_DESIGN.md`
-- [ ] **Out-of-order milestone E2E test** — create 3-milestone campaign, claim 0→2→1, verify all succeed
-- [ ] **EXPLOIT 12 tag** — add explicit label to pause→cancel security test in `security.spec.ts`
-- [ ] **Token-2022 mint guard** — verify `mint.owner == token_program` constraint in create paths
+- [ ] **Multi-leaf non-milestone tracking (Known Issue #29)** — per-leaf tracking (breaking on-chain change); design in `docs/KNOWN_ISSUE_29_DESIGN.md`; **BE mitigated** at API layer
+- [x] **Out-of-order milestone E2E test** — 0→2→1 verified in `vesting.supplementary.spec.ts`
+- [x] **EXPLOIT 12 tag** — unlabeled in `security.spec.ts`, labeled and passing
+- [x] **Token-2022 mint guard** — verified via T71 (`UnsupportedMint` rejected)
+- [x] **Formal CU budget audit** — Mollusk benchmarks re-run 2026-06-11; CU_BUDGET.md covers 9 active + 1 ignored
+- [x] **Localnet RPC pinning** — `e20f219`
+
+### CI
+- [x] **Web CI build green** — allocations TypeScript fix (`f16d736`)
 
 ### BE — Backend API
-- [ ] **k6 load test expansion** — add prepare, proof, spike test scripts
+- [x] **k6 load test expansion** — prepare, proof, spike scripts + `run-load-test.sh all`
+- [x] **Rate limit tuning** — per-route limits documented in TESTING.md §k6
+- [x] **CI migration strategy** — all workflows use `pnpm db:migrate`
+- [x] **Known Issue #29 BE validation** — prepare + import reject multi cliff/linear per beneficiary
+- [x] **BE/SC doc accuracy pass** — `BACKEND_API.md`, `TESTING.md`, `CU_BUDGET.md`, README index
+- [x] **Lana protocol docs realignment** — PRD/PDD/TDD Phase 4, Stream PDA mapping, spec-verify passed
+- [x] **Ops verification T13–T15** — `ops-verification.test.ts` expanded (`55ea778`)
+- [x] **Production 401 smoke** — verified in `verification-log.md`
 - [ ] **Sentry live DSN** — ops sets env var in Vercel
-- [ ] **Rate limit tuning** — adjust per-route limits based on k6 load test results
-- [ ] **CI migration strategy** — switch from `drizzle-kit push` to `drizzle-kit migrate`
 - [ ] **Cron upgrade to paid Vercel plan** — restore `*/5 * * * *` sync schedule for near-real-time dashboard
 
 ### FE — Frontend
 - [ ] **Clawback responsive E2E** — 7 deferred layout/responsive tests for banner, sidebar badge, needs-action tab
 - [ ] **Native SOL create flows** — FE uses `*_native` instructions when mint = `NATIVE_SOL_MINT` (Geral dependency)
 - [ ] **Instant refund UI** — Cancel UI distinguishes instant vs grace refund (Geral dependency)
-- [ ] **Commit doc polish** — README index, `BACKEND_API` auth tiers, `FE_INTEGRATION` events/sync guidance
 
 ### Security & Ops
 - [ ] **Monitoring dashboard** — Grafana/PagerDuty for program + API health
 - [ ] **Mainnet deploy** — follow `docs/MAINNET_CHECKLIST.md` after external audit
 - [ ] **Multisig setup** — follow `docs/operations/multisig-setup.md` before mainnet
-- [ ] **SC docs final pass** — verify `SECURITY.md`, `PDD_LANA.md`, `TDD_LANA.md`, `AUDIT_REPORT.md`, `MATURITY_REPORT.md`
+- [x] **SC docs final pass** — `SECURITY.md`, `PDD_LANA.md`, `TDD_LANA.md`, `AUDIT_REPORT.md`, `MATURITY_REPORT.md` verified and updated
