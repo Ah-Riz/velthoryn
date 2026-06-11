@@ -46,7 +46,7 @@ velthoryn/
 
 **Test results: 127+ SC tests PASS** (`pnpm test:localnet`); **563 web Vitest PASS** (API routes use Postgres in CI)
 **BE–SC Merkle pipeline verified end-to-end**: 3-leaf campaigns (Cliff/Linear/Milestone) through prepare → POST (all leaves verified) → GET proof → verify. RLS on all Supabase tables. **Bootcamp acceptance: 8/8** — see [`docs/BE-SC-MERKLE-ACCEPTANCE-STATUS.md`](docs/BE-SC-MERKLE-ACCEPTANCE-STATUS.md).
-- Devnet (`pnpm test:devnet`): **93 passing, 9 pending** (T64–T68 bankrun-only; cancel logic covered by T64b–T64d)
+- Devnet + bankrun (`pnpm test:devnet`): **98 passing, 1 pending** — live breakdown in [`docs/DEVNET_TEST_RESULTS.md`](docs/DEVNET_TEST_RESULTS.md) (devnet RPC 75 + bankrun 24; T68 pending on RPC, covered by clock suite)
 - Native SOL tests: `tests/vesting-native-sol.spec.ts` via **solana-bankrun** (12 tests covering full SOL lifecycle)
 - Clock-dependent cases: `tests/vesting.clock.spec.ts` via **solana-bankrun** (T17–T20, T25, T47, T55–T64, EXPLOIT 4)
 - Sealevel-attacks gap tests: `tests/sealevel-attacks-gap.spec.ts` via **solana-bankrun** (4 tests: duplicate accounts #6, PDA sharing #8, close-reinit #9)

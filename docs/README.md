@@ -60,6 +60,7 @@ Scripts: `apps/web/tests/load/` (`api-load.js`, `prepare-load.js`, `proof-load.j
 
 | Doc | Contents |
 |-----|----------|
+| [`DEVNET_TEST_RESULTS.md`](DEVNET_TEST_RESULTS.md) | **Live** SC integration test counts (devnet RPC + bankrun breakdown) |
 | [`PENDING_WORK.md`](PENDING_WORK.md) | Prioritized backlog from spec audit |
 | [`KNOWN_ISSUE_29_DESIGN.md`](KNOWN_ISSUE_29_DESIGN.md) | Multi-leaf `claimed_amount` undercount — BE enforcement active (prepare + import) |
 | [`WEEK8_KNOWN_ISSUES.md`](WEEK8_KNOWN_ISSUES.md) | Week 8 bug sweep log |
@@ -69,5 +70,5 @@ Scripts: `apps/web/tests/load/` (`api-load.js`, `prepare-load.js`, `proof-load.j
 
 | Doc | Owner |
 |-----|-------|
-| [`PRD_LANA.md`](PRD_LANA.md) / [`PDD_LANA.md`](PDD_LANA.md) / [`TDD_LANA.md`](TDD_LANA.md) | Lana (SC/BE) |
+| [`PRD_LANA.md`](PRD_LANA.md) / [`PDD_LANA.md`](PDD_LANA.md) / [`TDD_LANA.md`](TDD_LANA.md) | Lana (SC/BE) — Phase 4 complete, BE-SC-Merkle canonical model; test counts in [`DEVNET_TEST_RESULTS.md`](DEVNET_TEST_RESULTS.md) |
 | [`PRD_GERAL.md`](PRD_GERAL.md) / [`PDD_GERAL.md`](PDD_GERAL.md) / [`TDD_GERAL.md`](TDD_GERAL.md) / [`SECURITY_GERAL.md`](SECURITY_GERAL.md) | Geral (FE) |
