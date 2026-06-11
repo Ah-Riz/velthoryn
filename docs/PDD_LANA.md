@@ -1,7 +1,7 @@
 # PDD — Velthoryn Protocol
 
 **Author:** Lana — smart-contract / backend lead  
-**Status:** Week 4 complete — all features implemented and tested on devnet
+**Status:** Phase 4 complete — BE-SC-Merkle on devnet
 **Date:** 2026-05-08
 **Program ID:** `G6iaigUdi2btFwUc2N65twfxwA8Ew5uKKhKJ5RJa8wvu` (deployed, Solana devnet)
 **Framework:** Anchor 1.0.0
@@ -12,6 +12,7 @@
 - `docs/SECURITY.md` — attack surface tables, threat model, mitigations
 - `docs/INTEGRATION.md` — frontend call patterns, TypeScript SDK usage
 - `docs/PROGRAM.md` — IDL, account layout reference, instruction signatures
+- `docs/DEVNET_TEST_RESULTS.md` — live test counts and devnet deployment status
 
 ---
 
@@ -52,6 +53,29 @@ Three principles govern every design decision in this protocol:
 - Squads v4 multisig integration for cancel_authority
 - Pinocchio performance rewrite
 - Formal fuzzing harness (proptest / cargo-fuzz)
+- Tutorial Stream account operations: `trigger_milestone`, `cancel_stream`, per-recipient Stream PDA (see PRD §2.4 for mapping)
+
+---
+
+### §1.4 Single-recipient stream (logical model)
+
+A single-recipient campaign (`leaf_count == 1`) is the protocol's equivalent of a traditional stream. It uses the same `VestingTree` + `VestingLeaf` machinery as bulk campaigns, with two simplifications:
+
+- **No Merkle tree needed:** The Merkle root is computed on-chain from a single leaf hash. The creator calls `create_stream` (combining `create_campaign` + `fund_campaign`) without off-chain tree building or proof hosting.
+- **No proof needed to claim:** The `withdraw` instruction reconstructs the leaf from the caller's arguments and verifies `leaf_hash == merkle_root`. If the schedule parameters match what was committed at creation, the root check passes.
+
+The stream-specific arguments (passed to `create_stream` and reconstructed in `withdraw`) are:
+
+| Field | Type | Description |
+|---|---|---|
+| `beneficiary` | `Pubkey` | Wallet that can call `withdraw` |
+| `amount` | `u64` | Total token amount (becomes `total_supply`) |
+| `release_type` | `u8` | 0=cliff, 1=linear, 2=milestone |
+| `start_time` | `i64` | Unix timestamp, vesting start |
+| `cliff_time` | `i64` | Unix timestamp, first unlock |
+| `end_time` | `i64` | Unix timestamp, fully vested |
+
+For implementation details, see TDD §4.2a (`create_stream`) and §4.2b (`withdraw`).
 
 ---
 
@@ -1150,7 +1174,9 @@ Transfer fees in Token-2022 extensions cause the vault-to-beneficiary transfer t
 
 ---
 
-## §16 Phase 2 Roadmap Items
+## §16 Phase 5–7 Roadmap Items
+
+**Phase 5** (infrastructure and hardening):
 
 | Feature | Dependency | Notes |
 |---|---|---|
@@ -1158,7 +1184,18 @@ Transfer fees in Token-2022 extensions cause the vault-to-beneficiary transfer t
 | Token-2022 mint support | Anchor Token-2022 CPI helpers | Requires `transfer_checked` with fee extension awareness; claimable must account for fee deduction |
 | Pinocchio performance rewrite | Pinocchio framework stable | Removes Anchor overhead; targets sub-10k CU for claim; not a correctness change |
 | proptest / cargo-fuzz fuzzing harness | CI integration | Property-based tests for schedule math edge cases; fuzzing of Borsh deserialization paths |
+| On-chain schedule cache for `leaf_count == 1` | Design only, not scheduled | Optional: cache schedule parameters on VestingTree to eliminate leaf reconstruction in `withdraw` |
+
+**Phase 6** (DeFi composability):
+
+| Feature | Dependency | Notes |
+|---|---|---|
 | Lending protocol integration | DeFi partner specification | Uses `get_vested_amount` CPI; requires collateral accounting design on lender side |
+
+**Phase 7** (governance):
+
+| Feature | Dependency | Notes |
+|---|---|---|
 | DAO governance — Realms VSR plugin | Realms VSR plugin spec | Weight votes by `get_vested_amount`; requires VSR plugin development outside this program |
 | Mainnet deployment | Security audit completion | Audit scope: all 12 instructions, Merkle implementation, CEI order, bump caching |
 
@@ -1234,6 +1271,7 @@ Transfer fees in Token-2022 extensions cause the vault-to-beneficiary transfer t
 | PDD Section | Related PRD section | Related TDD section | Related SECURITY section | Related INTEGRATION section |
 |---|---|---|---|---|
 | §1 Executive Summary | §1 Problem Statement, §2 Product Vision | §1 Overview | — | — |
+| §1.4 Single-recipient stream (logical) | §2.3 BE-SC-Merkle canonical model | §4.2a–4.2b create_stream, withdraw | — | — |
 | §2 Design Goals and Trade-offs | §3 Functional Requirements | §2 Architecture | — | — |
 | §3 Protocol Actors and Trust Model | §4 Actors and Roles | §2.3 Authority model | §2 Threat actors | — |
 | §4 Campaign Lifecycle | §5 Campaign lifecycle | §3 State machine | §3 State transition attacks | §2 Campaign setup flow |
@@ -1248,6 +1286,6 @@ Transfer fees in Token-2022 extensions cause the vault-to-beneficiary transfer t
 | §13 Error Catalog | §12 Error handling | §11 Error codes | — | §9 Error handling patterns |
 | §14 DeFi Composability | §13 Phase 2 composability | §12 CPI interface | — | §10 CPI integration |
 | §15 Known Limitations | §14 Limitations | §13 Known issues | §10 Accepted risks | — |
-| §16 Phase 2 Roadmap | §15 Roadmap | §14 Future work | §11 Phase 2 security | — |
+| §16 Phase 5–7 Roadmap | §2.6 Phase roadmap | §14 Future work | §11 Phase 2 security | — |
 | §17 Glossary | §16 Glossary | — | — | — |
 | Appendix A | — | Appendix A (constants) | — | — |

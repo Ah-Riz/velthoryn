@@ -2,12 +2,16 @@
 
 Quick map of `docs/` — start at the repo [`README.md`](../README.md) for setup and status.
 
+## Load testing (k6)
+
+Scripts: `apps/web/tests/load/` (`api-load.js`, `prepare-load.js`, `proof-load.js`, `spike-load.js`). Orchestrator: `apps/web/tests/load/run-load-test.sh`. Baselines and per-route rate limits: [`TESTING.md`](TESTING.md) §k6.
+
 ## Getting started
 
 | Doc | Audience | Contents |
 |-----|----------|----------|
 | [`LOCAL_DEV.md`](LOCAL_DEV.md) | All | Keypair, validator, first green test |
-| [`TESTING.md`](TESTING.md) | All | SC + web + E2E commands, CI matrix |
+| [`TESTING.md`](TESTING.md) | All | SC + web + E2E commands, **k6 load tests**, SC benchmarks, CI matrix |
 | [`INTEGRATION.md`](INTEGRATION.md) | FE/BE | Program ID, PDAs, Merkle, sample calls |
 | [`FE_INTEGRATION.md`](FE_INTEGRATION.md) | FE | Full frontend guide, file map, flows |
 
@@ -21,7 +25,7 @@ Quick map of `docs/` — start at the repo [`README.md`](../README.md) for setup
 | [`NATIVE_SOL_VESTING.md`](NATIVE_SOL_VESTING.md) | Native SOL dual-path design |
 | [`CREATE_CAMPAIGN_VS_CREATE_STREAM.md`](CREATE_CAMPAIGN_VS_CREATE_STREAM.md) | When to use each entry point |
 | [`ROOT_ROTATION_GUIDE.md`](ROOT_ROTATION_GUIDE.md) | Merkle root rotation |
-| [`CU_BUDGET.md`](CU_BUDGET.md) | Compute unit notes |
+| [`CU_BUDGET.md`](CU_BUDGET.md) | Mollusk CU measurements + client `ComputeBudget` guidance |
 
 ## Backend & API
 
@@ -56,8 +60,9 @@ Quick map of `docs/` — start at the repo [`README.md`](../README.md) for setup
 
 | Doc | Contents |
 |-----|----------|
+| [`DEVNET_TEST_RESULTS.md`](DEVNET_TEST_RESULTS.md) | **Live** SC integration test counts (devnet RPC + bankrun breakdown) |
 | [`PENDING_WORK.md`](PENDING_WORK.md) | Prioritized backlog from spec audit |
-| [`KNOWN_ISSUE_29_DESIGN.md`](KNOWN_ISSUE_29_DESIGN.md) | Multi-leaf `claimed_amount` undercount design |
+| [`KNOWN_ISSUE_29_DESIGN.md`](KNOWN_ISSUE_29_DESIGN.md) | Multi-leaf `claimed_amount` undercount — BE enforcement active (prepare + import) |
 | [`WEEK8_KNOWN_ISSUES.md`](WEEK8_KNOWN_ISSUES.md) | Week 8 bug sweep log |
 | [`SHIP-PATH-NEXT.md`](SHIP-PATH-NEXT.md) | Ship path notes |
 
@@ -65,5 +70,5 @@ Quick map of `docs/` — start at the repo [`README.md`](../README.md) for setup
 
 | Doc | Owner |
 |-----|-------|
-| [`PRD_LANA.md`](PRD_LANA.md) / [`PDD_LANA.md`](PDD_LANA.md) / [`TDD_LANA.md`](TDD_LANA.md) | Lana (SC/BE) |
+| [`PRD_LANA.md`](PRD_LANA.md) / [`PDD_LANA.md`](PDD_LANA.md) / [`TDD_LANA.md`](TDD_LANA.md) | Lana (SC/BE) — Phase 4 complete, BE-SC-Merkle canonical model; test counts in [`DEVNET_TEST_RESULTS.md`](DEVNET_TEST_RESULTS.md) |
 | [`PRD_GERAL.md`](PRD_GERAL.md) / [`PDD_GERAL.md`](PDD_GERAL.md) / [`TDD_GERAL.md`](TDD_GERAL.md) / [`SECURITY_GERAL.md`](SECURITY_GERAL.md) | Geral (FE) |

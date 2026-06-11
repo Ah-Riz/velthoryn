@@ -89,7 +89,34 @@ function parseCsvText(text: string): {
     }
   }
 
-  return { recipients, totalRows, validRows: recipients.length, errors };
+  // Known Issue #29: reject multiple cliff/linear leaves per beneficiary.
+  const cliffLinearSeen = new Map<string, number>();
+  const duplicateRows = new Set<number>();
+  for (const recipient of recipients) {
+    if (recipient.releaseType !== 2) {
+      const prevRow = cliffLinearSeen.get(recipient.beneficiary);
+      if (prevRow !== undefined) {
+        duplicateRows.add(recipient.row);
+        errors.push({
+          row: recipient.row,
+          field: "beneficiary",
+          message:
+            `Known Issue #29: beneficiary ${recipient.beneficiary} already has a cliff/linear entry at row ${prevRow}`,
+        });
+      } else {
+        cliffLinearSeen.set(recipient.beneficiary, recipient.row);
+      }
+    }
+  }
+
+  const validRecipients = recipients.filter((r) => !duplicateRows.has(r.row));
+
+  return {
+    recipients: validRecipients,
+    totalRows,
+    validRows: validRecipients.length,
+    errors,
+  };
 }
 
 async function postImportHandler(request: NextRequest) {

@@ -1,12 +1,12 @@
-# Pending Work Audit (as of 2026-06-10)
+# Pending Work Audit (as of 2026-06-11)
 
 > Generated from full spec audit across 12 specs in `.claude/specs/`.
 > Purpose: Give Cursor clear, prioritized work items. Separate "already done" from "actually missing".
-> **Last refresh:** 2026-06-10 — verification sweep: items 4–7, 13 verified (SC tests + CI migrate); summary count 11 → 6.
+> **Last refresh:** 2026-06-11 — week8-lana-remnants: BigInt route audit, ops-verification tests (pool, sync_state, txn, RLS), PENDING_WORK refresh.
 
 ---
 
-## ✅ RECENTLY COMPLETED (2026-06-10)
+## ✅ RECENTLY COMPLETED (2026-06-11)
 
 | # | Task | Resolution |
 |---|------|------------|
@@ -20,6 +20,16 @@
 | 6 | EXPLOIT 12 label verified | `security.spec.ts` — `EXPLOIT 12: pause then cancel then claim during grace succeeds` (11 passing) |
 | 7 | Out-of-order milestone E2E verified | `vesting.supplementary.spec.ts` — `out-of-order milestone claim: 0 → 2 → 1 succeeds` |
 | 13 | CI migration strategy verified | `.github/workflows/lint.yml` + `web-ci.yml` use `pnpm db:migrate`; `BACKEND_API.md` updated |
+| 10 | SC documentation audit | 5 docs (`SECURITY.md`, `PDD_LANA.md`, `TDD_LANA.md`, `AUDIT_REPORT.md`, `MATURITY_REPORT.md`) verified against current SC state per week8 T16 |
+| 11 | Backup procedure runbook | [`docs/operations/backup-restore.md`](operations/backup-restore.md) verified for completeness; staging drill pending (blocked on staging access) |
+| 28 | BigInt serialization route audit | Grep of all route handlers under `apps/web/src/app/api/` confirms all use `jsonResponse` with `jsonReplacer` — no un-serialized BigInt paths |
+| 29 | DB pool config verified | `ops-verification.test.ts` confirms `max: 10` in production, `max: 3` in development |
+| 30 | sync_state checkpoint verified | `ops-verification.test.ts` confirms `persistSyncCheckpoint` writes and `getLastSyncedSlot` advances |
+| 31 | Transactional rollback verified | `ops-verification.test.ts` confirms `db.transaction` rolls back inserts on error |
+| 32 | RLS policy behavior verified | `ops-verification.test.ts` confirms anon SELECT succeeds, INSERT fails (CI with local Postgres); skipped on remote DBs gracefully |
+| 33 | syncClaimEvents end-to-end via mock RPC | `ops-verification.test.ts` ("syncClaimEvents checkpoint") validates `syncClaimEventsWithConnection` advances checkpoint through full pipeline |
+| 34 | processTransactions end-to-end | `ops-verification.test.ts` ("processTransactions rollback") validates event processing through `processTransactions` with mocked `getTransaction` |
+| 35 | BigInt route guard (automated) | `ops-verification.test.ts` ("BigInt serialization guard") scans all route files; would catch a new route that omits `jsonResponse` |
 
 ---
 
@@ -33,20 +43,13 @@ _No open high-priority BE items from the original audit._
 
 | # | Task | Source | What's needed |
 |---|------|--------|---------------|
-| 8 | Known issue #29 — cumulative claimed_amount undercount | Week8 Known Issues | Multi-leaf non-milestone leaves undercount via cumulative `claimed_amount`. Needs per-leaf tracking — **breaking on-chain change**. BE validation added in T4 (prepare route). |
-
-### Docs
-
-| # | Task | Source | What's needed |
-|---|------|--------|---------------|
-| 10 | Update 5 SC documentation files | 00.10 | Partially done in week 8 — verify `SECURITY.md`, `PDD_LANA.md`, `TDD_LANA.md`, `AUDIT_REPORT.md`, `MATURITY_REPORT.md` match current SC state. |
-| 11 | Backup procedure documentation | B4 | Partially done — see [`docs/operations/backup-restore.md`](operations/backup-restore.md); verify runbook completeness. |
+| 8 | Known issue #29 — cumulative claimed_amount undercount | Week8 Known Issues | On-chain fix still deferred (breaking change). **BE mitigated:** prepare + import routes reject multi cliff/linear per beneficiary (June 2026). FE validation pending (Geral). |
 
 ### Ops/Infra
 
 | # | Task | Source | What's needed |
 |---|------|--------|---------------|
-| 12 | Sentry DSN in Vercel production | B1 | Scaffolding done (`sentry.client.config.ts`, `sentry.server.config.ts`). Just needs `NEXT_PUBLIC_SENTRY_DSN` env var set in Vercel dashboard. |
+| 12 | Sentry DSN in Vercel production | B1 | Scaffolding done. Ops needs to set `NEXT_PUBLIC_SENTRY_DSN` in Vercel; production deploy appears down (`velthoryn.vercel.app` returns DEPLOYMENT_NOT_FOUND). |
 
 ---
 
@@ -56,8 +59,8 @@ _No open high-priority BE items from the original audit._
 
 | # | Task | Source | What's needed |
 |---|------|--------|---------------|
-| 14 | k6 load test expansion | B5 / Week8 Next | `api-load.js` covers basic endpoints. Need: prepare, proof, spike scripts + baseline results. |
-| 15 | Rate limit tuning | Week8 Next | Adjust per-route limits based on k6 load test results. |
+| 14 | k6 load test expansion | B5 / Week8 Next | **Done** — `prepare-load.js`, `proof-load.js`, `spike-load.js`, `run-load-test.sh all`; baselines in `TESTING.md` §k6. |
+| 15 | Rate limit tuning | Week8 Next | **Done** — limits documented in `TESTING.md` §k6; smoke p95 supports current prepare 10/min, proof 60/min. |
 
 ### FE
 
@@ -70,7 +73,7 @@ _No open high-priority BE items from the original audit._
 
 | # | Task | Source | What's needed |
 |---|------|--------|---------------|
-| 19 | Formal CU budget audit | Week8 Next | Re-measure with mainnet cluster parameters, set `compute_budget` limits. |
+| 19 | Formal CU budget audit | Week8 Next | **Done** — Mollusk benchmarks re-run 2026-06-11; `CU_BUDGET.md` updated (9 active + 1 ignored). |
 
 ---
 
@@ -85,14 +88,13 @@ _No open high-priority BE items from the original audit._
 | 24 | Monitoring dashboard (Grafana/PagerDuty) | Ops | Infra, not code |
 | 25 | Mainnet deploy | Ops | Follow MAINNET_CHECKLIST.md after audit |
 | 26 | Multisig setup execution | Ops | Doc exists at `docs/operations/multisig-setup.md`, needs doing |
-| 27 | k6 rate limit tuning | BE | Blocked on #14 (load test expansion) |
+| 27 | k6 rate limit tuning | BE | **Done** — see `TESTING.md` §k6 rate limit table. |
 
 ---
 
-## ✅ ALREADY DONE BUT NOT CHECKED IN SPECS — Spec file cleanup only
+## ✅ SPEC CHECKBOX CLEANUP (2026-06-11)
 
-These items are implemented in the codebase but their `tasks.md` checkboxes were never marked `[x]`.
-**No code work needed — just update the spec files.**
+Batch-verified and marked `[x]` in `.claude/specs/{production-security-ops,bulk-send,sc-remediation}/tasks.md`. `native-sol-vesting` BE tasks were already `[x]`; FE tasks T19–T22 remain deferred to Geral. `sc-remediation` §00.8 devnet redeploy still `[ ]`.
 
 ### production-security-ops (P0+P1) — ~30 sub-items
 - P0.1 Rate limiter utility → `lib/api/rate-limit.ts` exists
@@ -149,10 +151,10 @@ These items are implemented in the codebase but their `tasks.md` checkboxes were
 | Category | Actually not done | Recently completed | Already done (spec cleanup) | Blocked/deferred |
 |----------|-------------------|--------------------|----------------------------|------------------|
 | **SC** | 1 | 4 | 12 | 2 |
-| **BE** | 0 | 3 | 48 | 1 |
+| **BE** | 0 | 8 | 48 | 1 |
 | **FE** | 2 | 1 | 2 | 0 |
-| **Docs** | 2 | 1 | 0 | 0 |
+| **Docs** | 0 | 3 | 0 | 0 |
 | **Ops** | 1 | 1 | 0 | 5 |
-| **Total** | **6** | **10** | **62** | **8** |
+| **Total** | **~4** | **~17** | **0** (batch done) | **8** |
 
-**86 total items audited.** 10 completed 2026-06-10 (incl. verification sweep items 4–7, 13). 62 need spec file checkboxes only. **6** remain as real work. 8 are externally blocked.
+**86 total items audited.** Last refresh 2026-06-11. Remaining real work: SC #29 on-chain fix, FE E2E/clawback, Ops Sentry DSN + production redeploy. **8** externally blocked. Prod deployment at `velthoryn.vercel.app` is currently down — redeploy needed before smoke tests or Sentry verification can complete.

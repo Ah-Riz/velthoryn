@@ -1,10 +1,10 @@
 # TDD — Velthoryn Protocol (Lana's Scope)
 
 **Author:** Lana — smart-contract / backend lead
-**Status:** Week 8 — pause+cancel remediation complete (12 instructions, 76 integration tests). Deployed to devnet (slot 461219566).
-**Companion docs:** `docs/PRD_LANA.md`, `docs/SECURITY.md`, `docs/PROGRAM.md`
+**Status:** Phase 4 complete — BE-SC-Merkle on devnet. Test counts: see `docs/DEVNET_TEST_RESULTS.md` (live source).
+**Companion docs:** `docs/PRD_LANA.md`, `docs/SECURITY.md`, `docs/PROGRAM.md`, `docs/DEVNET_TEST_RESULTS.md`
 
-This document is the implementation blueprint. All sections have been implemented and verified with **76 integration tests** (63 supplementary incl. T69/T70, 11 security exploit incl. EXPLOIT 12, 2 smoke), plus **14 bankrun clock tests** (incl. pause→cancel→claim precise vesting), **5 golden vector**, and **11 Rust unit tests**.
+This document is the implementation blueprint. All sections have been implemented and verified. See `docs/DEVNET_TEST_RESULTS.md` for the current test suite breakdown.
 
 ---
 
@@ -15,22 +15,9 @@ This document is the implementation blueprint. All sections have been implemente
 | Crate | Version | Reason |
 |---|---|---|
 | `anchor-lang` | `1.0.0` | Stable major release (April 2026). Declarative account validation — the #1 source of Solana exploits is hand-rolled account checks. |
-| `anchor-spl` | `1.0.0` | SPL Token CPIs for `fund_campaign`, `claim`, `withdraw_unvested`. **Not yet in `Cargo.toml` — must be added.** |
+| `anchor-spl` | `1.0.0` | SPL Token CPIs for `fund_campaign`, `claim`, `withdraw_unvested`. |
 | `solana-keccak-hasher` | `2.2` | Already in deps. Used by `leaf_hash()`. Same crate for `verify_merkle_proof`. |
 | `solana-program` | `2.1` (transitive) | Via anchor. |
-
-**`Cargo.toml` change required:**
-```toml
-[dependencies]
-anchor-lang = { version = "1.0.0", features = ["init-if-needed"] }
-anchor-spl  = "1.0.0"
-solana-keccak-hasher = "2.2"
-
-[features]
-idl-build = ["anchor-lang/idl-build", "anchor-spl/idl-build"]
-```
-
-Without `anchor-spl`, no instruction that touches tokens can compile. Without `anchor-spl/idl-build` in the feature, the IDL build fails.
 
 ### TypeScript
 
@@ -44,8 +31,6 @@ Without `anchor-spl`, no instruction that touches tokens can compile. Without `a
 | `merkletreejs` | `^0.4.0` | Listed in deps; our `VestingMerkleTree` is hand-rolled for index-based proofs but this is available |
 
 Test deps: `mocha`, `ts-mocha`, `chai`, `typescript`.
-
-**`clients/ts/package.json` has zero runtime dependencies today** — all packages above must be added before the TS client compiles. The root `package.json` has dev deps for testing, but the client package needs its own `dependencies` block with at minimum: `js-sha3`, `bn.js`, `@coral-xyz/anchor`, `@solana/web3.js`, `@solana/spl-token`.
 
 ---
 
@@ -439,6 +424,8 @@ pub struct CreateStreamArgs {
 
 **Events:** `CampaignCreated { tree, creator, mint, total_supply, leaf_count: 1, cancellable }` then `CampaignFunded { tree, amount, vault_balance_after }`
 
+> **Schedule verification:** The schedule is not stored separately on `VestingTree`. It is verified through the `leaf_hash == merkle_root` equivalence — any mismatch in schedule parameters (cliff_time, end_time, etc.) produces a different leaf hash and fails the root check.
+
 ---
 
 ### 4.2b `withdraw` (proof-less claim for single-recipient streams)
@@ -474,6 +461,8 @@ pub struct WithdrawArgs {
 **State mutations:** Same CEI pattern as `claim` — all mutations before the SPL token CPI.
 
 **Event:** `Claimed` (same event type as `claim`)
+
+> **Schedule verification:** Same as `create_stream` (§4.2a) — the schedule is not stored on `VestingTree`. The `leaf_hash == merkle_root` check ensures schedule parameters match what was committed at campaign creation.
 
 ---
 
@@ -587,8 +576,6 @@ if cr.beneficiary == Pubkey::default() {
 
 **Purpose:** Freeze the vesting curve at `now`. Recipients keep earned tokens; unvested goes back to creator after grace period.
 
-> **Stub discrepancy:** the current stub in `instructions/cancel_campaign.rs` declares `authority: Signer<'info>`. Rename this field to `cancel_authority` when expanding — all constraint references below use that name.
-
 **Accounts block:**
 ```rust
 #[derive(Accounts)]
@@ -647,8 +634,6 @@ pub struct UpdateRoot<'info> {
 ### 4.6 `pause_campaign` / `unpause_campaign`
 
 **Purpose:** Emergency stop on `claim`. Same accounts struct shared by both handlers.
-
-> **Stub discrepancy:** the current stub in `instructions/pause_campaign.rs` declares `authority: Signer<'info>`. Rename this field to `pause_authority` when expanding. There is also no `UnpauseCampaign` type alias yet — add it as shown below.
 
 **Accounts block:**
 ```rust
@@ -772,8 +757,6 @@ require!(fully_claimed || post_grace, VestingError::CannotClose);
 ### 4.9 `get_vested_amount`
 
 **Purpose:** Read-only helper for Phase 2 DeFi integrations (lending protocols check vested balance without claiming).
-
-> **Stub discrepancy:** the current stub in `instructions/get_vested_amount.rs` has `viewer: Signer<'info>` in its accounts struct. This must be removed — the instruction takes no accounts at all. An empty struct `{}` is the correct form.
 
 **Accounts block:**
 ```rust
@@ -1089,17 +1072,30 @@ describe("golden vector", () => {
 
 ---
 
-## §7 Build Order
+## Appendix — External Tutorial Test Matrix Mapping
 
-Execute in sequence (each step must compile/pass before the next):
+| Tutorial concept | TDD test ID(s) | File |
+|---|---|---|
+| `create_stream` | T21–T25, T30–T32 | `tests/vesting.supplementary.spec.ts` |
+| `withdraw` | T22–T25, T40 | `tests/vesting.supplementary.spec.ts` |
+| `cancel_stream` | T33–T35 | `tests/vesting.supplementary.spec.ts` |
+| `trigger_milestone` | No equivalent (not supported — see PRD §2.4) | — |
+| Clock-dependent tests | Clock suite (12 tests) | `tests/vesting.clock.spec.ts` |
+| Pause + cancel | T69–T70, EXPLOIT 12 | `tests/vesting.supplementary.spec.ts`, `tests/security.spec.ts` |
 
-1. Add `anchor-spl = "1.0.0"` to `programs/vesting/Cargo.toml` + update `idl-build` feature
-2. Fill `math/schedule.rs` (`vested`, `get_vested_amount`, unit tests) → `cargo test` green
-3. Fill `verify_merkle_proof` in `math/merkle.rs`
-4. Expand + fill instructions in order: `create_campaign` → `create_stream` → `fund_campaign` → `cancel_campaign` → `pause_campaign` → `claim` → `withdraw` → `update_root` → `withdraw_unvested` → `close_claim_record` → `get_vested_amount`
-5. `anchor build` → IDL must list all 12 instructions
-6. Create `clients/ts/src/leaf.ts`, `merkle.ts`, update `index.ts`
-7. Create `tests/utils/setup.ts`, `tests/utils/time.ts`
-8. Create `tests/golden_vector.spec.ts`; run Rust golden hex test; set `GOLDEN_HASH`
-9. Expand `tests/vesting.spec.ts` with T1–T5
-10. `anchor test` → all green
+---
+
+## §7 Build Order (Phases 1–4 — completed)
+
+Historical sequence executed during initial implementation. Use as an onboarding traceability checklist, not a to-do list.
+
+1. `anchor-spl` in `programs/vesting/Cargo.toml` + `idl-build` feature — **shipped**
+2. `math/schedule.rs` (`vested`, `get_vested_amount`, unit tests) → `cargo test` green — **shipped**
+3. `verify_merkle_proof` in `math/merkle.rs` — **shipped**
+4. Instructions in order: `create_campaign` → `create_stream` → `fund_campaign` → `cancel_campaign` → `pause_campaign` → `claim` → `withdraw` → `update_root` → `withdraw_unvested` → `close_claim_record` → `get_vested_amount` — **shipped** (12 core + native SOL + stream helpers; see `PROGRAM.md`)
+5. `anchor build` → IDL lists all active instructions — **shipped**
+6. `clients/ts/src/leaf.ts`, `merkle.ts`, `index.ts` — **shipped**
+7. `tests/utils/setup.ts`, `tests/utils/time.ts` — **shipped**
+8. `tests/golden_vector.spec.ts`; Rust golden hex gate; `GOLDEN_HASH` — **shipped**
+9. `tests/vesting.spec.ts` T1–T5 + supplementary/clock/security suites — **shipped** (counts in `DEVNET_TEST_RESULTS.md`)
+10. `anchor test` / `pnpm test:localnet` → green — **shipped**

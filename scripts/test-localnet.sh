@@ -103,4 +103,7 @@ else
 fi
 
 # Prevent anchor test from redeploying to target/deploy/vesting-keypair.json (often != G6iaig).
+if [[ -n "${MOCHA_RETRIES:-}" ]]; then
+  export ANCHOR_TEST_RETRIES="--retries ${MOCHA_RETRIES}"
+fi
 anchor test --skip-local-validator --skip-deploy "${ANCHOR_TEST_ARGS[@]}" "$@"

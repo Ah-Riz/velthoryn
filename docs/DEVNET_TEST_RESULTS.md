@@ -6,9 +6,11 @@
 **Wallet:** `GPfHeZtBna1rJmwam1yCcREhYnLcxWhBmUdDoVuL5Es6` (program upgrade authority)
 **Method:** `pnpm test:devnet` (`scripts/test-devnet.sh` → `ts-mocha` on devnet RPC)
 
-**Summary: 93 passing, 0 failing, 9 pending (~4m)**
+**Summary: 98 passing, 1 pending (~4m)** — combined devnet RPC + bankrun suites (see table below).
 
-Pending: T64–T68 (bankrun-only clock-dependent tests — require `setClock` RPC). Covered by bankrun suite locally.
+- **Devnet RPC** (`pnpm test:devnet`): 75 tests against public devnet; 1 pending (T68 — bankrun-only path).
+- **Bankrun** (clock + native SOL + EXPLOIT 4): 24 additional tests run in-process during the same suite.
+- Pending T68 is covered by the bankrun clock suite locally (`tests/vesting.clock.spec.ts`).
 
 Integration tests that create on-chain state run against devnet RPC. Clock-dependent cases in `tests/vesting.clock.spec.ts` always run via **solana-bankrun** (embedded, not public RPC `setClock`).
 
