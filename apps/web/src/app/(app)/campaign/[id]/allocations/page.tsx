@@ -21,6 +21,27 @@ type OnChainTreeState = {
   cancelledAt: BN | null;
 };
 
+const ONCHAIN_TREE_FETCH_TIMEOUT_MS = 8000;
+const ONCHAIN_TREE_FETCH_TIMEOUT_MESSAGE = "Timed out fetching vesting tree";
+
+async function withTimeout<T>(
+  operation: Promise<T>,
+  timeoutMs: number,
+  message: string,
+): Promise<T> {
+  let timeoutId: ReturnType<typeof setTimeout> | undefined;
+  try {
+    return await Promise.race([
+      operation,
+      new Promise<T>((_, reject) => {
+        timeoutId = setTimeout(() => reject(new Error(message)), timeoutMs);
+      }),
+    ]);
+  } finally {
+    if (timeoutId) clearTimeout(timeoutId);
+  }
+}
+
 function truncateHash(value: string): string {
   if (value.length <= 18) return value;
   return `${value.slice(0, 10)}...${value.slice(-8)}`;
@@ -48,7 +69,11 @@ export default function CampaignAllocationsPage({
     setError(null);
     try {
       const treePubkey = new PublicKey(treeAddress);
-      const account = await (program.account as any).vestingTree.fetch(treePubkey);
+      const account = await withTimeout(
+        (program.account as any).vestingTree.fetch(treePubkey),
+        ONCHAIN_TREE_FETCH_TIMEOUT_MS,
+        ONCHAIN_TREE_FETCH_TIMEOUT_MESSAGE,
+      );
       setTreeState({
         merkleRoot: account.merkleRoot,
         leafCount: account.leafCount,
