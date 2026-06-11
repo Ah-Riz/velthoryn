@@ -106,4 +106,8 @@ fi
 if [[ -n "${MOCHA_RETRIES:-}" ]]; then
   export ANCHOR_TEST_RETRIES="--retries ${MOCHA_RETRIES}"
 fi
+# Anchor.toml provider.cluster may be devnet for manual deploys; tests must use the
+# local validator we started above (otherwise payer transfers hit the wrong RPC).
+export ANCHOR_PROVIDER_URL="$VALIDATOR_URL"
+export ANCHOR_WALLET="$DEPLOYER"
 anchor test --skip-local-validator --skip-deploy "${ANCHOR_TEST_ARGS[@]}" "$@"

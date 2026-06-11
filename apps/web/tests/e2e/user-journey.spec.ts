@@ -16,6 +16,7 @@ import {
   enableMockOnChainTransactions,
   gotoWithRetry,
   mockCampaignApi,
+  mockSolanaRpcGetAccountInfoNull,
   mockProofApi,
   injectStreamSchedule,
   selectSolToken,
@@ -193,6 +194,10 @@ test.describe("Cancel campaign journey", () => {
 // ---------------------------------------------------------------------------
 
 test.describe("Single-leaf claim journey", () => {
+  test.beforeEach(async ({ page }) => {
+    await mockSolanaRpcGetAccountInfoNull(page);
+  });
+
   test("clicking Claim shows Claiming loading state", async ({ page }) => {
     const pastCliff = now() - 86400;
     await injectStreamSchedule(page, ADDR, {
@@ -222,6 +227,10 @@ test.describe("Single-leaf claim journey", () => {
 // ---------------------------------------------------------------------------
 
 test.describe("Multi-leaf claim journey", () => {
+  test.beforeEach(async ({ page }) => {
+    await mockSolanaRpcGetAccountInfoNull(page);
+  });
+
   test("clicking Claim Tokens shows Claiming loading state", async ({ page }) => {
     const pastCliff = now() - 86400;
 
