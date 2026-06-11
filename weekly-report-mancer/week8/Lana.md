@@ -2,7 +2,7 @@
 
 **Scope:** BE-DB-SC-Merkle (backend API, Postgres/indexer, Solana program, Merkle client). Frontend UI is in scope where I implemented F2/F3 dashboard and clawback surfaces directly.
 
-**This week (chronological):** Week 7 report review + backlog analysis → exploration (Mollusk tests, BE infra, security/ops) → **Mollusk 0.13.1 bump + 18 IGNORED comment standardization** → **production code quality sweep (`.expect()` → `.ok_or()`, clippy suppressions 4→2, unused import fix)** → **CU budget audit (8 new benchmarks, 12/18 handlers measured)** → **multisig setup docs + devnet test script** → **mainnet readiness checklist** → **CI hardening (Mollusk + proptest + cargo audit)** → **Week 8 L1/P0 fixes (8 issues: root rotation minCliffTime, API auth, base58 validation, race condition 409, migration 0010, PDA seed docs)** → **Week 8 QA sweep (7 bugs found & fixed across SC/BE/FE)** → **Transparency Dashboard UI (F2: dashboard rewrite, portfolio page, activity feed, hooks)** → **Auto Clawback UI surfaces (F3: banner, countdown, sidebar badge, needs-action tab, dashboard section)** → **Cron reverted to daily (Vercel Hobby limitation)** → **UI primitive extraction + infra hardening** (`4a3e7a0`: shared components, migrations 0002–0005, E2E mock send-tx, claims/sync admin-only, trust-boundary docs, pending-work audit) → **Week 8 gap closure** (`6433974` + `week8-gap-closure-lana` spec): BE validation for KI#29, k6 load scripts, rate-limit baselines, CU re-audit, BE/SC doc pass, spec checkbox cleanup, **Lana protocol docs realignment** (PRD/PDD/TDD → Phase 4 / BE-SC-Merkle canonical story), **`/spec-verify` passed**.
+**This week (chronological):** Week 7 report review + backlog analysis → exploration (Mollusk tests, BE infra, security/ops) → **Mollusk 0.13.1 bump + 18 IGNORED comment standardization** → **production code quality sweep (`.expect()` → `.ok_or()`, clippy suppressions 4→2, unused import fix)** → **CU budget audit (8 new benchmarks, 12/18 handlers measured)** → **multisig setup docs + devnet test script** → **mainnet readiness checklist** → **CI hardening (Mollusk + proptest + cargo audit)** → **Week 8 L1/P0 fixes (8 issues: root rotation minCliffTime, API auth, base58 validation, race condition 409, migration 0010, PDA seed docs)** → **Week 8 QA sweep (7 bugs found & fixed across SC/BE/FE)** → **Transparency Dashboard UI (F2: dashboard rewrite, portfolio page, activity feed, hooks)** → **Auto Clawback UI surfaces (F3: banner, countdown, sidebar badge, needs-action tab, dashboard section)** → **Cron reverted to daily (Vercel Hobby limitation)** → **UI primitive extraction + infra hardening** (`4a3e7a0`: shared components, migrations 0002–0005, E2E mock send-tx, claims/sync admin-only, trust-boundary docs, pending-work audit) → **Week 8 gap closure** (`6433974` + `week8-gap-closure-lana` spec): BE validation for KI#29, k6 load scripts, rate-limit baselines, CU re-audit, BE/SC doc pass, spec checkbox cleanup, **Lana protocol docs realignment** (PRD/PDD/TDD → Phase 4 / BE-SC-Merkle canonical story), **`/spec-verify` passed** → **Late CI/E2E hardening (Jun 11):** Flow 4 duplicate-tx tolerance + mocha retries (`7efe0f6`); localnet RPC pinned in `test-localnet.sh` (`e20f219`); allocations page 8s on-chain fetch timeout + indexed API fallback (`5d17905`); Playwright `mockSolanaRpcGetAccountInfoNull` stub for allocation/claim/user-journey specs; TypeScript build fix for allocations page (`f16d736`) — **Lint + Web CI green**.
 
 ---
 
@@ -43,6 +43,9 @@
 | **CI** | Mollusk tests in CI | `ci.yml` — runs 72 active Mollusk tests across 8 test files after anchor build |
 | **CI** | Proptest in CI | `ci.yml` — runs `cargo test --lib` (31 tests including 18 proptest properties) |
 | **CI** | Cargo audit in CI | `ci.yml` — installs and runs `cargo audit` before build |
+| **CI** | Web CI / Lint build green | `allocations/page.tsx` — `withTimeout<any>` matches campaign detail pattern; fixes `account is of type 'unknown'` in `next build` |
+| **CI** | Localnet RPC pinning | `scripts/test-localnet.sh` + `Anchor.toml` — integration tests use validator RPC even when provider cluster is devnet (`e20f219`) |
+| **CI** | Flow 4 flake hardening | `tests/week7-integration-flow.spec.ts` — tolerates "transaction already been processed" when balances reflect success; mocha retries in `ci.yml` (`7efe0f6`) |
 | **QA** | 15 bugs found & fixed | 8 L1/P0 (auth, minCliffTime, base58, 409 race, migrations) + 7 QA sweep (2 P0, 3 P1, 2 P2 across SC/BE/FE) |
 | **QA** | ClaimWithProofButton milestone fix | `ClaimWithProofButton.tsx` — milestone leaves use on-chain `milestoneBitmap` instead of greedy `claimedAmount` allocation |
 | **QA** | claim.rs StreamExpired fix | `claim.rs:149` — removed `fully_claimed` sub-condition that blocked multi-leaf claims |
@@ -69,11 +72,15 @@
 | **FE** | Needs Action tab (F3) | Campaigns list `action` tab — filters sender-cancelled + recipient-claimable campaigns |
 | **FE** | Dashboard Needs Attention (F3) | Dashboard section with per-campaign grace period countdown + alert cards |
 | **FE** | Shared UI primitives extracted | 8 components: `StatCard`, `ProgressBar`, `SectionHeader`, `FieldRow`, `DetailRow`, `Spinner` (`components/ui/`), `CampaignCard`, `RecipientListModal` — dashboard/portfolio/campaign detail refactored |
+| **FE** | Allocations page on-chain resilience | `campaign/[id]/allocations/page.tsx` — 8s `withTimeout` on `vestingTree.fetch`, silent fallback to `useCampaignDetail` indexed data (`5d17905`) |
 | **Tests** | Clawback API test suite | `apps/web/tests/api/clawback.test.ts` (681 lines) — cancel campaign (6), withdraw unvested (5), cancel stream (7), milestone release (5) |
 | **Tests** | Clawback component tests | `CampaignStatusBanner.test.ts` (85 lines, 7 states), `GracePeriodCountdown.test.ts` (60 lines) |
 | **Tests** | Campaign-actions E2E suite | `tests/e2e/campaign-actions.spec.ts` (825 lines, **33 tests**) — pause/unpause, cancel stream/campaign, instant refund, withdraw, milestone release, clawback banners, needs-action tab, sidebar badge |
 | **Tests** | E2E mock send-tx helper | `WalletProvider.tsx` + `tests/e2e/helpers.ts` — `enableMockOnChainTransactions()` returns fixed sig for cancel flows without validator |
 | **Tests** | E2E campaign list mocking | `mockCampaignListApis()` in `helpers.ts` — routes sender/recipient list APIs for campaigns page tests |
+| **Tests** | Allocations E2E suite | `tests/e2e/allocations.spec.ts` — **14 tests** (editor UI, validation, update flow) |
+| **Tests** | E2E Solana RPC stub | `helpers.ts` — `mockSolanaRpcGetAccountInfoNull()` returns null immediately; wired in allocations, campaign-actions, user-journey specs to avoid devnet RPC hangs in Playwright CI |
+| **Ops** | Production auth smoke | `docs/operations/verification-log.md` — curl against `velthoryn.site` returns HTTP 401 without admin key |
 | **Ops** | Cron schedule reverted | `vercel.json` — `*/5 * * * *` → `0 0 * * *` (daily). Vercel Hobby plan only supports daily crons |
 
 ### Incomplete / deferred
@@ -126,6 +133,16 @@ Source: `docs/PENDING_WORK.md` (refreshed 2026-06-11). **86 items audited** — 
 | — | Spec checkbox cleanup | `production-security-ops`, `bulk-send`, `sc-remediation` tasks marked `[x]` with evidence |
 | — | Ops verification tests | `ops-verification.test.ts` — pool, sync_state, txn rollback, RLS, BigInt route guard |
 
+### Closed late Jun 11
+
+| Task | Resolution |
+|------|------------|
+| Web CI / Lint build failure | `withTimeout<any>` on allocations page on-chain fetch |
+| Playwright E2E devnet hangs | `mockSolanaRpcGetAccountInfoNull` + allocations page timeout/fallback |
+| Localnet CI cluster drift | `test-localnet.sh` exports `ANCHOR_PROVIDER_URL` / wallet; `Anchor.toml` default back to localnet |
+| Flow 4 integration flake | Duplicate-tx tolerance + retries in `week7-integration-flow.spec.ts` |
+| Ops verification T13–T15 | `ops-verification.test.ts` — sync checkpoint, txn rollback, BigInt route scan (`55ea778`) |
+
 ### Still open (real code work)
 
 | Priority | # | Task | Notes |
@@ -176,6 +193,7 @@ Mollusk 0.14+, SPL handler tests, cron 5-min sync (Vercel paid), external audit,
 | FE unit tests (new) | 0 | **+3** (clawback API 681 lines, serialize-bigint 5 tests, MilestoneReleasePanel +6 tests) |
 | FE component tests (new) | 0 | **+2** (CampaignStatusBanner, GracePeriodCountdown) |
 | E2E tests (campaign-actions) | 0 | **33** tests in 825-line suite |
+| E2E tests (allocations) | 0 | **14** tests in `allocations.spec.ts` |
 | Pending-work gaps closed | — | **~17** of 86 audited items (`4a3e7a0` + gap-closure spec) |
 | k6 load scripts | 1 (`api-load.js`) | **+3** (prepare, proof, spike) + orchestrator `all` mode |
 | BE API tests (KI#29) | — | **+4** in `bulk-campaign.test.ts` |
@@ -198,6 +216,10 @@ Mollusk 0.14+, SPL handler tests, cron 5-min sync (Vercel paid), external audit,
 - [x] **EXPLOIT 12 tag** — unlabeled in `security.spec.ts`, labeled and passing
 - [x] **Token-2022 mint guard** — verified via T71 (`UnsupportedMint` rejected)
 - [x] **Formal CU budget audit** — Mollusk benchmarks re-run 2026-06-11; CU_BUDGET.md covers 9 active + 1 ignored
+- [x] **Localnet RPC pinning** — `e20f219`
+
+### CI
+- [x] **Web CI build green** — allocations TypeScript fix (`f16d736`)
 
 ### BE — Backend API
 - [x] **k6 load test expansion** — prepare, proof, spike scripts + `run-load-test.sh all`
@@ -206,6 +228,8 @@ Mollusk 0.14+, SPL handler tests, cron 5-min sync (Vercel paid), external audit,
 - [x] **Known Issue #29 BE validation** — prepare + import reject multi cliff/linear per beneficiary
 - [x] **BE/SC doc accuracy pass** — `BACKEND_API.md`, `TESTING.md`, `CU_BUDGET.md`, README index
 - [x] **Lana protocol docs realignment** — PRD/PDD/TDD Phase 4, Stream PDA mapping, spec-verify passed
+- [x] **Ops verification T13–T15** — `ops-verification.test.ts` expanded (`55ea778`)
+- [x] **Production 401 smoke** — verified in `verification-log.md`
 - [ ] **Sentry live DSN** — ops sets env var in Vercel
 - [ ] **Cron upgrade to paid Vercel plan** — restore `*/5 * * * *` sync schedule for near-real-time dashboard
 
