@@ -36,9 +36,14 @@ async function postCampaignsHandler(request: NextRequest) {
 
   const data = parsed.data;
 
-  const authWallet = getAuthenticatedWallet(request);
-  if (authWallet !== data.creator) {
-    throw new ForbiddenError("Signer does not match the campaign creator");
+  // Auth is optional: if a Bearer token is provided, verify it matches the creator.
+  // Without auth, Merkle root verification below is the integrity gate.
+  const authHeader = request.headers.get("authorization");
+  if (authHeader) {
+    const authWallet = getAuthenticatedWallet(request);
+    if (authWallet !== data.creator) {
+      throw new ForbiddenError("Signer does not match the campaign creator");
+    }
   }
 
   if (data.leafCount !== data.leaves.length) {
@@ -203,7 +208,6 @@ async function getCampaignsHandler(request: NextRequest) {
 
 export const POST = withRoute(
   {
-    auth: true,
     rateLimit: { requests: 10, window: 60 },
     bodyLimit: "campaigns",
   },
