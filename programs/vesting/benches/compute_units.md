@@ -1,3 +1,83 @@
+#### 2026-06-11 03:49:42.448213716 UTC
+
+Solana CLI Version: solana-cli 3.1.12 (src:6c1ba346; feat:4140108451, client:Agave)
+
+| Name | CUs | Delta |
+|------|------|-------|
+| get_vested_amount [cliff, before_cliff] | 615 | - new - |
+| get_vested_amount [cliff, after_cliff] | 615 | - new - |
+| get_vested_amount [linear, mid-vesting] | 909 | - new - |
+| get_vested_amount [linear, fully_vested] | 614 | - new - |
+| get_vested_amount [milestone, flag_not_set] | 624 | - new - |
+| get_vested_amount [milestone, flag_set] | 655 | - new - |
+| get_vested_amount [linear, cancelled_clamp] | 916 | - new - |
+
+#### 2026-06-11 03:49:42.448338125 UTC
+
+Solana CLI Version: solana-cli 3.1.12 (src:6c1ba346; feat:4140108451, client:Agave)
+
+| Name | CUs | Delta |
+|------|------|-------|
+| cancel_campaign [partially claimed] | 5672 | - new - |
+
+#### 2026-06-11 03:49:42.446233743 UTC
+
+Solana CLI Version: solana-cli 3.1.12 (src:6c1ba346; feat:4140108451, client:Agave)
+
+| Name | CUs | Delta |
+|------|------|-------|
+| update_root [new root + 5 leaves] | 5567 | - new - |
+
+#### 2026-06-11 03:49:42.447312432 UTC
+
+Solana CLI Version: solana-cli 3.1.12 (src:6c1ba346; feat:4140108451, client:Agave)
+
+| Name | CUs | Delta |
+|------|------|-------|
+| set_milestone_released [idx=0] | 5299 | - new - |
+
+#### 2026-06-11 03:49:42.417492622 UTC
+
+Solana CLI Version: solana-cli 3.1.12 (src:6c1ba346; feat:4140108451, client:Agave)
+
+| Name | CUs | Delta |
+|------|------|-------|
+| create_stream_native [linear, 1 leaf] | 16117 | - new - |
+
+#### 2026-06-11 03:49:42.397685790 UTC
+
+Solana CLI Version: solana-cli 3.1.12 (src:6c1ba346; feat:4140108451, client:Agave)
+
+| Name | CUs | Delta |
+|------|------|-------|
+| pause_campaign [3 leaves] | 5380 | - new - |
+| unpause_campaign [3 leaves] | 5383 | - new - |
+
+#### 2026-06-11 03:49:42.395762046 UTC
+
+Solana CLI Version: solana-cli 3.1.12 (src:6c1ba346; feat:4140108451, client:Agave)
+
+| Name | CUs | Delta |
+|------|------|-------|
+| create_campaign_native [100 leaves, cancellable] | 10878 | - new - |
+| create_campaign_native [10k leaves, non-cancellable] | 9372 | - new - |
+
+#### 2026-06-11 03:49:42.400490333 UTC
+
+Solana CLI Version: solana-cli 3.1.12 (src:6c1ba346; feat:4140108451, client:Agave)
+
+| Name | CUs | Delta |
+|------|------|-------|
+| close_claim_record [fully claimed] | 5131 | - new - |
+
+#### 2026-06-11 03:49:42.393548972 UTC
+
+Solana CLI Version: solana-cli 3.1.12 (src:6c1ba346; feat:4140108451, client:Agave)
+
+| Name | CUs | Delta |
+|------|------|-------|
+| fund_campaign_native [500M lamports] | 7891 | - new - |
+
 #### 2026-06-06 03:47:56.874878588 UTC
 
 Solana CLI Version: solana-cli 3.1.12 (src:6c1ba346; feat:4140108451, client:Agave)

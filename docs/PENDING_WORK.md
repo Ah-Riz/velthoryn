@@ -2,7 +2,7 @@
 
 > Generated from full spec audit across 12 specs in `.claude/specs/`.
 > Purpose: Give Cursor clear, prioritized work items. Separate "already done" from "actually missing".
-> **Last refresh:** 2026-06-10 — verification sweep: items 4–7, 13 verified (SC tests + CI migrate); summary count 11 → 6.
+> **Last refresh:** 2026-06-11 — week8-gap-closure-lana: k6 scripts, rate-limit docs, CU re-audit, BE #29 import validation, spec checkbox batch (T20–T23).
 
 ---
 
@@ -33,7 +33,7 @@ _No open high-priority BE items from the original audit._
 
 | # | Task | Source | What's needed |
 |---|------|--------|---------------|
-| 8 | Known issue #29 — cumulative claimed_amount undercount | Week8 Known Issues | Multi-leaf non-milestone leaves undercount via cumulative `claimed_amount`. Needs per-leaf tracking — **breaking on-chain change**. BE validation added in T4 (prepare route). |
+| 8 | Known issue #29 — cumulative claimed_amount undercount | Week8 Known Issues | On-chain fix still deferred (breaking change). **BE mitigated:** prepare + import routes reject multi cliff/linear per beneficiary (June 2026). FE validation pending (Geral). |
 
 ### Docs
 
@@ -56,8 +56,8 @@ _No open high-priority BE items from the original audit._
 
 | # | Task | Source | What's needed |
 |---|------|--------|---------------|
-| 14 | k6 load test expansion | B5 / Week8 Next | `api-load.js` covers basic endpoints. Need: prepare, proof, spike scripts + baseline results. |
-| 15 | Rate limit tuning | Week8 Next | Adjust per-route limits based on k6 load test results. |
+| 14 | k6 load test expansion | B5 / Week8 Next | **Done** — `prepare-load.js`, `proof-load.js`, `spike-load.js`, `run-load-test.sh all`; baselines in `TESTING.md` §k6. |
+| 15 | Rate limit tuning | Week8 Next | **Done** — limits documented in `TESTING.md` §k6; smoke p95 supports current prepare 10/min, proof 60/min. |
 
 ### FE
 
@@ -70,7 +70,7 @@ _No open high-priority BE items from the original audit._
 
 | # | Task | Source | What's needed |
 |---|------|--------|---------------|
-| 19 | Formal CU budget audit | Week8 Next | Re-measure with mainnet cluster parameters, set `compute_budget` limits. |
+| 19 | Formal CU budget audit | Week8 Next | **Done** — Mollusk benchmarks re-run 2026-06-11; `CU_BUDGET.md` updated (9 active + 1 ignored). |
 
 ---
 
@@ -85,14 +85,13 @@ _No open high-priority BE items from the original audit._
 | 24 | Monitoring dashboard (Grafana/PagerDuty) | Ops | Infra, not code |
 | 25 | Mainnet deploy | Ops | Follow MAINNET_CHECKLIST.md after audit |
 | 26 | Multisig setup execution | Ops | Doc exists at `docs/operations/multisig-setup.md`, needs doing |
-| 27 | k6 rate limit tuning | BE | Blocked on #14 (load test expansion) |
+| 27 | k6 rate limit tuning | BE | **Done** — see `TESTING.md` §k6 rate limit table. |
 
 ---
 
-## ✅ ALREADY DONE BUT NOT CHECKED IN SPECS — Spec file cleanup only
+## ✅ SPEC CHECKBOX CLEANUP (2026-06-11)
 
-These items are implemented in the codebase but their `tasks.md` checkboxes were never marked `[x]`.
-**No code work needed — just update the spec files.**
+Batch-verified and marked `[x]` in `.claude/specs/{production-security-ops,bulk-send,sc-remediation}/tasks.md`. `native-sol-vesting` BE tasks were already `[x]`; FE tasks T19–T22 remain deferred to Geral. `sc-remediation` §00.8 devnet redeploy still `[ ]`.
 
 ### production-security-ops (P0+P1) — ~30 sub-items
 - P0.1 Rate limiter utility → `lib/api/rate-limit.ts` exists
@@ -153,6 +152,6 @@ These items are implemented in the codebase but their `tasks.md` checkboxes were
 | **FE** | 2 | 1 | 2 | 0 |
 | **Docs** | 2 | 1 | 0 | 0 |
 | **Ops** | 1 | 1 | 0 | 5 |
-| **Total** | **6** | **10** | **62** | **8** |
+| **Total** | **~4** | **~16** | **0** (batch done) | **8** |
 
-**86 total items audited.** 10 completed 2026-06-10 (incl. verification sweep items 4–7, 13). 62 need spec file checkboxes only. **6** remain as real work. 8 are externally blocked.
+**86 total items audited.** Spec checkboxes batch-updated 2026-06-11. Remaining real work: SC #29 on-chain fix, FE E2E/clawback, docs polish (#10–11), Ops Sentry DSN. **8** externally blocked.

@@ -40,6 +40,8 @@ velthoryn/
 
 **F1–F4 roadmap complete and implemented:** F1 Bulk Send (server-side Merkle build, CSV import), F2 Transparency Dashboard (dashboard rewrite with 6 stat cards + claimable banner + vesting progress + activity feed, portfolio page with per-campaign breakdown + sort, `/api/activity/[address]` cross-campaign feed, `useMintDecimals` for real token amounts), F3 Clawback (cancel campaign/stream, withdraw unvested, milestone release + `CampaignStatusBanner` 7-state banner, `GracePeriodCountdown`, sidebar amber dot badge, "Needs Action" tab, dashboard "Needs Attention" section), F4 Production Hardening (Sentry monitoring, API versioning, vesting simulation, schedule templates). 12 new API routes, 6 event tables, 15 bug fixes from code review.
 
+**Week 8 gap closure (BE/infra):** k6 load scripts (`apps/web/tests/load/` — prepare, proof, spike + `run-load-test.sh`); rate-limit baselines in [`docs/TESTING.md`](docs/TESTING.md) §k6; CU budget re-audit in [`docs/CU_BUDGET.md`](docs/CU_BUDGET.md); **Known Issue #29** mitigated at API layer (prepare + import reject multiple cliff/linear leaves per beneficiary — see [`docs/KNOWN_ISSUE_29_DESIGN.md`](docs/KNOWN_ISSUE_29_DESIGN.md) §6).
+
 **Week 8 FE cleanup:** Shared UI primitives extracted (`StatCard`, `ProgressBar`, `CampaignCard`, `SectionHeader`, `FieldRow`, `DetailRow`, `Spinner`, `RecipientListModal`). Centralized `lib/api/serialize.ts` for BigInt-safe JSON. Numbered migrations `0002`–`0005` backfill event-table history. Post-tx indexing uses public `POST /api/events/sync`; operator backfill uses admin-only `POST /api/claims/sync`. E2E helpers support mock wallet + mock send-tx for cancel flows without devnet RPC.
 
 **Test results: 127+ SC tests PASS** (`pnpm test:localnet`); **563 web Vitest PASS** (API routes use Postgres in CI)
@@ -50,7 +52,7 @@ velthoryn/
 - Sealevel-attacks gap tests: `tests/sealevel-attacks-gap.spec.ts` via **solana-bankrun** (4 tests: duplicate accounts #6, PDA sharing #8, close-reinit #9)
 - LiteSVM PoC: `tests/vesting-litesvm.spec.ts` via **LiteSVM** (5 tests: boot, mint, time-travel, program loading, simulation)
 - Mollusk instruction tests: 7 domain-specific test files via **Mollusk** (72 active + 18 ignored): `instructions.rs` (14), `stream.rs` (7), `admin.rs` (18+6), `cancel.rs` (5+9), `claim.rs` (16), `cleanup.rs` (2+3), `lifecycle.rs` (8)
-- Mollusk CU benchmarks: `programs/vesting/tests/benchmarks.rs` via **Mollusk** (2 tests: get_vested_amount 7 scenarios, create_campaign_native 2 configs)
+- Mollusk CU benchmarks: `programs/vesting/tests/benchmarks.rs` via **Mollusk** (9 active + 1 ignored; see [`docs/CU_BUDGET.md`](docs/CU_BUDGET.md))
 - proptest property tests: `programs/vesting/src/math/` via **proptest** (20 tests: schedule 11 invariants, merkle 7 invariants + 10 unit tests)
 
 See [`docs/STREAM_MODEL.md`](docs/STREAM_MODEL.md) (tutorial `Stream` PDA vs campaign model) and [`docs/ERROR_MAP.md`](docs/ERROR_MAP.md).
@@ -83,7 +85,7 @@ For deeper reads:
 - [`docs/INTEGRATION.md`](docs/INTEGRATION.md) — frontend-track guide: program ID, IDL/types location, PDA derivations, Merkle helpers, sample calls.
 - [`docs/FE_INTEGRATION.md`](docs/FE_INTEGRATION.md) — complete FE developer guide: flows, file map, events, error handling.
 - [`docs/NATIVE_SOL_VESTING.md`](docs/NATIVE_SOL_VESTING.md) — native SOL vesting research: architecture, dual-path design, cost comparison, security considerations.
-- [`docs/TESTING.md`](docs/TESTING.md) — how to run tests, clock-dependent tests, native SOL tests, writing new tests.
+- [`docs/TESTING.md`](docs/TESTING.md) — how to run tests, k6 load testing, SC benchmarks, CI matrix, clock/native SOL tests.
 - [`docs/DEVNET_TEST_RESULTS.md`](docs/DEVNET_TEST_RESULTS.md) — full test results matrix with acceptance criteria.
 - [`docs/API_TRUST_BOUNDARIES.md`](docs/API_TRUST_BOUNDARIES.md) — every API route: public / wallet-auth / admin classification.
 - [`docs/PENDING_WORK.md`](docs/PENDING_WORK.md) — prioritized backlog from spec audit (updated as items land).
@@ -126,8 +128,15 @@ Clock-dependent tests (11) use `solana-bankrun` inside the full suite; they are 
 
 For Rust-level CU benchmarks via Mollusk:
 ```bash
-BPF_OUT_DIR=target/deploy cargo test --manifest-path programs/vesting/Cargo.toml -- --show-output
-# Expected: 103 passed, 18 ignored
+BPF_OUT_DIR=target/deploy cargo test --manifest-path programs/vesting/Cargo.toml --test benchmarks -- --show-output
+# Expected: 9 passed, 1 ignored (bench_claim_native)
+```
+
+k6 load tests (from `apps/web/`):
+```bash
+./tests/load/run-load-test.sh prepare
+CAMPAIGN_ADDRESS=... BENEFICIARY_ADDRESS=... ./tests/load/run-load-test.sh proof
+./tests/load/run-load-test.sh all
 ```
 
 ## Frontend (apps/web)

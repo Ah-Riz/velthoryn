@@ -255,6 +255,15 @@ Revisit **Option A** when:
 - A customer needs multiple linear/cliff tranches per wallet in one campaign, or
 - Root rotation workflows routinely produce multi-leaf non-milestone beneficiaries.
 
+### BE enforcement (active)
+
+As of the `week8-gap-closure-lana` spec (June 2026), backend validation is **active**:
+
+- `POST /api/campaigns/prepare` — rejects the entire request with `400 ValidationError` when any beneficiary has 2+ cliff/linear leaves (Known Issue #29 message cites duplicate indices).
+- `POST /api/campaigns/import` — per-row errors for duplicate cliff/linear beneficiaries; valid rows still parse (partial success). Milestone rows for the same beneficiary are allowed.
+
+FE validation (bulk send UI) remains pending (Geral). On-chain fix (Option A) is still deferred.
+
 ---
 
 ## 7. Verification criteria (future implementation spec)

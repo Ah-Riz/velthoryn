@@ -9,7 +9,7 @@
 - Trident fuzz: smoke test in CI (`trident-tests/fuzz_vesting`)
 - Rust unit tests: **31** (math/merkle + math/schedule proptests + inline)
 - Mollusk instruction tests: **72 active** across 7 test files (18 ignored — Mollusk limitations)
-- Mollusk CU benchmarks: **2** measurements across 2 test functions
+- Mollusk CU benchmarks: **9 active** benchmark functions (17 scenarios) in `programs/vesting/tests/benchmarks.rs`; `bench_claim_native` ignored (Mollusk 0.13 `init_if_needed` blocker)
 
 | Test File | Tests | Purpose |
 |-----------|-------|---------|
@@ -32,7 +32,7 @@
 | `programs/vesting/tests/claim.rs` | 16 | Mollusk — claim (happy, partial, over-claim, wrong-proof, wrong-beneficiary, cancelled, paused, milestone) |
 | `programs/vesting/tests/cleanup.rs` | 2 (+3 ign.) | Mollusk — withdraw_unvested, close_claim_record |
 | `programs/vesting/tests/lifecycle.rs` | 8 | Mollusk — multi-instruction lifecycle sequences (create→pause→unpause, create→cancel→withdraw) |
-| `programs/vesting/tests/benchmarks.rs` | 2 | Mollusk CU benchmarks — get_vested_amount (7 scenarios) + create_campaign_native (2 configs) |
+| `programs/vesting/tests/benchmarks.rs` | 9 (+1 ign.) | Mollusk CU benchmarks — all native handlers; see `docs/CU_BUDGET.md` |
 
 ## Running Tests
 
@@ -406,6 +406,56 @@ pnpm test:e2e:deps
 On locked-down machines this may fail with `sudo: a password is required`; install `libnspr4`/Playwright Chromium dependencies at the OS level, then rerun `pnpm test:e2e`.
 
 CI runs this in `.github/workflows/web-ci.yml` using a Postgres service container.
+
+## k6 load testing
+
+Scripts live in `apps/web/tests/load/`. Run from `apps/web/`:
+
+```bash
+./tests/load/run-load-test.sh api          # default — health, campaigns, simulate-vesting
+./tests/load/run-load-test.sh prepare
+CAMPAIGN_ADDRESS=... BENEFICIARY_ADDRESS=... ./tests/load/run-load-test.sh proof
+./tests/load/run-load-test.sh spike
+./tests/load/run-load-test.sh all
+```
+
+### Baselines (local dev smoke, June 2026)
+
+Measured with `k6 run --vus 2 --iterations 3..5` against `http://localhost:3000`. Full staged runs use the thresholds in each script.
+
+| Script | Endpoint(s) | p95 (smoke) | Error rate | Threshold |
+|--------|-------------|-------------|------------|-----------|
+| `api-load.js` | GET health, campaigns, templates; POST simulate | <500ms | <1% | p95 <500ms |
+| `prepare-load.js` | POST `/api/campaigns/prepare` (10 leaves) | ~77–1434ms | 0% | p95 <2000ms, errors <5% |
+| `proof-load.js` | GET `/api/campaigns/:tree/proof?beneficiary=` | ~42–110ms | 0%* | p95 <500ms, errors <1% |
+| `spike-load.js` | Mixed health + campaigns + prepare (200 VU peak) | ~1038ms | varies† | p95 <3000ms |
+
+\* Requires Postgres with campaign data; without DB the endpoint returns 500 and thresholds fail.
+
+† Spike error rate dominated by health 503 when DB/RPC down; re-run against staging with full stack for production baselines.
+
+Reports written to `tests/load/last-*-report.json` via each script's `handleSummary`.
+
+### Per-route rate limits (requests / 60s window)
+
+| Route | Limit | Rationale |
+|-------|-------|-----------|
+| `POST /api/campaigns/prepare` | 10 | CPU-heavy Merkle build; p95 ~1.4s under load |
+| `POST /api/campaigns/import` | 5 | Large CSV parse |
+| `GET /api/campaigns/:tree/proof` | 60 | Read-only; smoke p95 <110ms |
+| `GET /api/campaigns`, `GET /api/campaigns/:tree` | 60 | Public reads |
+| `POST /api/simulate-vesting` | 30 | Stateless math |
+| Default (via `withRoute`) | 60 | General API |
+
+Configured in per-route `withRoute({ rateLimit: ... })` in `apps/web/src/app/api/**/route.ts`.
+
+## SC benchmarks (Mollusk CU)
+
+```bash
+BPF_OUT_DIR=target/deploy cargo test --manifest-path programs/vesting/Cargo.toml --test benchmarks -- --show-output
+```
+
+9 active tests pass; `bench_claim_native` is `#[ignore]`. Full CU table: [`docs/CU_BUDGET.md`](CU_BUDGET.md).
 
 ## CI workflows (web + API)
 

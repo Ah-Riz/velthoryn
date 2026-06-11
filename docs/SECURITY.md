@@ -21,6 +21,7 @@ Security review performed using Solana six-pattern checklist, manual instruction
 | **VEL-015** | MED | `milestoneIdx > 255` silently truncated by `writeUInt8` in leaf encoder | **Fixed** — `.max(255)` validation in Zod schemas |
 | **VEL-013** | LOW | Duplicate `(beneficiary, milestoneIdx)` causes permanent unclaimability | **Fixed** — prepare route rejects duplicates with 400 |
 | **VEL-014** | LOW | `total_entitled` stale after first claim — `close_claim_record` check imprecise | **Fixed** — accumulates for each milestone claim |
+| **Known Issue #29** | MED | Multi-leaf cliff/linear cumulative `claimed_amount` undercount | **Mitigated (BE)** — `prepare` and `import` routes reject multiple cliff/linear leaves per beneficiary; see [`docs/KNOWN_ISSUE_29_DESIGN.md`](KNOWN_ISSUE_29_DESIGN.md) §6 |
 
 ### [RESOLVED] Pause+Cancel Exploit
 
