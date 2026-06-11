@@ -1,12 +1,12 @@
-# Pending Work Audit (as of 2026-06-10)
+# Pending Work Audit (as of 2026-06-11)
 
 > Generated from full spec audit across 12 specs in `.claude/specs/`.
 > Purpose: Give Cursor clear, prioritized work items. Separate "already done" from "actually missing".
-> **Last refresh:** 2026-06-11 — week8-gap-closure-lana: k6 scripts, rate-limit docs, CU re-audit, BE #29 import validation, spec checkbox batch (T20–T23).
+> **Last refresh:** 2026-06-11 — week8-lana-remnants: BigInt route audit, ops-verification tests (pool, sync_state, txn, RLS), PENDING_WORK refresh.
 
 ---
 
-## ✅ RECENTLY COMPLETED (2026-06-10)
+## ✅ RECENTLY COMPLETED (2026-06-11)
 
 | # | Task | Resolution |
 |---|------|------------|
@@ -20,6 +20,16 @@
 | 6 | EXPLOIT 12 label verified | `security.spec.ts` — `EXPLOIT 12: pause then cancel then claim during grace succeeds` (11 passing) |
 | 7 | Out-of-order milestone E2E verified | `vesting.supplementary.spec.ts` — `out-of-order milestone claim: 0 → 2 → 1 succeeds` |
 | 13 | CI migration strategy verified | `.github/workflows/lint.yml` + `web-ci.yml` use `pnpm db:migrate`; `BACKEND_API.md` updated |
+| 10 | SC documentation audit | 5 docs (`SECURITY.md`, `PDD_LANA.md`, `TDD_LANA.md`, `AUDIT_REPORT.md`, `MATURITY_REPORT.md`) verified against current SC state per week8 T16 |
+| 11 | Backup procedure runbook | [`docs/operations/backup-restore.md`](operations/backup-restore.md) verified for completeness; staging drill pending (blocked on staging access) |
+| 28 | BigInt serialization route audit | Grep of all route handlers under `apps/web/src/app/api/` confirms all use `jsonResponse` with `jsonReplacer` — no un-serialized BigInt paths |
+| 29 | DB pool config verified | `ops-verification.test.ts` confirms `max: 10` in production, `max: 3` in development |
+| 30 | sync_state checkpoint verified | `ops-verification.test.ts` confirms `persistSyncCheckpoint` writes and `getLastSyncedSlot` advances |
+| 31 | Transactional rollback verified | `ops-verification.test.ts` confirms `db.transaction` rolls back inserts on error |
+| 32 | RLS policy behavior verified | `ops-verification.test.ts` confirms anon SELECT succeeds, INSERT fails (CI with local Postgres); skipped on remote DBs gracefully |
+| 33 | syncClaimEvents end-to-end via mock RPC | `ops-verification.test.ts` ("syncClaimEvents checkpoint") validates `syncClaimEventsWithConnection` advances checkpoint through full pipeline |
+| 34 | processTransactions end-to-end | `ops-verification.test.ts` ("processTransactions rollback") validates event processing through `processTransactions` with mocked `getTransaction` |
+| 35 | BigInt route guard (automated) | `ops-verification.test.ts` ("BigInt serialization guard") scans all route files; would catch a new route that omits `jsonResponse` |
 
 ---
 
@@ -35,18 +45,11 @@ _No open high-priority BE items from the original audit._
 |---|------|--------|---------------|
 | 8 | Known issue #29 — cumulative claimed_amount undercount | Week8 Known Issues | On-chain fix still deferred (breaking change). **BE mitigated:** prepare + import routes reject multi cliff/linear per beneficiary (June 2026). FE validation pending (Geral). |
 
-### Docs
-
-| # | Task | Source | What's needed |
-|---|------|--------|---------------|
-| 10 | Update 5 SC documentation files | 00.10 | Partially done in week 8 — verify `SECURITY.md`, `PDD_LANA.md`, `TDD_LANA.md`, `AUDIT_REPORT.md`, `MATURITY_REPORT.md` match current SC state. |
-| 11 | Backup procedure documentation | B4 | Partially done — see [`docs/operations/backup-restore.md`](operations/backup-restore.md); verify runbook completeness. |
-
 ### Ops/Infra
 
 | # | Task | Source | What's needed |
 |---|------|--------|---------------|
-| 12 | Sentry DSN in Vercel production | B1 | Scaffolding done (`sentry.client.config.ts`, `sentry.server.config.ts`). Just needs `NEXT_PUBLIC_SENTRY_DSN` env var set in Vercel dashboard. |
+| 12 | Sentry DSN in Vercel production | B1 | Scaffolding done. Ops needs to set `NEXT_PUBLIC_SENTRY_DSN` in Vercel; production deploy appears down (`velthoryn.vercel.app` returns DEPLOYMENT_NOT_FOUND). |
 
 ---
 
@@ -148,10 +151,10 @@ Batch-verified and marked `[x]` in `.claude/specs/{production-security-ops,bulk-
 | Category | Actually not done | Recently completed | Already done (spec cleanup) | Blocked/deferred |
 |----------|-------------------|--------------------|----------------------------|------------------|
 | **SC** | 1 | 4 | 12 | 2 |
-| **BE** | 0 | 3 | 48 | 1 |
+| **BE** | 0 | 8 | 48 | 1 |
 | **FE** | 2 | 1 | 2 | 0 |
-| **Docs** | 2 | 1 | 0 | 0 |
+| **Docs** | 0 | 3 | 0 | 0 |
 | **Ops** | 1 | 1 | 0 | 5 |
-| **Total** | **~4** | **~16** | **0** (batch done) | **8** |
+| **Total** | **~4** | **~17** | **0** (batch done) | **8** |
 
-**86 total items audited.** Spec checkboxes batch-updated 2026-06-11. Remaining real work: SC #29 on-chain fix, FE E2E/clawback, docs polish (#10–11), Ops Sentry DSN. **8** externally blocked.
+**86 total items audited.** Last refresh 2026-06-11. Remaining real work: SC #29 on-chain fix, FE E2E/clawback, Ops Sentry DSN + production redeploy. **8** externally blocked. Prod deployment at `velthoryn.vercel.app` is currently down — redeploy needed before smoke tests or Sentry verification can complete.

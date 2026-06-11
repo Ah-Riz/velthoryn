@@ -132,7 +132,7 @@ export async function syncClaimEvents(
   return syncClaimEventsWithConnection(connection, startSlot);
 }
 
-async function processTransactions(params: {
+export async function processTransactions(params: {
   connection: Connection;
   signatures: Array<{ signature: string; slot: number }>;
 }): Promise<{ processed: number; lastSlot: number }> {
@@ -198,7 +198,7 @@ async function processTransactions(params: {
   return { processed, lastSlot };
 }
 
-async function syncClaimEventsWithConnection(
+export async function syncClaimEventsWithConnection(
   connection: Connection,
   fromSlot?: number,
 ): Promise<{ processed: number; lastSlot: number }> {
