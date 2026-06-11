@@ -1,0 +1,12 @@
+{
+  "timestamp": "2026-06-11T03:36:58.483Z",
+  "endpoint": "POST /api/campaigns/prepare",
+  "target_rps": 10,
+  "p95_ms": "77.28",
+  "error_rate_pct": "0.00",
+  "total_requests": 3,
+  "thresholds": {
+    "p95_ms_max": 2000,
+    "error_rate_pct_max": 5
+  }
+}
