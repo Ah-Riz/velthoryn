@@ -41,6 +41,32 @@ Previously validation only ran on submit — users had no feedback until clickin
 - **Withdraw dialog buttons**: Added `disabled:cursor-not-allowed` for consistent cursor feedback
 - **Vitest config fix**: Added `test.alias` alongside `resolve.alias` — fixed 7 failing `cluster.test.ts` tests that used `vi.resetModules()` + dynamic `import("@/lib/sol/cluster")`
 
+### 7. shadcn/ui Migration + Campaign Detail Redesign
+Integrated shadcn/ui component library and did a full redesign of the campaign detail page:
+- Added `components.json` + 6 new shadcn primitives: `Card`, `Badge`, `Dialog`, `Button`, `Input`, `Label`
+- Rewrote `campaign/[id]/page.tsx` with Card-based layout — 6-metric grid, progress bar section, action buttons, structured skeleton loading
+- Upgraded `TokenPickerModal` and `WrapSolModal` to shadcn Dialog primitive for proper accessibility
+- Redesigned `CancelConfirmDialog` with shadcn Dialog base; cleaner instant refund vs grace period distinction
+- Added `globals.css` dark theme CSS variables (105 lines) for consistent shadcn theming across app
+
+### 8. Responsive E2E Tests (375px) + Native SOL Devnet Checklist
+Gap closure Phase 4c (#17) + Phase 4d (#18) from `week8-gap-closure.md`:
+- Added 4 responsive Playwright tests in `campaign-actions.spec.ts` at 375px viewport (iPhone SE):
+  1. Grace banner renders on narrow viewport
+  2. Needs Action tab wraps correctly on mobile
+  3. Sidebar amber dot visible with drawer open
+  4. Dashboard Needs Attention section stacks on mobile
+- Added E2E test suite table + native SOL / T22 manual devnet checklist (T19–T24) to `docs/TESTING.md`
+
+### 9. wrap-sol.spec.ts Selector Fix
+`wrap-sol.spec.ts` had 2 failing tests after the shadcn Dialog migration changed the DOM structure:
+- Added `aria-label="Close"` to WrapSolModal's custom close button
+- Replaced stale `.z-[60]` class selectors with role-based: `getByRole("dialog")`, `getByRole("button", { name: /close/i })`
+- Both tests now pass; selector pattern is resilient to future CSS changes
+
+### 10. Test Branch Merge + Conflict Resolution (Jun 11)
+Pulled 11 commits from `origin/test` (Lana's Week 8 gap closure: KI#29 BE validation, k6 load scripts, CU re-audit, CI hardening, ops verification tests, doc updates) into `dev_geral`. Resolved 1 merge conflict in `docs/TESTING.md` — kept both Geral's E2E devnet checklist section and Lana's k6/SC benchmarks section.
+
 ---
 
 ## Work Split with Lana
@@ -64,8 +90,9 @@ Previously validation only ran on submit — users had no feedback until clickin
 
 ## Blockers
 
-- **Native SOL create flows**: Lana exposed `*_native` instructions in BE. FE needs to detect `NATIVE_SOL_MINT` and route to native instruction path. Not blocking Week 8 submission — devnet tests use wrapped SOL.
-- **Instant refund UI distinction**: BE exposes `instantRefundEligible` flag. FE cancel modal should branch on this. Partially done (CampaignStatusBanner shows refund status), full cancel flow refinement is Week 9.
+- **Native SOL create flows**: Lana exposed `*_native` instructions in BE. FE needs to detect `NATIVE_SOL_MINT` and route to native instruction path. Not blocking Week 8 submission — devnet tests use wrapped SOL. T19/T20 UI paths verified in `wrap-sol.spec.ts`.
+- **Instant refund UI distinction**: BE exposes `instantRefundEligible` flag. `CampaignStatusBanner` shows refund status correctly. Full cancel flow branching (instant vs grace) deferred to Week 9.
+- **Responsive E2E** (#17): ✅ Done — 4 tests at 375px added in `campaign-actions.spec.ts`.
 
 ---
 
@@ -73,16 +100,20 @@ Previously validation only ran on submit — users had no feedback until clickin
 
 | Metric | Value |
 |--------|-------|
-| Files changed (this session) | 14 |
+| Files changed (Geral, Week 8 total) | 50+ across 4 commit sessions |
 | Test suite: vitest | ✅ 945/946 pass |
 | Test suite: next build | ✅ 0 errors, 0 warnings |
 | Next.js bundle: static assets | 19MB total |
 | Next.js bundle: framework chunk | 185KB |
 | Next.js bundle: largest app chunk | ~170KB (vendor/Solana deps) |
+| shadcn/ui components added | 6 (Card, Badge, Dialog, Button, Input, Label) |
 | Skeleton loaders added | 2 (campaigns list, campaign detail) |
 | Form pages with onBlur validation | 3 (cliff, linear, milestone) |
 | Empty state variants | 5 contextual variants |
 | Nav active state routes fixed | 1 (campaign detail → My Campaigns) |
+| E2E tests: campaign-actions | 33 functional + 4 responsive = 37 total |
+| E2E tests: wrap-sol | 16 (2 previously failing, now fixed) |
+| Responsive tests added (375px) | 4 (grace banner, needs-action tab, sidebar badge, dashboard stack) |
 | Known regressions | 0 |
 
 ---

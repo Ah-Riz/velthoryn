@@ -4,10 +4,10 @@ overview: "Week 8 continuation — close the 11 real gaps identified in [weekly-
 todos:
   - id: lana-verify-close
     content: "Lana — Phase 1: SC tests (#4–7), CI migrate (#13), refresh PENDING_WORK.md"
-    status: pending
+    status: done
   - id: lana-issue29-be
     content: "Lana — Phase 2: prepare/import BE validation + bulk-campaign API tests + SECURITY.md"
-    status: pending
+    status: done
   - id: geral-issue29-fe
     content: "Geral — Phase 2: bulk-send/import FE validation + client-side error UX"
     status: done
@@ -22,16 +22,16 @@ todos:
     status: done
   - id: lana-docs-ops
     content: "Lana — Phase 3: SC docs (#10), backup runbook (#11), BE docs, Sentry verify (#12)"
-    status: pending
+    status: done
   - id: lana-k6-rate-limits
     content: "Lana — Phase 4a–b: k6 prepare/proof/spike scripts + rate limit tuning"
-    status: pending
+    status: done
   - id: lana-cu-reaudit
     content: "Lana — Phase 4e: CU benchmarks + CU_BUDGET.md"
-    status: pending
+    status: done
   - id: lana-spec-cleanup
     content: "Lana — Phase 5: BE/SC spec checkbox batch (Geral: FE specs only)"
-    status: pending
+    status: done
 isProject: false
 ---
 
