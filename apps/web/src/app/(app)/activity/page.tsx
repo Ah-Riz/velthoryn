@@ -28,8 +28,13 @@ export default function ActivityPage() {
 
   const { decimalsMap } = useMintDecimals(mintAddresses);
 
-  const activityMintDecimals =
-    mintAddresses.length === 1 ? (decimalsMap.get(mintAddresses[0]) ?? null) : null;
+  const activityMintDecimals = useMemo(() => {
+    if (mintAddresses.length === 0) return null;
+    const vals = mintAddresses.map((m) => decimalsMap.get(m));
+    if (vals.some((d) => d === undefined)) return null;
+    const unique = new Set(vals);
+    return unique.size === 1 ? (vals[0] ?? null) : null;
+  }, [mintAddresses, decimalsMap]);
 
   return (
     <div className="mx-auto max-w-5xl space-y-6">

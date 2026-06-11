@@ -95,17 +95,29 @@ export default function DashboardPage() {
   );
   const { decimalsMap, isLoading: decimalsLoading } = useMintDecimals(allMintAddresses);
 
-  const vestingSingleMint = vestingMintAddresses.length === 1 ? vestingMintAddresses[0] : null;
-  const vestingAggregateDecimals = vestingSingleMint
-    ? (decimalsMap.get(vestingSingleMint) ?? null)
-    : null;
+  const vestingAggregateDecimals = useMemo(() => {
+    if (vestingMintAddresses.length === 0) return null;
+    const vals = vestingMintAddresses.map((m) => decimalsMap.get(m));
+    if (vals.some((d) => d === undefined)) return null;
+    const unique = new Set(vals);
+    return unique.size === 1 ? (vals[0] ?? null) : null;
+  }, [vestingMintAddresses, decimalsMap]);
 
-  const activityMintDecimals = allMintAddresses.length === 1
-    ? (decimalsMap.get(allMintAddresses[0]) ?? null)
-    : null;
+  const activityMintDecimals = useMemo(() => {
+    if (allMintAddresses.length === 0) return null;
+    const vals = allMintAddresses.map((m) => decimalsMap.get(m));
+    if (vals.some((d) => d === undefined)) return null;
+    const unique = new Set(vals);
+    return unique.size === 1 ? (vals[0] ?? null) : null;
+  }, [allMintAddresses, decimalsMap]);
 
-  const tvlSingleMint = senderMintAddresses.length === 1 ? senderMintAddresses[0] : null;
-  const tvlAggregateDecimals = tvlSingleMint ? (decimalsMap.get(tvlSingleMint) ?? null) : null;
+  const tvlAggregateDecimals = useMemo(() => {
+    if (senderMintAddresses.length === 0) return null;
+    const vals = senderMintAddresses.map((m) => decimalsMap.get(m));
+    if (vals.some((d) => d === undefined)) return null;
+    const unique = new Set(vals);
+    return unique.size === 1 ? (vals[0] ?? null) : null;
+  }, [senderMintAddresses, decimalsMap]);
 
   function fmtAmount(raw: bigint, campaign: (typeof vestingCampaigns)[number]): string {
     return formatTokenAmount(raw, decimalsMap.get(campaign.mint) ?? null);
@@ -221,9 +233,11 @@ export default function DashboardPage() {
       .slice(0, 5);
   }, [vestingCampaigns]);
 
-  const isLoading =
-    senderQuery.isLoading || recipientQuery.isLoading || localCampaigns.isLoading;
-  const statsLoading = isLoading || (allMintAddresses.length > 0 && decimalsLoading);
+  // Count-based stats only need sender/recipient DB queries to resolve.
+  // localCampaigns is a fallback (only used on DB error) — don't block counts on its slow RPC fetch.
+  const countLoading = senderQuery.isLoading || recipientQuery.isLoading;
+  // TVL needs sender mint decimals; other count cards don't.
+  const tvlLoading = countLoading || (senderMintAddresses.length > 0 && decimalsLoading);
 
   const claimableAmount = vestingSummary?.totalClaimable ?? 0n;
   const claimableStreams = vestingSummary?.claimableCampaigns ?? counts.claimableCount;
@@ -370,21 +384,21 @@ export default function DashboardPage() {
 
           {/* Summary Stats */}
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            <StatCard label="Total Streams" value={String(counts.total)} sub="All campaigns" loading={statsLoading} />
-            <StatCard label="Active" value={String(counts.active)} sub="Currently vesting" accent loading={statsLoading} />
+            <StatCard label="Total Streams" value={String(counts.total)} sub="All campaigns" loading={countLoading} />
+            <StatCard label="Active" value={String(counts.active)} sub="Currently vesting" accent loading={countLoading} />
             <StatCard
               label="TVL"
               value={formatTokenAmount(counts.tvl, tvlAggregateDecimals)}
-              sub={mixedMintAggregateSub(senderMintAddresses.length, "Locked value")}
-              loading={statsLoading}
+              sub={mixedMintAggregateSub(tvlAggregateDecimals !== null ? 1 : senderMintAddresses.length, "Locked value")}
+              loading={tvlLoading}
             />
-            <StatCard label="As Sender" value={String(counts.sender)} sub="Streams you created" loading={statsLoading} />
-            <StatCard label="As Recipient" value={String(counts.recipient)} sub="Streams you receive" loading={statsLoading} />
+            <StatCard label="As Sender" value={String(counts.sender)} sub="Streams you created" loading={countLoading} />
+            <StatCard label="As Recipient" value={String(counts.recipient)} sub="Streams you receive" loading={countLoading} />
             <StatCard
               label="Claimable Now"
               value={formatTokenAmount(claimableAmount, vestingAggregateDecimals)}
               sub={mixedMintAggregateSub(
-                vestingMintAddresses.length,
+                vestingAggregateDecimals !== null ? 1 : vestingMintAddresses.length,
                 claimableStreams > 0
                   ? `${claimableStreams} stream${claimableStreams > 1 ? "s" : ""} ready`
                   : "Ready to withdraw",

@@ -14,8 +14,14 @@ type Props = {
   onSuccess: () => void;
 };
 
+function formatSol(v: number): string {
+  if (v === 0) return "0";
+  const s = v.toFixed(4);
+  return s.replace(/\.?0+$/, "");
+}
+
 export function WrapSolModal({ isOpen, onClose, onSuccess }: Props) {
-  const { solBalance, wsolBalance, wrapSol, unwrapSol, isLoading, error, setError, fetchBalances } = useWrapSol();
+  const { solBalance, wsolBalance, wrapSol, unwrapSol, isLoading, balancesLoading, error, setError, fetchBalances } = useWrapSol();
   const [mode, setMode] = useState<"wrap" | "unwrap">("wrap");
   const [amount, setAmount] = useState("");
   const [success, setSuccess] = useState<{ amount: string; sig?: string } | null>(null);
@@ -59,7 +65,7 @@ export function WrapSolModal({ isOpen, onClose, onSuccess }: Props) {
 
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="max-w-md border-white/[0.08] bg-[#1a1d26]" showCloseButton={false}>
+      <DialogContent className="max-w-md border-[#222838] bg-[#13151f]" showCloseButton={false}>
         <DialogHeader className="flex-row items-center justify-between space-y-0">
           <div className="flex items-center gap-2">
             <svg width="24" height="24" viewBox="0 0 128 128" className="text-[#14F1D9]">
@@ -77,7 +83,7 @@ export function WrapSolModal({ isOpen, onClose, onSuccess }: Props) {
 
         <p className="text-[13px] leading-5 text-[#6b7280]">
           SOL is automatically wrapped when creating a stream. Use this tool if you want to manually manage your{" "}
-          <a href={solscanTokenUrl("So11111111111111111111111111111111111111112")} target="_blank" rel="noopener noreferrer" className="text-[#f97316] underline">wSOL</a>{" "}
+          <a href={solscanTokenUrl("So11111111111111111111111111111111111111112")} target="_blank" rel="noopener noreferrer" className="text-violet-400 underline">wSOL</a>{" "}
           balance.
         </p>
 
@@ -100,16 +106,16 @@ export function WrapSolModal({ isOpen, onClose, onSuccess }: Props) {
             {/* Mode Toggle */}
             <div className="flex items-center justify-between">
               <span className="text-[13px] text-[#6b7280]">{mode === "wrap" ? "Convert SOL → wSOL" : "Convert wSOL → SOL"}</span>
-              <div className="flex gap-1 rounded-lg bg-[#12141c] p-1">
+              <div className="flex gap-1 rounded-lg bg-[#0e1018] p-1">
                 <button
                   onClick={() => { setMode("wrap"); setAmount(""); setError(null); }}
-                  className={`rounded-md px-3 py-1.5 text-[12px] font-medium transition ${mode === "wrap" ? "bg-[#2a2d3a] text-white" : "text-[#6b7280]"}`}
+                  className={`rounded-md px-3 py-1.5 text-[12px] font-medium transition ${mode === "wrap" ? "bg-[#1e2235] text-violet-300" : "text-[#6b7280] hover:text-white/70"}`}
                 >
                   Wrap
                 </button>
                 <button
                   onClick={() => { setMode("unwrap"); setAmount(""); setError(null); }}
-                  className={`rounded-md px-3 py-1.5 text-[12px] font-medium transition ${mode === "unwrap" ? "bg-[#2a2d3a] text-white" : "text-[#6b7280]"}`}
+                  className={`rounded-md px-3 py-1.5 text-[12px] font-medium transition ${mode === "unwrap" ? "bg-[#1e2235] text-violet-300" : "text-[#6b7280] hover:text-white/70"}`}
                 >
                   Unwrap
                 </button>
@@ -119,7 +125,7 @@ export function WrapSolModal({ isOpen, onClose, onSuccess }: Props) {
             {/* Amount Input */}
             <div className="space-y-2">
               <label className="text-[12px] font-medium text-[#6b7280]">Amount</label>
-              <div className="flex items-center gap-2 rounded-lg border border-white/[0.08] bg-[#12141c] px-3 py-3">
+              <div className="flex items-center gap-2 rounded-lg border border-[#222838] bg-[#0e1018] px-3 py-3">
                 <Input
                   type="number"
                   placeholder="0.0"
@@ -138,29 +144,49 @@ export function WrapSolModal({ isOpen, onClose, onSuccess }: Props) {
                     type="button"
                     onClick={() => {
                       if (mode === "wrap") {
-                        setAmount(String(Math.max(0, solBalance - 0.003).toFixed(4)));
+                        setAmount(formatSol(Math.max(0, solBalance - 0.003)));
                       } else {
-                        setAmount(String(wsolBalance.toFixed(4)));
+                        setAmount(formatSol(wsolBalance));
                       }
                     }}
-                    className="text-[11px] text-[#f97316] hover:underline"
+                    className="text-[11px] text-violet-400 hover:text-violet-300 hover:underline"
                   >
-                    Max: {mode === "wrap" ? solBalance.toFixed(4) : wsolBalance.toFixed(4)}
+                    Max: {mode === "wrap" ? formatSol(solBalance) : formatSol(wsolBalance)}
                   </button>
                 </div>
               </div>
             </div>
 
             {/* Balance Info */}
-            <div className="space-y-2 rounded-lg border border-white/[0.08] bg-[#12141c] p-3">
+            <div className="space-y-2 rounded-lg border border-[#222838] bg-[#0e1018] p-3">
               <div className="flex justify-between text-[12px]">
                 <span className="text-[#6b7280]">SOL Balance</span>
-                <span className="text-white">{solBalance.toFixed(4)} SOL</span>
+                {balancesLoading ? (
+                  <Loader2 className="h-3 w-3 animate-spin text-[#6b7280]" />
+                ) : (
+                  <span className="text-white">{formatSol(solBalance)} SOL</span>
+                )}
               </div>
               <div className="flex justify-between text-[12px]">
                 <span className="text-[#6b7280]">wSOL Balance</span>
-                <span className="text-white">{wsolBalance.toFixed(4)} wSOL</span>
+                {balancesLoading ? (
+                  <Loader2 className="h-3 w-3 animate-spin text-[#6b7280]" />
+                ) : (
+                  <span className="text-white">{formatSol(wsolBalance)} wSOL</span>
+                )}
               </div>
+              {!balancesLoading && solBalance === 0 && wsolBalance === 0 && (
+                <div className="flex items-center justify-between">
+                  <span className="text-[11px] text-amber-400">Could not load balances</span>
+                  <button
+                    type="button"
+                    onClick={() => { setError(null); void fetchBalances(); }}
+                    className="text-[11px] text-violet-400 hover:text-violet-300 hover:underline"
+                  >
+                    Retry
+                  </button>
+                </div>
+              )}
             </div>
 
             {solBalance < 0.01 && mode === "wrap" && !error && (
@@ -182,8 +208,8 @@ export function WrapSolModal({ isOpen, onClose, onSuccess }: Props) {
               disabled={!canSubmit || isLoading}
               className={`w-full py-3 text-[14px] font-semibold ${
                 canSubmit && !isLoading
-                  ? "bg-[#f97316] text-white hover:bg-[#ea580c]"
-                  : "bg-[#2a2d3a] text-[#6b7280]"
+                  ? "bg-violet-600 text-white hover:bg-violet-500"
+                  : "bg-[#1e2235] text-[#6b7280]"
               }`}
             >
               {isLoading ? (

@@ -1597,7 +1597,7 @@ export default function CampaignPage({ params }: { params: Promise<{ id: string 
         queryKey: ["claimRecord", treeAddress, beneficiaryKey],
       });
       void (async () => {
-        await fetch("/api/claims/sync", {
+        await fetch("/api/events/sync", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ signature: sig }),
@@ -1673,20 +1673,20 @@ export default function CampaignPage({ params }: { params: Promise<{ id: string 
           <Skeleton className="h-7 w-1/3" />
           <Skeleton className="h-4 w-1/4" />
         </div>
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
           {[...Array(6)].map((_, i) => (
-            <Card key={i}>
-              <CardContent className="p-5">
-                <Skeleton className="h-3 w-1/2" />
-                <Skeleton className="mt-3 h-6 w-2/3" />
+            <Card key={i} className="rounded-xl">
+              <CardContent className="px-4 py-3">
+                <Skeleton className="h-2.5 w-1/2" />
+                <Skeleton className="mt-2 h-5 w-2/3" />
               </CardContent>
             </Card>
           ))}
         </div>
-        <Card>
-          <CardContent className="p-5">
-            <Skeleton className="h-3 w-1/4" />
-            <Skeleton className="mt-4 h-2 w-full" />
+        <Card className="rounded-xl">
+          <CardContent className="px-4 py-3">
+            <Skeleton className="h-2.5 w-1/4" />
+            <Skeleton className="mt-3 h-2 w-full" />
           </CardContent>
         </Card>
         <div className="flex gap-3">
@@ -1722,11 +1722,11 @@ export default function CampaignPage({ params }: { params: Promise<{ id: string 
 
   return (
     <div className="mx-auto max-w-6xl space-y-6 pb-12">
-      <Card className="rounded-2xl p-6">
+      <Card className="rounded-xl px-5 py-4">
         <CardContent className="p-0">
-          <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+          <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
             <div>
-              <h1 className="text-[24px] font-semibold text-foreground">{pageTitle}</h1>
+              <h1 className="text-[20px] font-semibold text-foreground sm:text-[22px]">{pageTitle}</h1>
               <p className="mt-2 max-w-3xl text-[14px] text-muted-foreground">
                 {pageDescription}
               </p>
@@ -1791,19 +1791,19 @@ export default function CampaignPage({ params }: { params: Promise<{ id: string 
           {isRecipientMetricsLoading ? (
             <MetricSkeletonGroup />
           ) : isRecipientView ? (
-            <div className="space-y-4">
-              <div className="grid gap-4 md:grid-cols-2">
+            <div className="space-y-3">
+              <div className="grid gap-3 grid-cols-2">
                 <MetricCard label="Total Supply" value={formatTokenAmount(totalSupply)} />
                 <MetricCard label="Your Allocation" value={formatTokenAmount(displaySupply)} accent />
               </div>
-              <div className="grid gap-4 md:grid-cols-3">
+              <div className="grid gap-3 grid-cols-2 md:grid-cols-3">
                 <MetricCard label={claimedLabel} value={formatTokenAmount(displayClaimed)} />
                 <MetricCard label="Vested" value={vestedLabel} />
                 <MetricCard label={claimableLabel} value={formatTokenAmount(displayClaimable)} accent />
               </div>
             </div>
           ) : (
-            <div className="grid grid-cols-2 gap-4 xl:grid-cols-4">
+            <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
               <MetricCard label="Total Supply" value={formatTokenAmount(totalSupply)} />
               <MetricCard label={claimedLabel} value={formatTokenAmount(displayClaimed)} />
               <MetricCard label="Vested" value={vestedLabel} />
@@ -1812,18 +1812,18 @@ export default function CampaignPage({ params }: { params: Promise<{ id: string 
           )}
 
           {!isMilestone && cliffTime && endTime && (
-            <Card className="rounded-2xl">
-              <CardContent className="p-5">
+            <Card className="rounded-xl">
+              <CardContent className="px-4 py-3">
                 <SectionHeader
                   title="Progress"
                   caption={scheduleSummary}
                 />
-                <div className="mt-4 space-y-2">
+                <div className="mt-3 space-y-1.5">
                   <div className="flex items-center justify-between text-[12px] text-muted-foreground">
                     <span>Vested</span>
                     <span className="font-medium text-foreground">{displayProgress}%</span>
                   </div>
-                  <Progress value={Math.min(displayProgress, 100)} className="h-2.5" />
+                  <Progress value={Math.min(displayProgress, 100)} className="h-2" />
                 </div>
               </CardContent>
             </Card>
@@ -1859,13 +1859,13 @@ export default function CampaignPage({ params }: { params: Promise<{ id: string 
 
           <CampaignTimeline treeAddress={treeAddress} mintDecimals={mintDecimals} />
 
-          <Card className="rounded-2xl">
-            <CardContent className="p-5">
+          <Card className="rounded-xl">
+            <CardContent className="px-4 py-3">
               <SectionHeader
                 title="Details"
                 caption={detailsCaption}
               />
-              <div className="mt-5 grid gap-3">
+              <div className="mt-3 grid gap-2.5">
                 <DetailRow label="Tree Address" value={treeAddress} mono />
                 <DetailRow label="Creator" value={treeState.creator.toBase58()} mono />
                 <DetailRow label="Mint" value={mintLabel ?? treeState.mint.toBase58()} mono={mintLabel === null || mintLabel === treeState.mint.toBase58()} />
@@ -2369,8 +2369,8 @@ function SectionHeader({
 }) {
   return (
     <div>
-      <h2 className="text-[16px] font-semibold text-white">{title}</h2>
-      <p className="mt-1 text-[13px] text-[#8b92a5]">{caption}</p>
+      <h2 className="text-[14px] font-semibold text-white">{title}</h2>
+      <p className="mt-0.5 text-[11px] text-[#8b92a5]">{caption}</p>
     </div>
   );
 }
@@ -2401,10 +2401,10 @@ function MetricCard({
   accent?: boolean;
 }) {
   return (
-    <Card className="rounded-2xl">
-      <CardContent className="p-5">
-        <p className="text-[11px] uppercase tracking-[0.12em] text-muted-foreground">{label}</p>
-        <p className={cn("mt-2 text-2xl font-semibold tabular-nums", accent ? "text-violet-400" : "text-foreground")}>
+    <Card className="rounded-xl">
+      <CardContent className="px-4 py-3">
+        <p className="text-[10px] uppercase tracking-[0.12em] text-muted-foreground">{label}</p>
+        <p className={cn("mt-1 text-lg font-semibold tabular-nums sm:text-xl", accent ? "text-violet-400" : "text-foreground")}>
           {value}
         </p>
       </CardContent>
@@ -2430,10 +2430,10 @@ function MetricSkeletonGroup() {
 
 function MetricCardSkeleton() {
   return (
-    <Card className="rounded-2xl">
-      <CardContent className="p-5">
-        <Skeleton className="h-3 w-24" />
-        <Skeleton className="mt-3 h-8 w-28" />
+    <Card className="rounded-xl">
+      <CardContent className="px-4 py-3">
+        <Skeleton className="h-2.5 w-20" />
+        <Skeleton className="mt-2 h-6 w-24" />
       </CardContent>
     </Card>
   );

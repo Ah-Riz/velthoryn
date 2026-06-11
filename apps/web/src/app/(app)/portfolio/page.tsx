@@ -41,8 +41,13 @@ export default function PortfolioPage() {
   );
   const { decimalsMap, isLoading: decimalsLoading } = useMintDecimals(mintAddresses);
 
-  const singleMint = mintAddresses.length === 1 ? mintAddresses[0] : null;
-  const aggregateDecimals = singleMint ? (decimalsMap.get(singleMint) ?? null) : null;
+  const aggregateDecimals = useMemo(() => {
+    if (mintAddresses.length === 0) return null;
+    const vals = mintAddresses.map((m) => decimalsMap.get(m));
+    if (vals.some((d) => d === undefined)) return null;
+    const unique = new Set(vals);
+    return unique.size === 1 ? (vals[0] ?? null) : null;
+  }, [mintAddresses, decimalsMap]);
 
   const statsLoading = isLoading || (mintAddresses.length > 0 && decimalsLoading);
 
@@ -119,7 +124,7 @@ export default function PortfolioPage() {
               label="Total Entitled"
               value={formatTokenAmount(summary?.totalEntitled ?? 0n, aggregateDecimals)}
               sub={mixedMintAggregateSub(
-                mintAddresses.length,
+                aggregateDecimals !== null ? 1 : mintAddresses.length,
                 summary ? `across ${summary.campaignCount} campaigns` : undefined,
               )}
               loading={statsLoading}
@@ -127,19 +132,19 @@ export default function PortfolioPage() {
             <StatCard
               label="Total Vested"
               value={formatTokenAmount(summary?.totalVested ?? 0n, aggregateDecimals)}
-              sub={statsLoading ? undefined : mixedMintAggregateSub(mintAddresses.length, `${vestedPercent}%`)}
+              sub={statsLoading ? undefined : mixedMintAggregateSub(aggregateDecimals !== null ? 1 : mintAddresses.length, `${vestedPercent}%`)}
               loading={statsLoading}
             />
             <StatCard
               label="Total Claimed"
               value={formatTokenAmount(summary?.totalClaimed ?? 0n, aggregateDecimals)}
-              sub={statsLoading ? undefined : mixedMintAggregateSub(mintAddresses.length, `${claimedPercent}%`)}
+              sub={statsLoading ? undefined : mixedMintAggregateSub(aggregateDecimals !== null ? 1 : mintAddresses.length, `${claimedPercent}%`)}
               loading={statsLoading}
             />
             <StatCard
               label="Claimable Now"
               value={formatTokenAmount(summary?.totalClaimable ?? 0n, aggregateDecimals)}
-              sub={statsLoading ? undefined : mixedMintAggregateSub(mintAddresses.length, `${claimablePercent}%`)}
+              sub={statsLoading ? undefined : mixedMintAggregateSub(aggregateDecimals !== null ? 1 : mintAddresses.length, `${claimablePercent}%`)}
               accent
               loading={statsLoading}
             />

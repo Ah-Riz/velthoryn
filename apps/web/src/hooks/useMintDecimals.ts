@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { PublicKey } from "@solana/web3.js";
 import { useConnection } from "@solana/wallet-adapter-react";
+import { NATIVE_SOL_MINT_ADDRESS } from "@/lib/sol/auto-wrap";
 
 /**
  * Fetches decimals for multiple mint addresses.
@@ -21,6 +22,7 @@ export function useMintDecimals(mintAddresses: string[]): {
     const unique = [...new Set(mintAddresses.filter(Boolean))];
     if (unique.length === 0) {
       setDecimalsMap(new Map());
+      setIsLoading(false);
       return;
     }
 
@@ -29,6 +31,9 @@ export function useMintDecimals(mintAddresses: string[]): {
 
     Promise.all(
       unique.map(async (mint) => {
+        if (mint === NATIVE_SOL_MINT_ADDRESS) {
+          return [mint, 9] as [string, number];
+        }
         try {
           const pubkey = new PublicKey(mint);
           const info = await connection.getParsedAccountInfo(pubkey);
