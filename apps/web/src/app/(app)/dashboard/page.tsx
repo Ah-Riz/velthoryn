@@ -251,7 +251,7 @@ export default function DashboardPage() {
         <h1 className="text-[22px] sm:text-[28px] font-semibold tracking-tight text-[#e5e7eb]">Dashboard</h1>
         <p className="mt-1 font-mono text-[12px] text-[#64748b]">
           {publicKey
-            ? `${publicKey.toBase58().slice(0, 4)}...${publicKey.toBase58().slice(-4)}`
+            ? `Welcome back, ${publicKey.toBase58().slice(0, 4)}...${publicKey.toBase58().slice(-4)}`
             : "Connect your wallet to get started"}
         </p>
       </div>

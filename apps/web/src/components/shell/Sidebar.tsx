@@ -108,6 +108,7 @@ function SidebarContent({
           <>
             <img src="/brand/velthoryn-logo-sm.svg" alt="Velthoryn" className="h-8 w-8 shrink-0" />
             <span className="text-[15px] font-semibold tracking-tight text-[#e5e7eb]">Velthoryn</span>
+            <span className="rounded-full border border-purple-500/20 bg-purple-500/10 px-1.5 py-0.5 text-[9px] font-medium uppercase tracking-wider text-purple-400">Devnet</span>
             <button
               type="button"
               onClick={onNavClick ?? onToggleCollapse}

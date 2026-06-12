@@ -790,7 +790,7 @@ test.describe("Clawback UI", () => {
     const campaignsLink = page.getByRole("link", { name: "My Campaigns", exact: true });
     await expect(campaignsLink).toBeVisible({ timeout: 20_000 });
     await expect(
-      campaignsLink.locator("span.ml-auto.h-2.w-2.rounded-full.bg-amber-400"),
+      campaignsLink.locator("span.ml-auto.h-1\\.5.w-1\\.5.rounded-full.bg-amber-400"),
     ).toBeVisible({ timeout: 20_000 });
     expect(pageErrors).toEqual([]);
   });

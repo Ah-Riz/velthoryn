@@ -294,6 +294,10 @@ export default function CampaignPage({ params }: { params: Promise<{ id: string 
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
+  const isE2eMockTx =
+    typeof window !== "undefined" &&
+    window.localStorage.getItem("velthoryn:e2e-mock-send-tx") === "1";
+
   const [treeState, setTreeState] = useState<TreeState | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -1164,7 +1168,7 @@ export default function CampaignPage({ params }: { params: Promise<{ id: string 
         .instruction();
       const cancelTx = new Transaction().add(cancelIx);
       const sig = await sendTransaction(cancelTx, connection);
-      await connection.confirmTransaction(sig, "confirmed");
+      if (!isE2eMockTx) await connection.confirmTransaction(sig, "confirmed");
 
       setTxStatus({ type: "success", sig });
       setCancelOpen(false);
@@ -1266,7 +1270,7 @@ export default function CampaignPage({ params }: { params: Promise<{ id: string 
           .instruction();
         const tx = new Transaction().add(cancelIx);
         const cancelStreamSig = await sendTransaction(tx, connection);
-        await connection.confirmTransaction(cancelStreamSig, "confirmed");
+        if (!isE2eMockTx) await connection.confirmTransaction(cancelStreamSig, "confirmed");
         fetch("/api/events/sync", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -1294,7 +1298,7 @@ export default function CampaignPage({ params }: { params: Promise<{ id: string 
           .instruction();
         const cancelStreamTx = new Transaction().add(cancelStreamIx);
         const cancelStreamSig = await sendTransaction(cancelStreamTx, connection);
-        await connection.confirmTransaction(cancelStreamSig, "confirmed");
+        if (!isE2eMockTx) await connection.confirmTransaction(cancelStreamSig, "confirmed");
         fetch("/api/events/sync", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -1592,7 +1596,7 @@ export default function CampaignPage({ params }: { params: Promise<{ id: string 
             return sendTransaction(tx, connection);
           })();
 
-      await connection.confirmTransaction(sig, "confirmed");
+      if (!isE2eMockTx) await connection.confirmTransaction(sig, "confirmed");
 
       const nextClaimed = totalClaimed + claimable;
       setTxStatus({ type: "success", sig });
