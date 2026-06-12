@@ -74,7 +74,7 @@ export default function LinearCreatePage() {
   const [mintDecimals, setMintDecimals] = useState<number | null>(null);
   const [useAutoWrap, setUseAutoWrap] = useState(false);
   const [cancellable, setCancellable] = useState(false);
-  const [baseCampaignId] = useState(() => Math.floor(Date.now() / 1000) % 1000000);
+  const [baseCampaignId, setBaseCampaignId] = useState(() => Math.floor(Date.now() / 1000) % 1000000);
 
   // Stream entries (manual mode)
   const [streams, setStreams] = useState<StreamEntry[]>([newStream()]);
@@ -237,6 +237,7 @@ export default function LinearCreatePage() {
           setTxState({ type: "bulk-funded", sig: funded.sig, treeAddress: created.treeAddress, prepared });
           setStreams([newStream()]);
           setFormErrors({});
+          setBaseCampaignId(Math.floor(Date.now() / 1000) % 1000000);
         } catch (error: unknown) {
           if (error instanceof Error && /User rejected|Connection rejected/i.test(error.message)) {
             toast("Funding rejected", "error");
@@ -285,6 +286,7 @@ export default function LinearCreatePage() {
       setTxState({ type: "success", results });
       setStreams([newStream()]);
       setFormErrors({});
+      setBaseCampaignId(Math.floor(Date.now() / 1000) % 1000000);
     } catch (error: unknown) {
       if (error instanceof Error && /User rejected|Connection rejected/i.test(error.message)) {
         toast("Transaction rejected by wallet", "error");

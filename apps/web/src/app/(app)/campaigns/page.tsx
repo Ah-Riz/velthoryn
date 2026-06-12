@@ -33,6 +33,8 @@ type SenderCampaign = {
   cancellable: boolean;
   paused: boolean;
   cancelledAt: number | null;
+  instantRefunded: boolean;
+  streamSettled: boolean;
   createdAt: number;
   metadata: { name?: string; description?: string; logoUri?: string } | null;
 };
@@ -146,6 +148,7 @@ function getSenderStateText(campaign: SenderCampaign): string {
   const status = getSenderStreamStatus(campaign);
   if (status === "Claimed") return "Fully claimed";
   if (status === "Paused") return "Paused";
+  if (status === "Settled") return "Settled";
   if (status === "Cancelled") return "Cancelled";
   return `${campaign.leafCount} ${campaign.leafCount === 1 ? "recipient" : "recipients"}`;
 }
@@ -365,7 +368,7 @@ export default function CampaignsPage() {
     for (const row of rows) {
       if (row.role === "sender" || row.role === "both") {
         const senderMatch = senderCampaigns.find((c) => c.treeAddress === row.treeAddress);
-        if (senderMatch && senderMatch.cancelledAt !== null) {
+        if (senderMatch && senderMatch.cancelledAt !== null && !senderMatch.instantRefunded && !senderMatch.streamSettled) {
           n++;
           continue;
         }
@@ -383,7 +386,7 @@ export default function CampaignsPage() {
     if (activeTab === "action") {
       if (row.role === "sender" || row.role === "both") {
         const senderMatch = senderCampaigns.find((c) => c.treeAddress === row.treeAddress);
-        if (senderMatch && senderMatch.cancelledAt !== null) return true;
+        if (senderMatch && senderMatch.cancelledAt !== null && !senderMatch.instantRefunded && !senderMatch.streamSettled) return true;
       }
       if (row.status === "Claimable") return true;
       return false;
@@ -620,7 +623,7 @@ export default function CampaignsPage() {
                     ? senderCampaigns.find((c) => c.treeAddress === row.treeAddress)
                     : undefined;
                 const actionNote =
-                  senderMatch?.cancelledAt != null ? (
+                  senderMatch?.cancelledAt != null && !senderMatch.instantRefunded && !senderMatch.streamSettled ? (
                     <GracePeriodCountdown
                       cancelledAt={BigInt(senderMatch.cancelledAt)}
                       className="text-[12px]"

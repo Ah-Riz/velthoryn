@@ -692,6 +692,20 @@ export default function CampaignPage({ params }: { params: Promise<{ id: string 
           setExpectedBeneficiary(urlSchedule.beneficiary);
           setMilestoneUi(urlSchedule.milestoneUi);
           setScheduleSource("url");
+        } else if (campaignDetailQuery.data?.singleLeaf) {
+          const sl = campaignDetailQuery.data.singleLeaf;
+          applyScheduleToForm(sl, {
+            setReleaseType,
+            setStartTime,
+            setCliffTime,
+            setEndTime,
+            setMilestoneIdx,
+            setRawStartTs,
+            setRawCliffTs,
+            setRawEndTs,
+          });
+          setExpectedBeneficiary(sl.beneficiary);
+          setScheduleSource("api");
         } else if (scheduleSource === "none") {
           setScheduleSource("manual");
         }
@@ -706,6 +720,7 @@ export default function CampaignPage({ params }: { params: Promise<{ id: string 
     treeAddress,
     scheduleSource,
     localSchedule,
+    campaignDetailQuery.data,
   ]);
 
   /* ---- Derived values ---- */
@@ -1035,6 +1050,12 @@ export default function CampaignPage({ params }: { params: Promise<{ id: string 
       : null;
   const claimFundingDisabledReason = treeState?.instantRefunded
     ? "Campaign Refunded"
+    : (streamSettled || hasStreamCancelledEvent) && cancelledAtBigint !== null
+      ? isCancelledBeforeCliff
+        ? "Cancelled — vesting had not started yet"
+        : "Settled — tokens sent to your wallet"
+    : cancelledAtBigint !== null
+      ? "Campaign Cancelled"
     : fundingStateQuery.isLoading
       ? "Checking campaign funding..."
       : isFundingIncomplete
@@ -1084,21 +1105,25 @@ export default function CampaignPage({ params }: { params: Promise<{ id: string 
     ? "Refunded"
     : treeState?.paused
       ? "Paused"
-      : treeState?.cancelledAt
-        ? "Cancelled"
-        : displaySupply > 0n && displayClaimed >= displaySupply
-          ? "Claimed"
-          : "Active";
+      : isWithdrawn
+        ? "Settled"
+        : treeState?.cancelledAt
+          ? "Cancelled"
+          : displaySupply > 0n && displayClaimed >= displaySupply
+            ? "Claimed"
+            : "Active";
 
   const statusBadgeClass = treeState?.instantRefunded
     ? "border-amber-500/20 bg-amber-500/10 text-amber-400"
     : treeState?.paused
       ? "border-amber-500/20 bg-amber-500/10 text-amber-400"
-      : treeState?.cancelledAt
-        ? "border-red-500/20 bg-red-500/10 text-red-400"
-        : displaySupply > 0n && displayClaimed >= displaySupply
-          ? "border-sky-500/20 bg-sky-500/10 text-sky-400"
-          : "border-emerald-500/20 bg-emerald-500/10 text-emerald-400";
+      : isWithdrawn
+        ? "border-emerald-500/20 bg-emerald-500/10 text-emerald-400"
+        : treeState?.cancelledAt
+          ? "border-red-500/20 bg-red-500/10 text-red-400"
+          : displaySupply > 0n && displayClaimed >= displaySupply
+            ? "border-sky-500/20 bg-sky-500/10 text-sky-400"
+            : "border-emerald-500/20 bg-emerald-500/10 text-emerald-400";
 
   async function handleFundExistingCampaign() {
     if (!treeState || fundingRemaining <= 0n) return;
@@ -1203,12 +1228,22 @@ export default function CampaignPage({ params }: { params: Promise<{ id: string 
       const treePubkey = new PublicKey(treeAddress);
       const beneficiary = new PublicKey(resolvedBeneficiary);
       const [claimRecord] = derivePda(["claim", treePubkey.toBuffer(), beneficiary.toBuffer()]);
-      const startTs = startTime ? new BN(datetimeLocalToUnix(startTime)) : new BN(0);
+      const startTs = rawStartTs !== null
+        ? new BN(rawStartTs)
+        : startTime
+        ? new BN(datetimeLocalToUnix(startTime))
+        : new BN(0);
+      const cliffTs = rawCliffTs !== null
+        ? new BN(rawCliffTs)
+        : new BN(datetimeLocalToUnix(cliffTime));
+      const endTs = rawEndTs !== null
+        ? new BN(rawEndTs)
+        : new BN(datetimeLocalToUnix(endTime));
       const args = {
         releaseType,
         startTime: startTs,
-        cliffTime: new BN(datetimeLocalToUnix(cliffTime)),
-        endTime: new BN(datetimeLocalToUnix(endTime)),
+        cliffTime: cliffTs,
+        endTime: endTs,
         milestoneIdx: Number(milestoneIdx),
       };
 
@@ -1231,6 +1266,7 @@ export default function CampaignPage({ params }: { params: Promise<{ id: string 
           .instruction();
         const tx = new Transaction().add(cancelIx);
         const cancelStreamSig = await sendTransaction(tx, connection);
+        await connection.confirmTransaction(cancelStreamSig, "confirmed");
         fetch("/api/events/sync", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -1258,6 +1294,7 @@ export default function CampaignPage({ params }: { params: Promise<{ id: string 
           .instruction();
         const cancelStreamTx = new Transaction().add(cancelStreamIx);
         const cancelStreamSig = await sendTransaction(cancelStreamTx, connection);
+        await connection.confirmTransaction(cancelStreamSig, "confirmed");
         fetch("/api/events/sync", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -1310,9 +1347,9 @@ export default function CampaignPage({ params }: { params: Promise<{ id: string 
       queryClient.setQueriesData(
         { queryKey: ["campaigns"] },
         (old: unknown) => {
-          const data = old as { campaigns?: { treeAddress: string; cancelledAt: number | null; totalClaimed?: number | string }[] } | undefined;
+          const data = old as { campaigns?: { treeAddress: string; cancelledAt: number | null; totalClaimed?: number | string; streamSettled?: boolean }[] } | undefined;
           if (!data?.campaigns) return old;
-          return { ...data, campaigns: data.campaigns.map((c) => c.treeAddress === treeAddress ? { ...c, cancelledAt: cancelTs, totalClaimed: nextTotalClaimed.toString() } : c) };
+          return { ...data, campaigns: data.campaigns.map((c) => c.treeAddress === treeAddress ? { ...c, cancelledAt: cancelTs, totalClaimed: nextTotalClaimed.toString(), streamSettled: true } : c) };
         },
       );
       void queryClient.invalidateQueries({ queryKey: ["beneficiaryCampaigns"] });
@@ -1362,7 +1399,7 @@ export default function CampaignPage({ params }: { params: Promise<{ id: string 
             creatorAta: sentinel,
             tokenProgram: sentinel,
             systemProgram: SystemProgram.programId,
-          } as any)
+          })
           .instruction();
         const refundTx = new Transaction().add(refundIx);
         const refundSig = await sendTransaction(refundTx, connection);

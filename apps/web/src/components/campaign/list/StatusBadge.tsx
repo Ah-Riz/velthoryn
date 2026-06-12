@@ -12,7 +12,9 @@ export function StatusBadge({ status }: { status: StreamStatus }) {
           ? "border-amber-500/20 bg-amber-500/10 text-amber-400"
           : status === "Cancelled"
             ? "border-red-500/20 bg-red-500/10 text-red-400"
-            : "border-[#222838] bg-[#161a25] text-[#64748b]";
+            : status === "Settled"
+              ? "border-emerald-500/20 bg-emerald-500/10 text-emerald-400"
+              : "border-[#222838] bg-[#161a25] text-[#64748b]";
 
   const dot =
     status === "Claimable"

@@ -44,6 +44,20 @@ export function CampaignStatusBanner({
   }
 
   if (cancelledAtBigint !== null) {
+    const showAsWithdrawn =
+      isWithdrawn ?? (unvestedAmount !== undefined && unvestedAmount === 0n);
+
+    if (showAsWithdrawn) {
+      return (
+        <div className="rounded-xl border border-emerald-500/20 bg-emerald-500/[0.05] p-4">
+          <p className="text-[13px] font-medium text-emerald-400">Campaign settled</p>
+          <p className="mt-1.5 text-[12px] leading-6 text-emerald-300/70">
+            Unvested tokens have been withdrawn to your wallet.
+          </p>
+        </div>
+      );
+    }
+
     const graceState = getGracePeriodState(cancelledAtBigint, nowTs);
 
     if (graceState.status === "grace_active") {
@@ -64,20 +78,6 @@ export function CampaignStatusBanner({
               className="text-[12px]"
             />
             . Recipients can still claim vested tokens.
-          </p>
-        </div>
-      );
-    }
-
-    const showAsWithdrawn =
-      isWithdrawn ?? (unvestedAmount !== undefined && unvestedAmount === 0n);
-
-    if (showAsWithdrawn) {
-      return (
-        <div className="rounded-xl border border-emerald-500/20 bg-emerald-500/[0.05] p-4">
-          <p className="text-[13px] font-medium text-emerald-400">Campaign settled</p>
-          <p className="mt-1.5 text-[12px] leading-6 text-emerald-300/70">
-            Unvested tokens have been withdrawn to your wallet.
           </p>
         </div>
       );

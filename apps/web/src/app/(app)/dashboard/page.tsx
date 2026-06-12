@@ -72,6 +72,8 @@ export default function DashboardPage() {
       mint: string;
       paused: boolean;
       cancelledAt: number | null;
+      instantRefunded: boolean;
+      streamSettled: boolean;
       totalSupply: number | string;
       totalClaimed: number | string;
       creator: string;
@@ -213,7 +215,7 @@ export default function DashboardPage() {
 
   const needsAttention = useMemo(() => {
     return senderCampaigns
-      .filter((c) => c.cancelledAt !== null)
+      .filter((c) => c.cancelledAt !== null && !c.instantRefunded && !c.streamSettled)
       .map((c) => ({
         campaign: c,
         graceState: getGracePeriodState(BigInt(c.cancelledAt!), nowTs),

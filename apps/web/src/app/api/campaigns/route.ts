@@ -2,7 +2,7 @@ import { NextRequest } from "next/server";
 import { jsonResponse } from "@/lib/api/json-response";
 import { eq, and, sql, desc } from "drizzle-orm";
 import { db } from "@/lib/db";
-import { campaigns, rootVersions, leaves } from "@/lib/db/schema";
+import { campaigns, rootVersions, leaves, streamCancelEvents } from "@/lib/db/schema";
 import { createCampaignRequestSchema } from "@/lib/api/validators";
 import { verifyAllLeaves } from "@/lib/merkle/verify";
 import { ForbiddenError, ValidationError } from "@/lib/api/errors";
@@ -189,8 +189,13 @@ async function getCampaignsHandler(request: NextRequest) {
       cancellable: campaigns.cancellable,
       paused: campaigns.paused,
       cancelledAt: campaigns.cancelledAt,
+      instantRefunded: campaigns.instantRefunded,
       createdAt: campaigns.createdAt,
       metadata: campaigns.metadata,
+      streamSettled: sql<boolean>`EXISTS (
+        SELECT 1 FROM stream_cancel_events sce
+        WHERE sce.campaign_id = ${campaigns.id}
+      )`.as("stream_settled"),
     })
     .from(campaigns)
     .where(whereClause)

@@ -45,6 +45,14 @@ export function CloseClaimRecordButton({
     setLoading(true);
     try {
       const [claimRecordPda] = derivePda(["claim", treePubkey.toBuffer(), publicKey.toBuffer()]);
+
+      // Verify claim record exists on-chain before sending
+      const accountInfo = await connection.getAccountInfo(claimRecordPda);
+      if (!accountInfo) {
+        toast("Claim record not found on-chain. It may already be closed.", "error");
+        return;
+      }
+
       const ix = await program.methods
         .closeClaimRecord()
         .accounts({
@@ -54,6 +62,21 @@ export function CloseClaimRecordButton({
         })
         .instruction();
       const tx = new Transaction().add(ix);
+
+      // Simulate first to get detailed error logs
+      tx.recentBlockhash = (await connection.getLatestBlockhash("confirmed")).blockhash;
+      tx.feePayer = publicKey;
+      const sim = await connection.simulateTransaction(tx);
+      if (sim.value.err) {
+        const logs = sim.value.logs ?? [];
+        const programLog = logs.find((l) => l.includes("Error Code:") || l.includes("error:"));
+        const msg = programLog
+          ? programLog.replace(/^.*Error Code:\s*/, "").replace(/^.*error:\s*/, "")
+          : "Transaction simulation failed";
+        toast(msg, "error");
+        return;
+      }
+
       const sig = await sendTransaction(tx, connection);
       await connection.confirmTransaction(sig, "confirmed");
       toast("Claim record closed. Rent reclaimed.", "success");

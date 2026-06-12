@@ -79,7 +79,7 @@ export default function MilestoneCreatePage() {
   const [useAutoWrap, setUseAutoWrap] = useState(false);
   const [cancellable, setCancellable] = useState(false);
   const [recipient, setRecipient] = useState("");
-  const [baseCampaignId] = useState(() => Math.floor(Date.now() / 1000) % 1000000);
+  const [baseCampaignId, setBaseCampaignId] = useState(() => Math.floor(Date.now() / 1000) % 1000000);
 
   // Milestone entries
   const [milestones, setMilestones] = useState<MilestoneEntry[]>([newMilestone()]);
@@ -329,6 +329,7 @@ export default function MilestoneCreatePage() {
           setTxState({ type: "bulk-funded", sig: funded.sig, treeAddress: created.treeAddress, prepared });
           setMilestones([newMilestone()]);
           setFormErrors({});
+          setBaseCampaignId(Math.floor(Date.now() / 1000) % 1000000);
         } catch (error: unknown) {
           if (error instanceof Error && /User rejected|Connection rejected/i.test(error.message)) {
             toast("Funding rejected", "error");
@@ -380,6 +381,7 @@ export default function MilestoneCreatePage() {
       setTxState({ type: "success", results: [result] });
       setMilestones([newMilestone()]);
       setFormErrors({});
+      setBaseCampaignId(Math.floor(Date.now() / 1000) % 1000000);
     } catch (error: unknown) {
       if (error instanceof Error && /User rejected|Connection rejected/i.test(error.message)) {
         toast("Transaction rejected", "error");

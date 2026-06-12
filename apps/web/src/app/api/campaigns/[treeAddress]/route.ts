@@ -51,6 +51,9 @@ async function getCampaignByAddressHandler(
           beneficiary: leaves.beneficiary,
           amount: leaves.amount,
           releaseType: leaves.releaseType,
+          startTime: leaves.startTime,
+          cliffTime: leaves.cliffTime,
+          endTime: leaves.endTime,
           milestoneIdx: leaves.milestoneIdx,
         })
         .from(leaves)
@@ -179,6 +182,16 @@ async function getCampaignByAddressHandler(
     },
     rootVersions: rootVersionList,
     recipients: recipientList,
+    singleLeaf: campaign.leafCount === 1 && latestLeaves[0]
+      ? {
+          beneficiary: latestLeaves[0].beneficiary,
+          releaseType: latestLeaves[0].releaseType,
+          startTime: Number(latestLeaves[0].startTime),
+          cliffTime: Number(latestLeaves[0].cliffTime),
+          endTime: Number(latestLeaves[0].endTime),
+          milestoneIdx: latestLeaves[0].milestoneIdx,
+        }
+      : null,
   });
 }
 

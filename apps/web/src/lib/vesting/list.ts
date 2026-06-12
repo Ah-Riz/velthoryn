@@ -3,6 +3,7 @@ export type SenderStream = {
   totalClaimed: number | string;
   paused: boolean;
   cancelledAt: number | null;
+  streamSettled?: boolean;
 };
 
 export type RecipientLeaf = {
@@ -19,7 +20,7 @@ export type RecipientStream = {
   cancelledAt: number | null;
 };
 
-export type StreamStatus = "Active" | "Scheduled" | "Claimable" | "Claimed" | "Paused" | "Cancelled";
+export type StreamStatus = "Active" | "Scheduled" | "Claimable" | "Claimed" | "Paused" | "Cancelled" | "Settled";
 
 function toBigInt(value: number | string): bigint {
   return BigInt(String(value));
@@ -62,6 +63,7 @@ export function getSenderStreamStatus(stream: SenderStream): StreamStatus {
   const totalSupply = toBigInt(stream.totalSupply);
   const totalClaimed = toBigInt(stream.totalClaimed);
 
+  if (stream.cancelledAt !== null && stream.streamSettled) return "Settled";
   if (stream.cancelledAt !== null) return "Cancelled";
   if (stream.paused) return "Paused";
   if (totalSupply > 0n && totalClaimed >= totalSupply) return "Claimed";
