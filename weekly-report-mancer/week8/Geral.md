@@ -115,6 +115,8 @@ Detect `NATIVE_SOL_MINT` in FE create flow and route to `*_native` instruction p
 
 ## Work Split with Lana
 
+Note: Lana contributed significant FE work this week (F2 dashboard rewrite, F3 clawback UI) in addition to SC/BE. The table below reflects the actual split — not all FE is Geral's.
+
 | Area | Lana | Geral |
 |------|------|-------|
 | Smart contract (Rust) | ✅ | — |
@@ -123,11 +125,21 @@ Detect `NATIVE_SOL_MINT` in FE create flow and route to `*_native` instruction p
 | CI/CD hardening | ✅ | — |
 | CU benchmarks | ✅ | — |
 | Mainnet checklist / multisig docs | ✅ | — |
-| Bug fixes (7 P0/P1/P2) | ✅ (SC/BE) | ✅ (FE integration) |
-| Frontend UI/UX | — | ✅ |
-| Loading states / empty states | — | ✅ |
-| Form validation | — | ✅ |
-| E2E tests (Week 7 carry-over) | — | ✅ |
+| Bug fixes — SC/BE layer (7 P0/P1/P2) | ✅ | — |
+| Bug fixes — FE/API integration layer | — | ✅ |
+| FE: Transparency Dashboard rewrite (F2) | ✅ dashboard/page.tsx, portfolio, ActivityFeed, hooks | — |
+| FE: Auto Clawback surfaces (F3) | ✅ CampaignStatusBanner, GracePeriodCountdown, useNeedsActionCount, Needs Action tab, Dashboard Needs Attention | — |
+| FE: Shared UI primitive extraction (8 components) | ✅ StatCard, ProgressBar, SectionHeader, etc. | — |
+| FE: shadcn/ui migration + campaign detail redesign | — | ✅ TokenPickerModal, WrapSolModal, CancelConfirmDialog, campaign/[id]/page.tsx Card layout |
+| FE: Skeleton loaders + empty states | — | ✅ |
+| FE: Form validation (onBlur, 3 pages) | — | ✅ |
+| FE: Lifecycle state model (Task 1) | — | ✅ isGracePeriodVisible, instantRefunded, streamSettled |
+| FE: Raw token amount display fix (Task 9) | — | ✅ decimals cache, formatTokenAmount |
+| FE: Native SOL create flow (Task 13) | — | ✅ |
+| FE: Responsive E2E tests (375px) | — | ✅ 4 tests |
+| FE: E2E CI hardening | — | ✅ confirmTransaction skip, amber dot, Devnet badge, welcome text |
+| Bankrun integration test fixes | — | ✅ warpClock warpToSlot fix |
+| Navigation polish (routing, sidebar active, Quick Actions) | — | ✅ |
 | Weekly report | ✅ | ✅ |
 
 ---
@@ -143,6 +155,88 @@ Detect `NATIVE_SOL_MINT` in FE create flow and route to `*_native` instruction p
 - ✅ Lifecycle state model (Task 1) — DONE
 - ✅ All 3 CI pipelines — green (Lint, Web CI, ci/build-test)
 - ✅ Bankrun EC17 + Vesting Math invariant — fixed
+
+---
+
+## BUG_FIX_PLAN Progress (10 Tasks)
+
+Full plan: `weekly-report-mancer/week8/BUG_FIX_PLAN.md`
+
+| Task | Description | Status | Owner | Notes |
+|------|-------------|--------|-------|-------|
+| Task 1 | Lifecycle State Model | ✅ Done | Geral | `isGracePeriodVisible()`, `instantRefunded`, `streamSettled` in API + FE; 3 tests added |
+| Task 2 | Dashboard / Campaign List Needs Action | 🟡 Partial | Geral + Lana | Lana built CampaignStatusBanner + useNeedsActionCount (F3); Geral fixed confirmTransaction so state updates fire; settled/instant-refund filtering verified in lifecycle model |
+| Task 3 | Linear Cancel Recipient Withdraw Button | 🟡 Partial | Geral | API: vesting-progress correctly returns claimable after cancel; FE: "Claim Vested" button label + cancel modal CTA branch not yet wired |
+| Task 4 | Linear Allocation Vesting Math | ❌ Pending | Geral | Not addressed this week — different allocation sizes (1 vs 0.5) showing different vesting speeds |
+| Task 5 | Block Cancel/Pause When Fully Vested | ❌ Pending | Geral + Lana | FE/API guard not implemented; on-chain guard is SC scope (Lana) |
+| Task 6 | Cancel Grace Notifications (Sender + Recipient) | 🟡 Partial | Geral + Lana | Lana built GracePeriodCountdown + banner states; Geral wired lifecycle flags from API; role-specific copy (sender vs recipient) not differentiated yet |
+| Task 7 | CSV Parse and Validation | ❌ Pending | Geral | Quoted CSV, header aliases, per-page validation rules — not addressed |
+| Task 8 | Root Allocation Flow | 🟡 Partial | Geral + Lana | Lana added 8s timeout + indexed fallback on allocations page; editor lock states (paused/cancelled/fully-vested/non-authority) not implemented |
+| Task 9 | Raw Amount Display | ✅ Done | Geral | decimals cache fixed; `formatTokenAmount` wired across dashboard, portfolio, campaign card |
+| Task 10 | Mobile Campaign List Dropdown | 🟡 Partial | Geral | Compact mobile cards + collapsible sections done; tab → native `<select>` on narrow screens not done |
+
+**Summary:** 2 done, 5 partial, 3 pending. P0 items (Task 1, Task 3 API layer, Task 9) done. P1/P2 items partially addressed or deferred.
+
+---
+
+## Performance Check
+
+### Transaction Cost (user-facing)
+
+| Action | Cost (SOL) | Cost (USD @ ~$150/SOL) |
+|--------|-----------|------------------------|
+| Create campaign (10K leaves) + fund | ~0.0013 SOL | ~$0.0017 |
+| Claim (withdraw) | ~0.00085 SOL | ~$0.00085 |
+| Cancel campaign | ~0.00085 SOL | ~$0.00085 |
+| Pause/unpause | ~0.00085 SOL | ~$0.00085 |
+
+Cost is dominated by the 5,000-lamport base signature fee, not compute units. CU optimization has zero economic impact at default priority (1 micro-lamport/CU). These costs are negligible for end users — vesting protocol overhead is effectively free vs asset value being distributed.
+
+### API Latency (from Lana's k6 baselines — affects FE loading states)
+
+| Endpoint | p95 (smoke, 2 VUs) | Target p99 |
+|----------|--------------------|-----------|
+| `POST /api/campaigns/prepare` | 77–1434ms | < 2,000ms ✅ |
+| `GET /api/campaigns/:tree/proof` | 42–110ms | < 500ms ✅ |
+| `GET /api/campaigns` (list) | < 500ms | < 1,000ms ✅ |
+
+FE implication: skeleton loaders and async loading states are correctly placed — the 1-2s prepare latency is real and visible to users without skeletons.
+
+### Frontend Bundle
+
+| Metric | Value |
+|--------|-------|
+| Static assets total | 19 MB |
+| Framework chunk | 185 KB |
+| Largest app chunk | ~170 KB (vendor/Solana deps) |
+| TypeScript errors | 0 |
+
+### Bottlenecks Identified
+
+- `campaign/[id]/page.tsx` is ~2,600 lines — single file does data fetching, state management, 4 tx handlers, and all rendering. Should be split into sub-components for code splitting and lazy loading. Currently loads full JS on every campaign detail visit.
+- Devnet integration tests (`devnet-vesting.test.ts`) hit Solana's public RPC without rate-limit handling — fails locally under sustained load (HTTP 429). Needs private RPC key or test skip guard.
+- `confirmTransaction` polling on Devnet is synchronous and blocking — 4 call sites in campaign detail page. Should be parallelized or moved to background with optimistic UI updates for better perceived performance.
+
+---
+
+## End-to-End Flow Verification (Devnet)
+
+Core acceptance criterion: "create stream → view dashboard → withdraw → cancel works without crashes"
+
+| Flow | Status | Notes |
+|------|--------|-------|
+| Create cliff campaign (manual CSV) | ✅ | Token picker, wrap SOL, CSV upload, on-chain tx — functional |
+| Create linear campaign | ✅ | Same path; onBlur validation fires correctly |
+| Create milestone campaign | ✅ | milestone idx validation added |
+| Create with native SOL | ✅ | Detects `NATIVE_SOL_MINT`, routes to `*_native` instructions |
+| View dashboard | ✅ | Real token amounts (decimals from on-chain), activity feed, needs attention alerts |
+| View campaign detail | ✅ | Card layout, 6-metric grid, progress bar, skeleton on load |
+| Withdraw (recipient claim) | ✅ | Claim button enabled when claimable > 0; tx sent and confirmed |
+| Cancel campaign | ✅ | Cancel modal opens; tx sent; grace period amber banner appears |
+| Cancel → recipient claim vested | 🟡 | API returns correct claimable amount after cancel; FE "Claim Vested" button label not yet wired |
+| Instant refund | ✅ | Banner shows "Instantly Refunded" state; no grace period countdown |
+| Pause/unpause | ✅ | State update reflected in UI |
+| Sidebar amber dot (needs action) | ✅ | Appears when `needsActionCount > 0`; disappears after action taken |
 
 ---
 
@@ -200,6 +294,19 @@ Closed all 3 CI failures before shipping new features. A broken CI is a multipli
 - Split `campaign/[id]/page.tsx` (~2,600 lines) into sub-components earlier — it's too large for a single file and makes E2E selector debugging harder.
 
 **For Phase 3:**
-- Add Sentry DSN to production — error observability is zero right now (scaffolding complete, just needs env var).
-- Cancel modal CTA branch — mechanical change, high UX value for instant refund flow.
-- VestingChart (Recharts) responsive container — can overflow on narrow screens; needs browser testing to tune breakpoints.
+
+*Immediate (before mainnet demo):*
+- Cancel modal CTA branch on `instantRefundEligible` — mechanical FE change; the state model is correct, just button label/handler needs to split
+- CSV parse fixes (Task 7) — quoted CSV + header aliases; currently blocks some valid import flows
+- Block cancel/pause when fully vested (Task 5) — FE guard is straightforward once `vestedTotal >= totalSupply` is computed
+
+*Production hardening:*
+- Add Sentry DSN to Vercel — `NEXT_PUBLIC_SENTRY_DSN` env var only; scaffolding is already wired. Zero error observability right now.
+- Split `campaign/[id]/page.tsx` (~2,600 lines) into sub-components — enables code splitting, reduces TTI on campaign detail page, makes E2E debugging easier
+- Add `DEVNET_RPC_URL` guard to `devnet-vesting.test.ts` — skip test file unless private RPC is configured; eliminates 11 misleading local failures
+- Paid Vercel plan — restore `*/5 * * * *` cron for near-real-time dashboard indexing (currently daily only)
+
+*UX/stability:*
+- VestingChart (Recharts) responsive container — overflows on narrow screens; needs `ResponsiveContainer` wrapper with tested breakpoints
+- Linear allocation vesting math (Task 4) — verify different allocation sizes (1 vs 0.5 token) show correct vesting percentage; possibly a display math bug in `schedule.ts`
+- Role-specific grace period copy (Task 6) — sender sees "Grace period active, recipients can claim" vs recipient sees "Claim before grace expires" — same banner, different message
