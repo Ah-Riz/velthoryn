@@ -1058,7 +1058,7 @@ export default function CampaignPage({ params }: { params: Promise<{ id: string 
       ? isCancelledBeforeCliff
         ? "Cancelled — vesting had not started yet"
         : "Settled — tokens sent to your wallet"
-    : cancelledAtBigint !== null
+    : cancelledAtBigint !== null && displayClaimable === 0n
       ? "Campaign Cancelled"
     : fundingStateQuery.isLoading
       ? "Checking campaign funding..."
@@ -1075,7 +1075,9 @@ export default function CampaignPage({ params }: { params: Promise<{ id: string 
           ? claimFundingDisabledReason
         : waitActionLabel
           ? waitActionLabel
-          : withdrawDisabledReason ?? `Claim ${formatTokenAmount(displayClaimable)}`;
+          : cancelledAtBigint !== null && displayClaimable > 0n
+            ? `Claim Vested ${formatTokenAmount(displayClaimable)}`
+            : withdrawDisabledReason ?? `Claim ${formatTokenAmount(displayClaimable)}`;
   const currentMerkleRootHex = treeState ? Buffer.from(treeState.merkleRoot).toString("hex") : "";
   const rootVersions = campaignDetailQuery.data?.rootVersions ?? [];
   const campaignRecipients = campaignDetailQuery.data?.recipients ?? [];

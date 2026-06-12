@@ -478,7 +478,22 @@ export default function CampaignsPage() {
         <>
           <div className="rounded-xl sm:rounded-2xl border border-[#222838] bg-[#13161f] p-3 sm:p-4">
             <div className="flex flex-col gap-3 sm:gap-4 lg:flex-row lg:items-center lg:justify-between">
-              <div className="flex flex-wrap gap-1.5 sm:gap-2">
+              {/* Mobile: native select */}
+              <div className="sm:hidden">
+                <select
+                  value={activeTab}
+                  onChange={(e) => setActiveTab(e.target.value as TabKey)}
+                  className="w-full rounded-xl border border-[#222838] bg-[#0b0d12] px-3 py-2.5 font-mono text-[12px] text-[#b4b9c5] outline-none transition focus:border-[#7c3aed]/40"
+                >
+                  {TABS.map((tab) => (
+                    <option key={tab.key} value={tab.key}>
+                      {tab.label} ({tabCounts[tab.key]}){tab.key === "action" && actionCount > 0 ? " !" : ""}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              {/* Desktop: tab buttons */}
+              <div className="hidden sm:flex flex-wrap gap-1.5 sm:gap-2">
                 {TABS.map((tab) => {
                   const active = activeTab === tab.key;
                   return (
