@@ -3,7 +3,12 @@ import { Keypair } from "@solana/web3.js";
 import { NextRequest } from "next/server";
 import { GET } from "@/app/api/beneficiary/[address]/vesting-progress/route";
 import { resetDb } from "../helpers/db";
-import { createCampaignViaPost, seedClaimEvent } from "../helpers/fixtures";
+import {
+  createCampaignViaPost,
+  seedClaimEvent,
+  seedStreamCancelEvent,
+  setCampaignStatus,
+} from "../helpers/fixtures";
 import { makeUrl, MINT } from "../helpers/requests";
 import { resetRateLimitForTests } from "@/lib/api/rate-limit";
 import { resetRedisForTests } from "@/lib/api/redis";
@@ -33,6 +38,8 @@ type ProgressCampaign = {
   treeAddress: string;
   mint: string;
   cancelledAt: string | null;
+  instantRefunded: boolean;
+  streamSettled: boolean;
   progress: {
     totalEntitled: string;
     vestedSoFar: string;
@@ -200,6 +207,84 @@ describe("GET /api/beneficiary/:address/vesting-progress", () => {
     expect(json.campaigns[0]!.progress.vestedSoFar).toBe(expectedVested.toString());
     expect(json.campaigns[0]!.progress.progressPercent).toBeLessThan(15);
     expect(json.campaigns[0]!.progress.progressPercent).toBeGreaterThan(5);
+  });
+
+  it("cancelled linear campaign remains claimable for vested unclaimed amount", async () => {
+    const amount = "1000000";
+    const startTime = 1700000000;
+    const cliffTime = 1700000000;
+    const endTime = 1700001000;
+    const cancelledAt = 1700000500;
+
+    const { beneficiary } = await seedLinearCampaign({
+      startTime,
+      cliffTime,
+      endTime,
+      amount,
+      cancelledAt,
+    });
+
+    const req = makeVestingProgressRequest(beneficiary);
+    const res = await GET(req, makeContext(beneficiary) as never);
+    const json = (await res.json()) as { campaigns: ProgressCampaign[] };
+
+    expect(res.status).toBe(200);
+    expect(json.campaigns).toHaveLength(1);
+    expect(json.campaigns[0]!.cancelledAt).toBe(String(cancelledAt));
+    expect(json.campaigns[0]!.progress.vestedSoFar).toBe("500000");
+    expect(json.campaigns[0]!.progress.claimedSoFar).toBe("0");
+    expect(json.campaigns[0]!.progress.claimable).toBe("500000");
+  });
+
+  it("returns instantRefunded lifecycle flag for instant refund campaigns", async () => {
+    const startTime = 1700000000;
+    const cancelledAt = 1700000010;
+    const { beneficiary, treeAddress } = await seedLinearCampaign({
+      startTime,
+      cliffTime: startTime + 1000,
+      endTime: startTime + 2000,
+      amount: "1000000",
+      cancelledAt,
+    });
+    await setCampaignStatus(treeAddress, { instantRefunded: true });
+
+    const req = makeVestingProgressRequest(beneficiary);
+    const res = await GET(req, makeContext(beneficiary) as never);
+    const json = (await res.json()) as { campaigns: ProgressCampaign[] };
+
+    expect(res.status).toBe(200);
+    expect(json.campaigns).toHaveLength(1);
+    expect(json.campaigns[0]!.cancelledAt).toBe(String(cancelledAt));
+    expect(json.campaigns[0]!.instantRefunded).toBe(true);
+    expect(json.campaigns[0]!.streamSettled).toBe(false);
+    expect(json.campaigns[0]!.progress.claimable).toBe("0");
+  });
+
+  it("returns streamSettled lifecycle flag for stream-settled campaigns", async () => {
+    const startTime = 1700000000;
+    const cancelledAt = 1700000500;
+    const { campaignId, beneficiary } = await seedLinearCampaign({
+      startTime,
+      cliffTime: startTime,
+      endTime: startTime + 1000,
+      amount: "1000000",
+      cancelledAt,
+    });
+    await seedStreamCancelEvent(campaignId, {
+      cancelledAt,
+      amountToBeneficiary: 500000,
+      amountToCreator: 500000,
+    });
+
+    const req = makeVestingProgressRequest(beneficiary);
+    const res = await GET(req, makeContext(beneficiary) as never);
+    const json = (await res.json()) as { campaigns: ProgressCampaign[] };
+
+    expect(res.status).toBe(200);
+    expect(json.campaigns).toHaveLength(1);
+    expect(json.campaigns[0]!.cancelledAt).toBe(String(cancelledAt));
+    expect(json.campaigns[0]!.instantRefunded).toBe(false);
+    expect(json.campaigns[0]!.streamSettled).toBe(true);
   });
 
   it("fully claimed campaign shows claimable = 0", async () => {

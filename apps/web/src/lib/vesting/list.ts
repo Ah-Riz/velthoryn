@@ -3,6 +3,7 @@ export type SenderStream = {
   totalClaimed: number | string;
   paused: boolean;
   cancelledAt: number | null;
+  instantRefunded?: boolean;
   streamSettled?: boolean;
 };
 
@@ -18,9 +19,29 @@ export type RecipientStream = {
   myLeaf: RecipientLeaf;
   paused: boolean;
   cancelledAt: number | null;
+  instantRefunded?: boolean;
+  streamSettled?: boolean;
 };
 
 export type StreamStatus = "Active" | "Scheduled" | "Claimable" | "Claimed" | "Paused" | "Cancelled" | "Settled";
+
+export type CampaignLifecycle =
+  | "active"
+  | "paused"
+  | "claimable"
+  | "claimed"
+  | "cancelled_grace"
+  | "cancelled_expired"
+  | "instant_refunded"
+  | "settled";
+
+export function isGracePeriodVisible(input: {
+  cancelledAt: number | string | null;
+  instantRefunded?: boolean;
+  streamSettled?: boolean;
+}): boolean {
+  return input.cancelledAt !== null && !input.instantRefunded && !input.streamSettled;
+}
 
 function toBigInt(value: number | string): bigint {
   return BigInt(String(value));
@@ -63,7 +84,7 @@ export function getSenderStreamStatus(stream: SenderStream): StreamStatus {
   const totalSupply = toBigInt(stream.totalSupply);
   const totalClaimed = toBigInt(stream.totalClaimed);
 
-  if (stream.cancelledAt !== null && stream.streamSettled) return "Settled";
+  if (stream.cancelledAt !== null && (stream.streamSettled || stream.instantRefunded)) return "Settled";
   if (stream.cancelledAt !== null) return "Cancelled";
   if (stream.paused) return "Paused";
   if (totalSupply > 0n && totalClaimed >= totalSupply) return "Claimed";
@@ -76,13 +97,14 @@ export function getRecipientStreamStatus(
 ): StreamStatus {
   const claimed = toBigInt(stream.myClaimed);
   const entitled = toBigInt(stream.myLeaf.amount);
+  const claimable = getRecipientClaimableAmount(stream, nowTs);
 
   if (entitled > 0n && claimed >= entitled) return "Claimed";
-  if (stream.cancelledAt !== null) return "Cancelled";
+  if (stream.streamSettled) return "Settled";
+  if (stream.instantRefunded) return "Cancelled";
   if (stream.paused) return "Paused";
-
-  const claimable = getRecipientClaimableAmount(stream, nowTs);
   if (claimable > 0n) return "Claimable";
+  if (stream.cancelledAt !== null) return "Cancelled";
 
   return "Scheduled";
 }
@@ -97,14 +119,15 @@ export function getMultiLeafRecipientStreamStatus(
   const first = streams[0];
   const claimed = toBigInt(first.myClaimed);
   const totalEntitled = streams.reduce((sum, s) => sum + toBigInt(s.myLeaf.amount), 0n);
-
-  if (totalEntitled > 0n && claimed >= totalEntitled) return "Claimed";
-  if (first.cancelledAt !== null) return "Cancelled";
-  if (first.paused) return "Paused";
-
   const totalVested = streams.reduce((sum, s) => sum + vestedForRecipient(s, nowTs), 0n);
   const claimable = totalVested > claimed ? totalVested - claimed : 0n;
+
+  if (totalEntitled > 0n && claimed >= totalEntitled) return "Claimed";
+  if (first.streamSettled) return "Settled";
+  if (first.instantRefunded) return "Cancelled";
+  if (first.paused) return "Paused";
   if (claimable > 0n) return "Claimable";
+  if (first.cancelledAt !== null) return "Cancelled";
 
   return "Scheduled";
 }

@@ -18,6 +18,8 @@ type BeneficiaryCampaignRow = {
   total_supply: string | number;
   leaf_count: number;
   paused: boolean;
+  instant_refunded: boolean;
+  stream_settled: boolean;
   cancelled_at: string | number | null;
   created_at: string | number;
   metadata: { name?: string; description?: string; logoUri?: string } | null;
@@ -71,12 +73,16 @@ async function getVestingProgressHandler(
     )
     SELECT
       c.id, c.tree_address, c.creator, c.mint, c.campaign_id,
-      c.total_supply, c.leaf_count, c.paused, c.cancelled_at,
+      c.total_supply, c.leaf_count, c.paused, c.instant_refunded, c.cancelled_at,
       c.created_at, c.metadata,
       l.leaf_index, l.amount, l.release_type,
       l.start_time, l.cliff_time, l.end_time, l.milestone_idx,
       coalesce(mc.claimed_amount, 0)::bigint AS my_claimed,
-      (rm.milestone_idx IS NOT NULL) AS milestone_released
+      (rm.milestone_idx IS NOT NULL) AS milestone_released,
+      EXISTS (
+        SELECT 1 FROM stream_cancel_events sce
+        WHERE sce.campaign_id = c.id
+      ) AS stream_settled
     FROM campaigns c
     INNER JOIN latest_rv rv ON rv.campaign_id = c.id
     INNER JOIN leaves l ON l.root_version_id = rv.id AND l.beneficiary = ${address}
@@ -137,6 +143,8 @@ async function getVestingProgressHandler(
       },
       cancelledAt: cancelledAt !== null ? cancelledAt.toString() : null,
       paused: row.paused,
+      instantRefunded: row.instant_refunded,
+      streamSettled: row.stream_settled,
       milestoneReleased,
     };
   });
