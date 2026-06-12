@@ -7,6 +7,11 @@ export default defineConfig({
   test: {
     environment: "node",
     include: ["tests/**/*.test.ts", "src/**/*.test.ts"],
+    // Devnet integration tests require a private RPC (set DEVNET_RPC_URL).
+    // Public api.devnet.solana.com rate-limits under test load (HTTP 429).
+    exclude: process.env.DEVNET_RPC_URL
+      ? []
+      : ["**/integration/devnet-*.test.ts"],
     globalSetup: ["./tests/globalSetup.ts"],
     fileParallelism: false,
     testTimeout: 15_000,
