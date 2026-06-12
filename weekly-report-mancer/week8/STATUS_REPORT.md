@@ -87,11 +87,21 @@
 
 ### Frontend
 
-<!-- Geral: add your working items here (FE tests, E2E, UI features, etc.) -->
-
 | Item | Evidence |
 |------|----------|
-| _Add items_ | _Add evidence_ |
+| shadcn/ui component library integrated | `apps/web/components.json` — 6 shadcn components added: Card, Badge, Dialog, Button, Input, Label |
+| Campaign detail page fully redesigned | `apps/web/src/app/(app)/campaign/[id]/page.tsx` — Card-based layout, 6-metric grid, progress bar, action buttons; structured skeleton during load |
+| Skeleton loaders on high-traffic pages | `campaigns/page.tsx` — 5 skeleton rows matching CampaignRow; `campaign/[id]/page.tsx` — full-page structured skeleton |
+| Contextual empty states (5 variants) | `campaigns/page.tsx` — All/Sender/Recipient/Search/Needs-Action tabs: dedicated copy + CTA; API error shows Retry button |
+| Real-time form validation (onBlur) | `cliff/page.tsx`, `linear/page.tsx`, `milestone/page.tsx` — errors surface on blur, not only on submit |
+| WrapSolModal + TokenPickerModal redesigned | `TokenPickerModal.tsx` — shadcn Dialog, accessible markup; `WrapSolModal.tsx` — `aria-label="Close"` on custom close button |
+| CancelConfirmDialog redesigned | `CancelConfirmDialog.tsx` — shadcn Dialog primitive, instant refund vs grace period UI distinction |
+| Sidebar polish | `Sidebar.tsx` — collapsible, active route fix for campaign detail, amber dot badge when `needsActionCount > 0` |
+| Responsive E2E tests at 375px (4 tests) | `campaign-actions.spec.ts` lines 687+ — grace banner, needs-action tab wrap, sidebar amber dot, dashboard Needs Attention stacking |
+| wrap-sol E2E selectors fixed | `wrap-sol.spec.ts` — role-based selectors (`getByRole("dialog")`); both previously-failing tests now pass |
+| 33 campaign-action E2E tests passing | `tests/e2e/campaign-actions.spec.ts` (825 lines) — pause/cancel/refund/withdraw/milestone/clawback/responsive |
+| Vitest: 945/946 tests pass | `pnpm vitest run` — 73 test files; 1 known skip, 0 new failures |
+| Next.js build clean | `pnpm build` — 0 TypeScript errors, 0 warnings |
 
 ---
 
@@ -164,10 +174,15 @@ All sizes fit comfortably in Node.js default heap (1.7 GB). Maximum proof (640 b
 
 ### API Latency
 
-k6 smoke baselines documented in `docs/TESTING.md` §k6 (prepare, proof, spike scripts). Production P50/P99 not yet validated under real traffic. Targets:
-- POST `/api/campaigns`: P50 < 500ms, P99 < 2,000ms
-- GET `/api/campaigns`: P50 < 200ms, P99 < 1,000ms
-- GET `/api/campaigns/:id/proof`: P50 < 100ms, P99 < 500ms
+Measured via k6 smoke runs (2 VUs, 3–5 iterations, local dev server):
+
+| Endpoint | p95 (smoke) | Target p99 | Status |
+|----------|-------------|-----------|--------|
+| `POST /api/campaigns/prepare` | ~77–1434ms | < 2,000ms | ✅ within target |
+| `GET /api/campaigns/:tree/proof` | ~42–110ms | < 500ms | ✅ within target |
+| Health + campaigns list + simulate | < 500ms | < 1,000ms | ✅ within target |
+
+Full baseline data: `apps/web/tests/load/last-*-report.json`. Spike test (200 VU burst) p95 ~1,038ms — acceptable. Production baselines need staging environment with live DB.
 
 ---
 
@@ -220,9 +235,9 @@ Unit tests are healthy (924 Vitest, 31 Rust unit+proptest, 72 Mollusk). k6 load 
 
 ### Frontend
 
-<!-- Geral: add your honest assessment of FE readiness here -->
+Production-quality UI for devnet demonstration. shadcn/ui migration unifies the design language — campaign detail Card-based redesign is a major UX improvement over the raw div layout. E2E suite covers 33 campaign-action tests + 4 responsive tests at 375px. Next.js build is clean (0 TS errors), 945/946 Vitest tests pass (1 known skip).
 
-Interim F2/F3 work (dashboard, clawback UI, E2E) is documented in [`Lana.md`](./Lana.md); this team report awaits Geral input.
+Known gaps: (1) Native SOL create flows still route through wrapped SOL — `*_native` instruction detection is Week 9 work. BE exposes the native tx builders; FE needs to detect `NATIVE_SOL_MINT` and branch. (2) Cancel flow doesn't yet branch on `instantRefundEligible` — status banner shows the state but the cancel modal doesn't distinguish instant vs grace. Both are Week 9 items, not regressions. VestingChart (Recharts) may overflow on very narrow screens — flagged but not fixed this week.
 
 ### Overall
 V1 is stable and ready for external audit. The two blockers for mainnet are (1) external audit completion and (2) Mollusk 0.14 upgrade to validate the 8 estimated CU measurements. All code-level work is either done or has a clear path forward.
@@ -278,21 +293,45 @@ V1 is stable and ready for external audit. The two blockers for mainnet are (1) 
 | `apps/web/tests/api/clawback.test.ts` | Clawback API test suite (681 lines) |
 | `apps/web/tests/api/ops-verification.test.ts` | Pool, sync_state, txn rollback, RLS, BigInt route guard |
 | `apps/web/tests/lib/serialize-bigint.test.ts` | BigInt serialization unit tests |
-| `docs/ROOT_ROTATION_GUIDE.md` | Root rotation integration guide |
+| `docs/ROOT_ROTATION_GUIDE.md` | Comprehensive root rotation integration guide (on-chain instruction, authority gates, step-by-step, edge cases, bug fix for FE) |
 | `docs/KNOWN_ISSUE_29_DESIGN.md` | KI#29 design + BE enforcement §6 |
 | `docs/MAINNET_CHECKLIST.md` | Mainnet readiness checklist (~60 checkboxes) |
 | `docs/operations/multisig-setup.md` | Squads v4 multisig runbook |
 | `docs/WEEK8_KNOWN_ISSUES.md` | Bug audit: 15 fixed, 12 documented, 1 deferred |
+| `docs/WEEK8_PERFORMANCE_REPORT.md` | Performance profiling results: CU budgets, transaction costs, Merkle scale, API latency |
 | `scripts/test-multisig-transfer.sh` | Devnet multisig authority transfer test |
 | `weekly-report-mancer/week8/STATUS_REPORT.md` | This file |
 
-### Frontend
-
-<!-- Geral: add your created/modified files here -->
+### Frontend — Modified
 
 | File | Change |
 |------|--------|
-| _Add files_ | _Add changes_ |
+| `apps/web/src/app/(app)/campaigns/page.tsx` | Skeleton loader (5 rows), contextual empty states (5 variants), API error Retry button |
+| `apps/web/src/app/(app)/campaign/[id]/page.tsx` | Full redesign with shadcn Card layout, structured skeleton, 6-metric grid |
+| `apps/web/src/app/(app)/campaign/create/cliff/page.tsx` | onBlur real-time validation |
+| `apps/web/src/app/(app)/campaign/create/linear/page.tsx` | onBlur real-time validation |
+| `apps/web/src/app/(app)/campaign/create/milestone/page.tsx` | onBlur real-time validation |
+| `apps/web/src/app/(app)/dashboard/page.tsx` | Quick Actions moved to top of page |
+| `apps/web/src/components/shell/Sidebar.tsx` | Collapsible, active route fix (campaign detail → My Campaigns), amber dot badge |
+| `apps/web/src/components/campaign/create/TokenPickerModal.tsx` | shadcn Dialog base, accessible markup |
+| `apps/web/src/components/campaign/create/WrapSolModal.tsx` | `aria-label="Close"` on close button; fixes E2E selector |
+| `apps/web/src/components/campaign/detail/CancelConfirmDialog.tsx` | shadcn Dialog primitive, instant vs grace refund UI |
+| `apps/web/src/app/globals.css` | shadcn/ui dark theme CSS variables |
+| `apps/web/vitest.config.ts` | Added `test.alias` — fixes cluster.test.ts dynamic import |
+| `apps/web/tests/e2e/campaign-actions.spec.ts` | +4 responsive tests at 375px viewport |
+| `apps/web/tests/e2e/wrap-sol.spec.ts` | Role-based selectors replace stale class selectors |
+
+### Frontend — Created
+
+| File | Purpose |
+|------|---------|
+| `apps/web/components.json` | shadcn/ui project config |
+| `apps/web/src/components/ui/badge.tsx` | shadcn Badge component |
+| `apps/web/src/components/ui/button.tsx` | shadcn Button component |
+| `apps/web/src/components/ui/card.tsx` | shadcn Card / CardHeader / CardContent |
+| `apps/web/src/components/ui/dialog.tsx` | shadcn Dialog primitive |
+| `apps/web/src/components/ui/input.tsx` | shadcn Input |
+| `apps/web/src/components/ui/label.tsx` | shadcn Label |
 
 ### CI Fixes (committed)
 

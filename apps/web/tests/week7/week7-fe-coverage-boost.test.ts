@@ -681,8 +681,12 @@ describe("Vesting list — getRecipientStreamStatus", () => {
     expect(getRecipientStreamStatus({ ...baseStream, myClaimed: "1000" }, 150n)).toBe("Claimed");
   });
 
-  it("returns Cancelled when cancelled", () => {
-    expect(getRecipientStreamStatus({ ...baseStream, cancelledAt: 120 }, 150n)).toBe("Cancelled");
+  it("returns Cancelled when cancelled before any vesting", () => {
+    expect(getRecipientStreamStatus({ ...baseStream, cancelledAt: 50 }, 150n)).toBe("Cancelled");
+  });
+
+  it("returns Claimable when cancelled after partial vesting", () => {
+    expect(getRecipientStreamStatus({ ...baseStream, cancelledAt: 120 }, 150n)).toBe("Claimable");
   });
 
   it("returns Paused when paused", () => {

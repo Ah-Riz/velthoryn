@@ -24,6 +24,7 @@ export function useWrapSol() {
   const [solBalance, setSolBalance] = useState<number>(0);
   const [wsolBalance, setWsolBalance] = useState<number>(0);
   const [isLoading, setIsLoading] = useState(false);
+  const [balancesLoading, setBalancesLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const fetchInFlightRef = useRef<Promise<void> | null>(null);
   const lastFetchAtRef = useRef(0);
@@ -40,6 +41,7 @@ export function useWrapSol() {
     }
 
     const run = (async () => {
+      setBalancesLoading(true);
       try {
         const sol = await connection.getBalance(publicKey);
         setSolBalance(sol / LAMPORTS_PER_SOL);
@@ -51,9 +53,10 @@ export function useWrapSol() {
         } catch {
           setWsolBalance(0);
         }
-      } catch {
-        // ignore read-rate-limit / transient RPC errors here
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "Failed to fetch balances");
       } finally {
+        setBalancesLoading(false);
         lastFetchAtRef.current = Date.now();
       }
     })();
@@ -109,8 +112,12 @@ export function useWrapSol() {
         // Sync native to update wSOL balance
         tx.add(createSyncNativeInstruction(ata));
 
+        const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash();
+        tx.recentBlockhash = blockhash;
+        tx.feePayer = publicKey;
+
         const sig = await sendTransaction(tx, connection);
-        await connection.confirmTransaction(sig, "confirmed");
+        await connection.confirmTransaction({ signature: sig, blockhash, lastValidBlockHeight }, "confirmed");
 
         await fetchBalances();
         setIsLoading(false);
@@ -182,15 +189,23 @@ export function useWrapSol() {
           createCloseAccountInstruction(tempKeypair.publicKey, publicKey, publicKey),
         );
 
+        const { blockhash: bh2, lastValidBlockHeight: lvbh2 } = await connection.getLatestBlockhash();
+        tx.recentBlockhash = bh2;
+        tx.feePayer = publicKey;
+
         const sig = await sendTransaction(tx, connection, { signers: [tempKeypair] });
-        await connection.confirmTransaction(sig, "confirmed");
+        await connection.confirmTransaction({ signature: sig, blockhash: bh2, lastValidBlockHeight: lvbh2 }, "confirmed");
         await fetchBalances();
         setIsLoading(false);
         return true;
       }
 
+      const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash();
+      tx.recentBlockhash = blockhash;
+      tx.feePayer = publicKey;
+
       const sig = await sendTransaction(tx, connection);
-      await connection.confirmTransaction(sig, "confirmed");
+      await connection.confirmTransaction({ signature: sig, blockhash, lastValidBlockHeight }, "confirmed");
 
       await fetchBalances();
       setIsLoading(false);
@@ -206,5 +221,5 @@ export function useWrapSol() {
     }
   }, [publicKey, sendTransaction, connection, fetchBalances, wsolBalance]);
 
-  return { solBalance, wsolBalance, wrapSol, unwrapSol, isLoading, error, setError, fetchBalances };
+  return { solBalance, wsolBalance, wrapSol, unwrapSol, isLoading, balancesLoading, error, setError, fetchBalances };
 }

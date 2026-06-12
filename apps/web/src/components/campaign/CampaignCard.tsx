@@ -86,11 +86,11 @@ export function CampaignCard({ campaign }: CampaignCardProps) {
   return (
     <Link
       href={`/campaign/${campaign.address}`}
-      className="group block rounded-2xl border border-white/[0.06] bg-white/[0.02] p-5 transition-colors hover:border-violet-500/20 hover:bg-violet-500/[0.03]"
+      className="group block rounded-xl border border-white/[0.06] bg-white/[0.02] p-3.5 sm:rounded-2xl sm:p-5 transition-colors hover:border-violet-500/20 hover:bg-violet-500/[0.03]"
     >
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h3 className="text-[15px] font-medium text-white group-hover:text-violet-300">
+          <h3 className="text-[14px] sm:text-[15px] font-medium text-white group-hover:text-violet-300">
             {campaign.name}
           </h3>
         </div>
@@ -107,11 +107,11 @@ export function CampaignCard({ campaign }: CampaignCardProps) {
       <ProgressBar
         percentage={campaign.progressPercent}
         showLabel
-        className="mt-4"
+        className="mt-3 sm:mt-4"
         colorClass={campaign.progressColorClass}
       />
 
-      <div className="mt-4 grid gap-2 text-[12px] sm:grid-cols-2">
+      <div className="mt-3 sm:mt-4 grid gap-1.5 sm:gap-2 text-[11px] sm:text-[12px] sm:grid-cols-2">
         <div className="text-[#8b92a5]">
           Entitled: <span className="text-white">{campaign.entitled}</span>
         </div>
@@ -128,7 +128,7 @@ export function CampaignCard({ campaign }: CampaignCardProps) {
         </div>
       </div>
 
-      <div className="mt-4 flex items-center justify-between">
+      <div className="mt-3 sm:mt-4 flex items-center justify-between">
         <span className="text-[12px] text-[#555d73]">
           Next unlock: {campaign.nextUnlock}
         </span>

@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import Link from "next/link";
 import { useWallet } from "@solana/wallet-adapter-react";
 import { useCampaignList } from "@/hooks/useCampaignList";
@@ -8,7 +8,6 @@ import { useBeneficiaryCampaigns } from "@/hooks/useBeneficiaryCampaigns";
 import { useLocalCampaigns } from "@/hooks/useLocalCampaigns";
 import { useVestingProgressSummary } from "@/hooks/useVestingProgress";
 import { ActivityFeed } from "@/components/dashboard/ActivityFeed";
-import { ProgressBar } from "@/components/ui/ProgressBar";
 import { StatCard } from "@/components/ui/StatCard";
 import { GracePeriodCountdown } from "@/components/campaign/detail/GracePeriodCountdown";
 import { getRecipientStreamStatus, getSenderStreamStatus } from "@/lib/vesting/list";
@@ -36,15 +35,18 @@ function ActionCard({
   return (
     <Link
       href={href}
-      className="group flex items-start gap-4 rounded-2xl border border-white/[0.06] bg-white/[0.02] p-5 transition-colors hover:border-violet-500/20 hover:bg-violet-500/[0.03]"
+      className="group flex items-start gap-3 sm:gap-4 rounded-xl sm:rounded-2xl border border-[#222838] bg-[#13161f] p-3.5 sm:p-5 transition-all hover:border-[#7c3aed]/30 hover:bg-[#161a25]"
     >
-      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-violet-600/15 text-violet-400 transition-colors group-hover:bg-violet-600/25">
+      <div className="flex h-8 w-8 sm:h-10 sm:w-10 shrink-0 items-center justify-center rounded-lg sm:rounded-xl border border-[#7c3aed]/20 bg-[#7c3aed]/10 text-[#a78bfa] transition-all group-hover:border-[#7c3aed]/40 group-hover:bg-[#7c3aed]/20">
         {icon}
       </div>
-      <div>
-        <div className="text-[14px] font-medium text-white">{title}</div>
-        <div className="mt-1 text-[12px] text-[#8b92a5]">{description}</div>
+      <div className="flex-1 min-w-0">
+        <div className="text-[13px] sm:text-[14px] font-medium text-[#e5e7eb]">{title}</div>
+        <div className="mt-0.5 sm:mt-1 text-[11px] sm:text-[12px] text-[#64748b]">{description}</div>
       </div>
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="mt-0.5 shrink-0 text-[#64748b] transition-transform group-hover:translate-x-0.5">
+        <polyline points="9 18 15 12 9 6" />
+      </svg>
     </Link>
   );
 }
@@ -70,6 +72,8 @@ export default function DashboardPage() {
       mint: string;
       paused: boolean;
       cancelledAt: number | null;
+      instantRefunded: boolean;
+      streamSettled: boolean;
       totalSupply: number | string;
       totalClaimed: number | string;
       creator: string;
@@ -91,15 +95,31 @@ export default function DashboardPage() {
     () => [...new Set([...vestingMintAddresses, ...senderMintAddresses])],
     [vestingMintAddresses, senderMintAddresses],
   );
-  const { decimalsMap } = useMintDecimals(allMintAddresses);
+  const { decimalsMap, isLoading: decimalsLoading } = useMintDecimals(allMintAddresses);
 
-  const vestingSingleMint = vestingMintAddresses.length === 1 ? vestingMintAddresses[0] : null;
-  const vestingAggregateDecimals = vestingSingleMint
-    ? (decimalsMap.get(vestingSingleMint) ?? null)
-    : null;
+  const vestingAggregateDecimals = useMemo(() => {
+    if (vestingMintAddresses.length === 0) return null;
+    const vals = vestingMintAddresses.map((m) => decimalsMap.get(m));
+    if (vals.some((d) => d === undefined)) return null;
+    const unique = new Set(vals);
+    return unique.size === 1 ? (vals[0] ?? null) : null;
+  }, [vestingMintAddresses, decimalsMap]);
 
-  const tvlSingleMint = senderMintAddresses.length === 1 ? senderMintAddresses[0] : null;
-  const tvlAggregateDecimals = tvlSingleMint ? (decimalsMap.get(tvlSingleMint) ?? null) : null;
+  const activityMintDecimals = useMemo(() => {
+    if (allMintAddresses.length === 0) return null;
+    const vals = allMintAddresses.map((m) => decimalsMap.get(m));
+    if (vals.some((d) => d === undefined)) return null;
+    const unique = new Set(vals);
+    return unique.size === 1 ? (vals[0] ?? null) : null;
+  }, [allMintAddresses, decimalsMap]);
+
+  const tvlAggregateDecimals = useMemo(() => {
+    if (senderMintAddresses.length === 0) return null;
+    const vals = senderMintAddresses.map((m) => decimalsMap.get(m));
+    if (vals.some((d) => d === undefined)) return null;
+    const unique = new Set(vals);
+    return unique.size === 1 ? (vals[0] ?? null) : null;
+  }, [senderMintAddresses, decimalsMap]);
 
   function fmtAmount(raw: bigint, campaign: (typeof vestingCampaigns)[number]): string {
     return formatTokenAmount(raw, decimalsMap.get(campaign.mint) ?? null);
@@ -195,7 +215,7 @@ export default function DashboardPage() {
 
   const needsAttention = useMemo(() => {
     return senderCampaigns
-      .filter((c) => c.cancelledAt !== null)
+      .filter((c) => c.cancelledAt !== null && !c.instantRefunded && !c.streamSettled)
       .map((c) => ({
         campaign: c,
         graceState: getGracePeriodState(BigInt(c.cancelledAt!), nowTs),
@@ -215,17 +235,21 @@ export default function DashboardPage() {
       .slice(0, 5);
   }, [vestingCampaigns]);
 
-  const isLoading =
-    senderQuery.isLoading || recipientQuery.isLoading || localCampaigns.isLoading;
+  // Count-based stats only need sender/recipient DB queries to resolve.
+  // localCampaigns is a fallback (only used on DB error) — don't block counts on its slow RPC fetch.
+  const countLoading = senderQuery.isLoading || recipientQuery.isLoading;
+  // TVL needs sender mint decimals; other count cards don't.
+  const tvlLoading = countLoading || (senderMintAddresses.length > 0 && decimalsLoading);
 
   const claimableAmount = vestingSummary?.totalClaimable ?? 0n;
   const claimableStreams = vestingSummary?.claimableCampaigns ?? counts.claimableCount;
 
   return (
-    <div className="mx-auto max-w-5xl space-y-8">
+    <div className="mx-auto max-w-5xl space-y-5 sm:space-y-8">
       <div>
-        <h1 className="text-2xl font-semibold tracking-tight text-white">Dashboard</h1>
-        <p className="mt-1 text-[13px] text-[#8b92a5]">
+        <div className="mb-2 font-mono text-[11px] font-medium uppercase tracking-[0.18em] text-[#7c3aed]/70">Overview</div>
+        <h1 className="text-[22px] sm:text-[28px] font-semibold tracking-tight text-[#e5e7eb]">Dashboard</h1>
+        <p className="mt-1 font-mono text-[12px] text-[#64748b]">
           {publicKey
             ? `Welcome back, ${publicKey.toBase58().slice(0, 4)}...${publicKey.toBase58().slice(-4)}`
             : "Connect your wallet to get started"}
@@ -233,14 +257,14 @@ export default function DashboardPage() {
       </div>
 
       {!publicKey ? (
-        <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-white/[0.08] bg-white/[0.02] px-8 py-16 text-center">
-          <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-violet-600/15 text-violet-400">
+        <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-[#222838] bg-[#13161f]/60 px-8 py-16 text-center">
+          <div className="flex h-14 w-14 items-center justify-center rounded-2xl border border-[#7c3aed]/20 bg-[#7c3aed]/10 text-[#a78bfa]">
             <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <rect x="2" y="6" width="20" height="12" rx="2" /><path d="M22 10H2" /><path d="M6 14h.01" />
             </svg>
           </div>
-          <h2 className="mt-4 text-[15px] font-medium text-white">No wallet connected</h2>
-          <p className="mt-1 text-[13px] text-[#8b92a5]">
+          <h2 className="mt-4 text-[15px] font-medium text-[#e5e7eb]">No wallet connected</h2>
+          <p className="mt-1 text-[13px] text-[#64748b]">
             Connect your Solana wallet using the button in the top right to view your streams.
           </p>
         </div>
@@ -250,23 +274,23 @@ export default function DashboardPage() {
           {claimableStreams > 0 && (
             <Link
               href="/portfolio"
-              className="flex items-center gap-3 rounded-2xl border border-emerald-500/20 bg-emerald-500/[0.05] p-5 transition hover:border-emerald-500/40"
+              className="flex items-center gap-2.5 sm:gap-3 rounded-xl sm:rounded-2xl border border-[#14f1d9]/20 bg-[#14f1d9]/[0.04] p-3.5 sm:p-5 transition-all hover:border-[#14f1d9]/35 hover:bg-[#14f1d9]/[0.06]"
             >
-              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-emerald-500/20 text-emerald-400">
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <div className="flex h-8 w-8 sm:h-10 sm:w-10 shrink-0 items-center justify-center rounded-lg sm:rounded-xl border border-[#14f1d9]/20 bg-[#14f1d9]/10 text-[#14f1d9]">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="sm:h-5 sm:w-5">
                   <path d="M22 11.08V12a10 10 0 11-5.93-9.14" />
                   <polyline points="22 4 12 14.01 9 11.01" />
                 </svg>
               </div>
-              <div className="flex-1">
-                <p className="text-[14px] font-medium text-emerald-400">
-                  {claimableStreams} stream{claimableStreams > 1 ? "s" : ""} ready to claim!
+              <div className="flex-1 min-w-0">
+                <p className="text-[13px] sm:text-[14px] font-medium text-[#14f1d9]">
+                  {claimableStreams} stream{claimableStreams > 1 ? "s" : ""} ready to claim
                 </p>
-                <p className="text-[12px] text-[#8b92a5]">
-                  {formatTokenAmount(claimableAmount, vestingAggregateDecimals)} tokens available for withdrawal. Click to view.
+                <p className="font-mono text-[10px] sm:text-[11px] text-[#64748b] truncate">
+                  {formatTokenAmount(claimableAmount, vestingAggregateDecimals)} tokens available
                 </p>
               </div>
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="text-[#8b92a5]">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="shrink-0 text-[#64748b]">
                 <polyline points="9 18 15 12 9 6" />
               </svg>
             </Link>
@@ -275,7 +299,7 @@ export default function DashboardPage() {
           {/* Needs Attention */}
           {needsAttention.length > 0 && (
             <div className="space-y-3">
-              <h2 className="text-[13px] font-medium uppercase tracking-[0.1em] text-[#555d73]">
+              <h2 className="font-mono text-[11px] font-medium uppercase tracking-[0.18em] text-[#64748b]">
                 Needs Attention
               </h2>
               {needsAttention.map(({ campaign, graceState }) => {
@@ -286,21 +310,21 @@ export default function DashboardPage() {
                     <Link
                       key={campaign.treeAddress}
                       href={`/campaign/${campaign.treeAddress}`}
-                      className="flex items-center gap-3 rounded-2xl border border-amber-500/20 bg-amber-500/[0.05] p-5 transition hover:border-amber-500/40"
+                      className="flex items-center gap-3 rounded-2xl border border-amber-500/25 bg-[#13161f] p-5 transition-all hover:border-amber-500/40"
                     >
-                      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-amber-500/20 text-amber-400">
-                        <span className="text-lg">⚠</span>
+                      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-amber-500/20 bg-amber-500/10 text-amber-400">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
                       </div>
                       <div className="flex-1">
                         <p className="text-[14px] font-medium text-amber-400">
                           {name} —{" "}
                           <GracePeriodCountdown cancelledAt={BigInt(campaign.cancelledAt!)} />
                         </p>
-                        <p className="text-[12px] text-[#8b92a5]">
-                          Recipients can still claim vested tokens before expiry.
+                        <p className="font-mono text-[11px] text-[#64748b]">
+                          Recipients can still claim vested tokens before expiry
                         </p>
                       </div>
-                      <span className="text-[12px] font-medium text-amber-400">Claim Now →</span>
+                      <span className="font-mono text-[11px] font-medium text-amber-400">Claim Now →</span>
                     </Link>
                   );
                 }
@@ -308,124 +332,29 @@ export default function DashboardPage() {
                   <Link
                     key={campaign.treeAddress}
                     href={`/campaign/${campaign.treeAddress}`}
-                    className="flex items-center gap-3 rounded-2xl border border-red-500/20 bg-red-500/[0.05] p-5 transition hover:border-red-500/40"
+                    className="flex items-center gap-3 rounded-2xl border border-red-500/25 bg-[#13161f] p-5 transition-all hover:border-red-500/40"
                   >
-                    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-red-500/20 text-red-400">
-                      <span className="text-lg">⚠</span>
+                    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-red-500/20 bg-red-500/10 text-red-400">
+                      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
                     </div>
                     <div className="flex-1">
                       <p className="text-[14px] font-medium text-red-400">
                         {name} — Grace period expired
                       </p>
-                      <p className="text-[12px] text-[#8b92a5]">
-                        Unvested tokens can be withdrawn by the creator.
+                      <p className="font-mono text-[11px] text-[#64748b]">
+                        Unvested tokens can be withdrawn by the creator
                       </p>
                     </div>
-                    <span className="text-[12px] font-medium text-red-400">Withdraw Unvested →</span>
+                    <span className="font-mono text-[11px] font-medium text-red-400">Withdraw →</span>
                   </Link>
                 );
               })}
             </div>
           )}
 
-          {/* Summary Stats */}
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            <StatCard label="Total Streams" value={isLoading ? "..." : String(counts.total)} sub="All campaigns" />
-            <StatCard label="Active" value={isLoading ? "..." : String(counts.active)} sub="Currently vesting" accent />
-            <StatCard
-              label="TVL"
-              value={isLoading ? "..." : formatTokenAmount(counts.tvl, tvlAggregateDecimals)}
-              sub={mixedMintAggregateSub(senderMintAddresses.length, "Locked value")}
-            />
-            <StatCard label="As Sender" value={isLoading ? "..." : String(counts.sender)} sub="Streams you created" />
-            <StatCard label="As Recipient" value={isLoading ? "..." : String(counts.recipient)} sub="Streams you receive" />
-            <StatCard
-              label="Claimable Now"
-              value={vestingLoading ? "..." : formatTokenAmount(claimableAmount, vestingAggregateDecimals)}
-              sub={mixedMintAggregateSub(
-                vestingMintAddresses.length,
-                claimableStreams > 0
-                  ? `${claimableStreams} stream${claimableStreams > 1 ? "s" : ""} ready`
-                  : "Ready to withdraw",
-              )}
-              accent
-            />
-          </div>
-
-          {/* Vesting Progress Summary */}
-          <div>
-            <div className="mb-3 flex items-center justify-between">
-              <h2 className="text-[13px] font-medium uppercase tracking-[0.1em] text-[#555d73]">
-                Vesting Progress
-              </h2>
-              {vestingCampaigns.length > 0 && (
-                <Link href="/portfolio" className="text-[12px] text-violet-400 transition hover:text-violet-300">
-                  View All →
-                </Link>
-              )}
-            </div>
-
-            {vestingLoading ? (
-              <div className="grid gap-3 sm:grid-cols-2">
-                {[...Array(2)].map((_, i) => (
-                  <div key={i} className="h-28 animate-pulse rounded-2xl border border-white/[0.06] bg-white/[0.02]" />
-                ))}
-              </div>
-            ) : topVestingCampaigns.length === 0 ? (
-              <div className="rounded-2xl border border-white/[0.06] bg-white/[0.02] p-5">
-                <p className="text-[13px] text-[#555d73]">No vesting streams yet.</p>
-              </div>
-            ) : (
-              <div className="grid gap-3 sm:grid-cols-2">
-                {topVestingCampaigns.map((campaign) => {
-                  const name =
-                    campaign.metadata?.name ?? truncateAddress(campaign.treeAddress);
-                  const vestedSoFar = BigInt(campaign.progress.vestedSoFar);
-                  const totalEntitled = BigInt(campaign.progress.totalEntitled);
-                  const claimable = BigInt(campaign.progress.claimable);
-                  const nextUnlockLabel =
-                    campaign.leaf.releaseType === 2 && !campaign.milestoneReleased
-                      ? "Milestone not released"
-                      : campaign.progress.nextUnlock
-                        ? formatCountdown(BigInt(campaign.progress.nextUnlock), nowTs)
-                        : "Complete";
-
-                  return (
-                    <Link
-                      key={`${campaign.treeAddress}-${campaign.leaf.leafIndex}`}
-                      href={`/campaign/${campaign.treeAddress}`}
-                      className="rounded-2xl border border-white/[0.06] bg-white/[0.02] p-4 transition hover:border-violet-500/20"
-                    >
-                      <div className="flex items-center justify-between gap-2">
-                        <span className="truncate text-[14px] font-medium text-white">{name}</span>
-                        <span className="shrink-0 text-[11px] text-[#555d73]">
-                          {getVestingTypeLabel(campaign.leaf.releaseType)}
-                        </span>
-                      </div>
-                      <div className="mt-3">
-                        <ProgressBar
-                          percentage={campaign.progress.progressPercent}
-                          size="sm"
-                          colorClass={claimable > 0n ? "bg-emerald-500" : "bg-violet-500"}
-                        />
-                        <div className="mt-2 text-[11px] text-[#555d73]">
-                          {fmtAmount(vestedSoFar, campaign)} / {fmtAmount(totalEntitled, campaign)} vested
-                          {" · "}Next: {nextUnlockLabel}
-                        </div>
-                      </div>
-                    </Link>
-                  );
-                })}
-              </div>
-            )}
-          </div>
-
-          {/* Recent Activity */}
-          <ActivityFeed address={walletAddress!} limit={10} />
-
           {/* Quick Actions */}
           <div>
-            <h2 className="mb-3 text-[13px] font-medium uppercase tracking-[0.1em] text-[#555d73]">
+            <h2 className="mb-3 font-mono text-[11px] font-medium uppercase tracking-[0.18em] text-[#64748b]">
               Quick Actions
             </h2>
             <div className="grid gap-3 sm:grid-cols-2">
@@ -454,8 +383,157 @@ export default function DashboardPage() {
               />
             </div>
           </div>
+
+          {/* Summary Stats */}
+          <div className="grid grid-cols-2 gap-2 sm:gap-4 lg:grid-cols-3">
+            <StatCard label="Total Streams" value={String(counts.total)} sub="All campaigns" loading={countLoading} />
+            <StatCard label="Active" value={String(counts.active)} sub="Currently vesting" accent loading={countLoading} />
+            <StatCard
+              label="TVL"
+              value={formatTokenAmount(counts.tvl, tvlAggregateDecimals)}
+              sub={mixedMintAggregateSub(tvlAggregateDecimals !== null ? 1 : senderMintAddresses.length, "Locked value")}
+              loading={tvlLoading}
+            />
+            <StatCard label="As Sender" value={String(counts.sender)} sub="Streams you created" loading={countLoading} />
+            <StatCard label="As Recipient" value={String(counts.recipient)} sub="Streams you receive" loading={countLoading} />
+            <StatCard
+              label="Claimable Now"
+              value={formatTokenAmount(claimableAmount, vestingAggregateDecimals)}
+              sub={mixedMintAggregateSub(
+                vestingAggregateDecimals !== null ? 1 : vestingMintAddresses.length,
+                claimableStreams > 0
+                  ? `${claimableStreams} stream${claimableStreams > 1 ? "s" : ""} ready`
+                  : "Ready to withdraw",
+              )}
+              accent
+              loading={vestingLoading || (vestingMintAddresses.length > 0 && decimalsLoading)}
+            />
+          </div>
+
+          {/* Vesting Progress Summary */}
+          <div>
+            <div className="mb-3 flex items-center justify-between">
+              <h2 className="font-mono text-[11px] font-medium uppercase tracking-[0.18em] text-[#64748b]">
+                Vesting Progress
+              </h2>
+              {vestingCampaigns.length > 0 && (
+                <Link href="/portfolio" className="text-[12px] text-violet-400 transition hover:text-violet-300">
+                  View All →
+                </Link>
+              )}
+            </div>
+
+            {vestingLoading || (vestingMintAddresses.length > 0 && decimalsLoading) ? (
+              <div className="grid gap-3 sm:grid-cols-2">
+                {[...Array(2)].map((_, i) => (
+                  <div key={i} className="h-28 animate-pulse rounded-2xl border border-[#222838] bg-[#13161f]" />
+                ))}
+              </div>
+            ) : topVestingCampaigns.length === 0 ? (
+              <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-[#222838] bg-[#13161f]/60 px-8 py-10 text-center">
+                <div className="flex h-10 w-10 items-center justify-center rounded-xl border border-[#222838] bg-[#161a25] text-[#64748b]">
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                    <polyline points="22 12 18 12 15 21 9 3 6 12 2 12" />
+                  </svg>
+                </div>
+                <p className="mt-3 text-[13px] font-medium text-[#b4b9c5]">No vesting streams yet</p>
+                <p className="mt-1 font-mono text-[11px] text-[#64748b]">Streams you receive will appear here</p>
+              </div>
+            ) : (
+              <VestingProgressGrid
+                campaigns={topVestingCampaigns}
+                fmtAmount={fmtAmount}
+                nowTs={nowTs}
+              />
+            )}
+          </div>
+
+          {/* Recent Activity */}
+          <ActivityFeed
+            address={walletAddress!}
+            limit={10}
+            mintDecimals={activityMintDecimals}
+            viewAllHref="/activity"
+          />
         </>
       )}
     </div>
+  );
+}
+
+const MOBILE_VESTING_LIMIT = 2;
+
+function VestingProgressGrid({
+  campaigns,
+  fmtAmount,
+  nowTs,
+}: {
+  campaigns: ReturnType<typeof useVestingProgressSummary>["campaigns"];
+  fmtAmount: (raw: bigint, campaign: ReturnType<typeof useVestingProgressSummary>["campaigns"][number]) => string;
+  nowTs: bigint;
+}) {
+  const [expanded, setExpanded] = useState(false);
+  const showExpand = campaigns.length > MOBILE_VESTING_LIMIT;
+
+  return (
+    <>
+      <div className="grid gap-3 sm:grid-cols-2">
+        {campaigns.map((campaign, idx) => {
+          const name = campaign.metadata?.name ?? truncateAddress(campaign.treeAddress);
+          const vestedSoFar = BigInt(campaign.progress.vestedSoFar);
+          const totalEntitled = BigInt(campaign.progress.totalEntitled);
+          const claimable = BigInt(campaign.progress.claimable);
+          const nextUnlockLabel =
+            campaign.leaf.releaseType === 2 && !campaign.milestoneReleased
+              ? "Milestone not released"
+              : campaign.progress.nextUnlock
+                ? formatCountdown(BigInt(campaign.progress.nextUnlock), nowTs)
+                : "Complete";
+
+          return (
+            <Link
+              key={`${campaign.treeAddress}-${campaign.leaf.leafIndex}`}
+              href={`/campaign/${campaign.treeAddress}`}
+              className={`rounded-xl border border-[#222838] bg-[#13161f] p-3 sm:rounded-2xl sm:p-4 transition-all hover:border-[#7c3aed]/25 hover:bg-[#161a25] ${
+                !expanded && showExpand && idx >= MOBILE_VESTING_LIMIT ? "hidden sm:block" : ""
+              }`}
+            >
+              <div className="flex items-center justify-between gap-2">
+                <span className="truncate text-[13px] sm:text-[14px] font-medium text-[#e5e7eb]">{name}</span>
+                <span className="shrink-0 font-mono text-[10px] tracking-[0.1em] text-[#64748b]">
+                  {getVestingTypeLabel(campaign.leaf.releaseType)}
+                </span>
+              </div>
+              <div className="mt-2 sm:mt-3">
+                <div className="h-1 overflow-hidden rounded-full bg-[#222838]">
+                  <div
+                    className="h-full rounded-full transition-all duration-500 ease-out"
+                    style={{
+                      width: `${Math.min(100, campaign.progress.progressPercent)}%`,
+                      background: claimable > 0n
+                        ? "linear-gradient(90deg, #7c3aed, #14f1d9)"
+                        : "#7c3aed",
+                    }}
+                  />
+                </div>
+                <div className="mt-1.5 sm:mt-2 font-mono text-[10px] text-[#64748b]">
+                  {fmtAmount(vestedSoFar, campaign)} / {fmtAmount(totalEntitled, campaign)} vested
+                  {" · "}Next: {nextUnlockLabel}
+                </div>
+              </div>
+            </Link>
+          );
+        })}
+      </div>
+      {showExpand && !expanded && (
+        <button
+          type="button"
+          onClick={() => setExpanded(true)}
+          className="mt-2 w-full rounded-xl border border-dashed border-[#222838] py-2 text-center font-mono text-[11px] text-[#64748b] transition hover:border-[#7c3aed]/30 hover:text-violet-400 sm:hidden"
+        >
+          Show {campaigns.length - MOBILE_VESTING_LIMIT} more streams
+        </button>
+      )}
+    </>
   );
 }

@@ -407,6 +407,40 @@ On locked-down machines this may fail with `sudo: a password is required`; insta
 
 CI runs this in `.github/workflows/web-ci.yml` using a Postgres service container.
 
+### E2E test suites
+
+| File | Tests | Coverage |
+|------|-------|----------|
+| `campaign-actions.spec.ts` | 33+ | Pause, cancel, instant refund, withdraw, milestone, clawback UI (grace banners, needs-action tab, sidebar dot), responsive 375px |
+| `wrap-sol.spec.ts` | 16 | WrapSolModal: trigger, content, tabs, submit, max, close |
+| `campaign-journey.spec.ts` | — | End-to-end campaign creation + funding |
+| `signing/*.spec.ts` | — | Real signing with local validator |
+
+### Native SOL / Token-2022 (T22) manual devnet checklist
+
+These flows require a funded devnet wallet and cannot be fully automated in CI. Run manually before release:
+
+| # | Test | Steps | Expected |
+|---|------|-------|----------|
+| T19 | Token picker shows wSOL | Open create cliff → Select Token | wSOL row appears with balance |
+| T20 | Wrap SOL modal | Token picker → "Wrap / Unwrap SOL" | Modal opens, SOL/wSOL balances shown |
+| T21 | Wrap SOL transaction | Enter amount → click Wrap | wSOL balance increases, SOL decreases |
+| T22 | Create campaign with wSOL | Wrap SOL → select wSOL → create cliff campaign via CSV | Campaign created, funded with wSOL |
+| T23 | Token-2022 mint rejection | Use T22-extension mint in CSV | Parse error: "Token-2022 extensions not supported" |
+| T24 | Unwrap wSOL | Wrap modal → Unwrap tab → enter amount → Unwrap | SOL balance increases |
+
+**Setup:**
+```bash
+# Fund devnet wallet
+solana airdrop 2 --url devnet
+
+# Start dev server against devnet
+cd apps/web
+NEXT_PUBLIC_SOLANA_RPC=https://api.devnet.solana.com pnpm dev
+```
+
+**Automated coverage:** `wrap-sol.spec.ts` covers T19–T20 UI paths with mock wallet. T21–T24 require real transactions.
+
 ## k6 load testing
 
 Scripts live in `apps/web/tests/load/`. Run from `apps/web/`:

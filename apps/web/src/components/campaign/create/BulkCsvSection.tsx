@@ -1,6 +1,7 @@
 "use client";
 
 import type { BulkCsvParseResult, PreparedBulkCampaign } from "@/lib/campaign/bulk";
+import { Button } from "@/components/ui/button";
 import {
   CARD,
   SECTION,
@@ -58,8 +59,9 @@ export function BulkCsvSection({
         } />
 
         {/* Download template */}
-        <button
+        <Button
           type="button"
+          variant="ghost"
           onClick={() => {
             const blob = new Blob([csvTemplate], { type: "text/csv" });
             const url = URL.createObjectURL(blob);
@@ -69,11 +71,11 @@ export function BulkCsvSection({
             a.click();
             URL.revokeObjectURL(url);
           }}
-          className="inline-flex items-center gap-2 rounded-lg border border-white/[0.08] px-3 py-2 text-[12px] font-medium text-[#8b92a5] transition hover:border-white/[0.16] hover:text-white"
+          className="h-auto gap-2 rounded-lg border border-white/[0.08] px-3 py-2 text-[12px] font-medium text-[#8b92a5] hover:border-white/[0.16] hover:bg-transparent hover:text-white"
         >
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg>
           Download {vestingType} CSV template
-        </button>
+        </Button>
 
         {/* File upload */}
         <label className="flex cursor-pointer items-center justify-center gap-2 rounded-xl border border-dashed border-white/[0.12] bg-white/[0.02] px-4 py-6 text-[13px] text-[#8b92a5] transition hover:border-white/[0.2] hover:bg-white/[0.04]">
@@ -105,13 +107,13 @@ export function BulkCsvSection({
           onChange={(e) => onCsvTextChange(e.target.value)}
           className={`${INPUT} min-h-[140px] font-mono text-[11px]`}
         />
-        <button
+        <Button
           type="button"
           onClick={onParse}
-          className="rounded-xl bg-white/[0.06] px-4 py-2.5 text-[13px] font-medium text-white transition hover:bg-white/[0.1]"
+          className="h-auto rounded-xl bg-white/[0.06] px-4 py-2.5 text-[13px] font-medium text-white hover:bg-white/[0.1]"
         >
           Parse & Validate
-        </button>
+        </Button>
 
         {csvResult?.issues.length ? (
           <div className="space-y-1">

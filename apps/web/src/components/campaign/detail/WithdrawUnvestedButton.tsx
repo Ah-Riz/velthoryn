@@ -151,14 +151,14 @@ export const WithdrawUnvestedButton = forwardRef<HTMLButtonElement, Props>(funct
               <button
                 onClick={() => setConfirmOpen(false)}
                 disabled={loading}
-                className="flex-1 rounded-xl border border-white/[0.08] py-2.5 text-[13px] text-[#8b92a5] transition hover:bg-white/[0.04] disabled:opacity-50"
+                className="flex-1 rounded-xl border border-white/[0.08] py-2.5 text-[13px] text-[#8b92a5] transition hover:bg-white/[0.04] disabled:cursor-not-allowed disabled:opacity-50"
               >
                 Go Back
               </button>
               <button
                 onClick={handleWithdraw}
                 disabled={loading}
-                className="flex-1 rounded-xl bg-amber-600 py-2.5 text-[13px] font-medium text-white transition hover:bg-amber-500 disabled:opacity-50"
+                className="flex-1 rounded-xl bg-amber-600 py-2.5 text-[13px] font-medium text-white transition hover:bg-amber-500 disabled:cursor-not-allowed disabled:opacity-50"
               >
                 {loading ? "Withdrawing..." : "Confirm Withdraw"}
               </button>

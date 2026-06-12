@@ -61,10 +61,17 @@ export function WalletTokensProvider({ children }: { children: React.ReactNode }
     setLoading(true);
     setError(null);
 
+    const fetchTimeout = new Promise<never>((_, reject) =>
+      setTimeout(() => reject(new Error("Wallet token fetch timed out — check your connection")), 30_000),
+    );
+
     try {
-      const [response, solBalance] = await Promise.all([
-        connection.getParsedTokenAccountsByOwner(publicKey, { programId: TOKEN_PROGRAM_ID }),
-        connection.getBalance(publicKey),
+      const [response, solBalance] = await Promise.race([
+        Promise.all([
+          connection.getParsedTokenAccountsByOwner(publicKey, { programId: TOKEN_PROGRAM_ID }),
+          connection.getBalance(publicKey),
+        ]),
+        fetchTimeout,
       ]);
       const splTokens = normalizeWalletTokens(response.value);
 
@@ -77,8 +84,9 @@ export function WalletTokensProvider({ children }: { children: React.ReactNode }
       };
 
       setTokens([nativeSolEntry, ...splTokens]);
+      setError(null);
     } catch (err) {
-      setTokens([]);
+      // Don't clear existing tokens on error — stale data is better than nothing
       setError(err instanceof Error ? err.message : "Failed to load wallet tokens.");
     } finally {
       fetchingRef.current = false;

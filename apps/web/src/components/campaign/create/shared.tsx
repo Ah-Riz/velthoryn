@@ -1,6 +1,9 @@
 "use client";
 
 import Link from "next/link";
+import { Label } from "@/components/ui/label";
+import { Input } from "@/components/ui/input";
+export { Input };
 
 // Shared Tailwind class constants
 export const CARD = "rounded-2xl border border-white/[0.08] bg-[#0d1117]";
@@ -102,16 +105,18 @@ export function Field({
   error,
   hint,
   hintClassName,
+  inputId,
 }: {
   label: string;
   input: React.ReactNode;
   error?: string | null;
   hint?: string;
   hintClassName?: string;
+  inputId?: string;
 }) {
   return (
     <div>
-      <label className={LABEL}>{label}</label>
+      <Label htmlFor={inputId} className={`${LABEL} mb-2 block`}>{label}</Label>
       {input}
       {error ? (
         <p className="mt-2 text-[12px] text-red-400">{error}</p>

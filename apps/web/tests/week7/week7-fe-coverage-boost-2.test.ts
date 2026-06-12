@@ -295,9 +295,14 @@ describe("Vesting list — multi-leaf edge cases", () => {
     expect(getMultiLeafRecipientStreamStatus(streams, 300n)).toBe("Claimed");
   });
 
-  it("cancelled multi-leaf returns Cancelled", () => {
-    const streams = [makeStream(500, "0", 100, 200, 150), makeStream(500, "0", 100, 200, 150)];
+  it("cancelled multi-leaf returns Cancelled when no vesting before cancel", () => {
+    const streams = [makeStream(500, "0", 100, 200, 50), makeStream(500, "0", 100, 200, 50)];
     expect(getMultiLeafRecipientStreamStatus(streams, 300n)).toBe("Cancelled");
+  });
+
+  it("cancelled multi-leaf returns Claimable when partially vested at cancel", () => {
+    const streams = [makeStream(500, "0", 100, 200, 150), makeStream(500, "0", 100, 200, 150)];
+    expect(getMultiLeafRecipientStreamStatus(streams, 300n)).toBe("Claimable");
   });
 
   it("paused multi-leaf returns Paused", () => {
