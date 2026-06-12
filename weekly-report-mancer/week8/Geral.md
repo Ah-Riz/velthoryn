@@ -67,6 +67,27 @@ Gap closure Phase 4c (#17) + Phase 4d (#18) from `week8-gap-closure.md`:
 ### 10. Test Branch Merge + Conflict Resolution (Jun 11)
 Pulled 11 commits from `origin/test` (Lana's Week 8 gap closure: KI#29 BE validation, k6 load scripts, CU re-audit, CI hardening, ops verification tests, doc updates) into `dev_geral`. Resolved 1 merge conflict in `docs/TESTING.md` — kept both Geral's E2E devnet checklist section and Lana's k6/SC benchmarks section.
 
+### 11. Bug Fix Plan — Task 1: Lifecycle State Model (Jun 12, in progress)
+Started `BUG_FIX_PLAN.md` Task 1 (P0 Cancel/Grace/Settled state model). Steps 1–4 complete; Step 5 (test run) deferred to later session.
+
+**Changes:**
+- `apps/web/src/lib/vesting/list.ts`:
+  - Added `CampaignLifecycle` type (8 states: `active | paused | claimable | claimed | cancelled_grace | cancelled_expired | instant_refunded | settled`)
+  - Added `isGracePeriodVisible()` helper — checks `cancelledAt != null && !instantRefunded && !streamSettled`
+  - Fixed `getSenderStreamStatus()` — `instantRefunded` now also returns `"Settled"` (was missing)
+  - Fixed `getRecipientStreamStatus()` and `getMultiLeafRecipientStreamStatus()` — check `streamSettled`/`instantRefunded` explicitly before falling through to generic `"Cancelled"`; moved claimable check before `cancelledAt` check so cancelled campaigns with vested balance show `"Claimable"`
+- `apps/web/src/app/api/beneficiary/[address]/vesting-progress/route.ts`:
+  - Query now selects `c.instant_refunded` and `EXISTS(SELECT 1 FROM stream_cancel_events WHERE campaign_id = c.id) AS stream_settled`
+  - Response JSON now includes `instantRefunded` and `streamSettled` lifecycle flags
+- `apps/web/tests/api/vesting-progress.test.ts`:
+  - Added test: cancelled linear campaign retains claimable amount for vested-but-unclaimed tokens (amount=1M, cancelledAt=midpoint → claimable=500K)
+  - Added test: `instantRefunded: true` campaigns return `claimable=0` and correct lifecycle flags
+  - Added test: stream-settled campaigns (via `stream_cancel_events` row) return `streamSettled: true`
+
+**Remaining from BUG_FIX_PLAN:**
+- Task 1 Step 5: run `vesting-progress.test.ts` + `CampaignStatusBanner.test.ts`
+- Tasks 2–10: all pending (see `BUG_FIX_PLAN.md` for full breakdown)
+
 ---
 
 ## Work Split with Lana
@@ -91,7 +112,8 @@ Pulled 11 commits from `origin/test` (Lana's Week 8 gap closure: KI#29 BE valida
 ## Blockers
 
 - **Native SOL create flows**: Lana exposed `*_native` instructions in BE. FE needs to detect `NATIVE_SOL_MINT` and route to native instruction path. Not blocking Week 8 submission — devnet tests use wrapped SOL. T19/T20 UI paths verified in `wrap-sol.spec.ts`.
-- **Instant refund UI distinction**: BE exposes `instantRefundEligible` flag. `CampaignStatusBanner` shows refund status correctly. Full cancel flow branching (instant vs grace) deferred to Week 9.
+- **Lifecycle state model (Task 1)**: `isGracePeriodVisible`, `CampaignLifecycle` type, and `instantRefunded`/`streamSettled` flags added to API + FE helpers. Tests written. Test run + Tasks 2–10 deferred to next session.
+- **Instant refund UI distinction**: `instantRefunded` lifecycle flag now propagated from API to FE via `vesting-progress` route. Full cancel modal branching (instant vs grace) still needs Task 3 work.
 - **Responsive E2E** (#17): ✅ Done — 4 tests at 375px added in `campaign-actions.spec.ts`.
 
 ---
@@ -100,8 +122,8 @@ Pulled 11 commits from `origin/test` (Lana's Week 8 gap closure: KI#29 BE valida
 
 | Metric | Value |
 |--------|-------|
-| Files changed (Geral, Week 8 total) | 50+ across 4 commit sessions |
-| Test suite: vitest | ✅ 945/946 pass |
+| Files changed (Geral, Week 8 total) | 53+ across 5 commit sessions |
+| Test suite: vitest | ✅ 945/946 pass (pre-Task 1 tests; Task 1 tests not yet run) |
 | Test suite: next build | ✅ 0 errors, 0 warnings |
 | Next.js bundle: static assets | 19MB total |
 | Next.js bundle: framework chunk | 185KB |
