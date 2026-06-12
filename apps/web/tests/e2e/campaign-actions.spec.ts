@@ -867,7 +867,7 @@ test.describe("Responsive clawback UI (375px)", () => {
     expect(pageErrors).toEqual([]);
   });
 
-  test("needs action tab wraps on narrow viewport", async ({ page }) => {
+  test("needs action filter uses dropdown on narrow viewport", async ({ page }) => {
     const pageErrors = collectRelevantPageErrors(page);
     const cancelledAt = now() - 86400;
 
@@ -894,17 +894,17 @@ test.describe("Responsive clawback UI (375px)", () => {
     await gotoWithRetry(page, "/campaigns");
     await waitForCampaignListMocks(page);
 
-    const allTab = page.getByRole("button", { name: /^all\b/i });
-    await expect(allTab).toBeVisible({ timeout: 20_000 });
+    // On mobile (375px) tab buttons are hidden; native select dropdown shown instead
+    await expect(page.getByRole("button", { name: /^all\b/i })).not.toBeVisible({ timeout: 20_000 });
     await expect(page.getByText(/loading streams/i)).not.toBeVisible({ timeout: 20_000 });
 
-    const needsActionTab = page.getByRole("button", { name: /needs action/i });
-    await expect(needsActionTab).toBeVisible();
-    await expect(needsActionTab).toBeInViewport();
+    const filterSelect = page.locator("select").first();
+    await expect(filterSelect).toBeVisible();
+    await expect(filterSelect).toBeInViewport();
 
-    const tabBox = await needsActionTab.boundingBox();
-    expect(tabBox).toBeTruthy();
-    expect(tabBox!.x + tabBox!.width).toBeLessThanOrEqual(375);
+    const selectBox = await filterSelect.boundingBox();
+    expect(selectBox).toBeTruthy();
+    expect(selectBox!.x + selectBox!.width).toBeLessThanOrEqual(375);
     expect(pageErrors).toEqual([]);
   });
 
