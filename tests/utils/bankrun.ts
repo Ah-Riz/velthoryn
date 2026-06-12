@@ -36,9 +36,14 @@ export async function warpClock(
   unixTimestamp: number,
 ): Promise<void> {
   const currentClock = await context.banksClient.getClock();
+  const nextSlot = currentClock.slot + 1n;
+  // Advance the bank slot so the blockhash ring produces a fresh hash.
+  // Without this, consecutive identical transactions share the same recent
+  // blockhash → same signature → "already been processed" error.
+  context.warpToSlot(nextSlot);
   context.setClock(
     new Clock(
-      currentClock.slot + 1n,
+      nextSlot,
       BigInt(unixTimestamp),
       currentClock.epoch,
       currentClock.leaderScheduleEpoch,
