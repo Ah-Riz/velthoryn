@@ -13,8 +13,8 @@ vi.mock("@solana/wallet-adapter-react", () => ({
 
 import { useMintDecimals } from "@/hooks/useMintDecimals";
 
-const MINT_ALPHA = Keypair.generate().publicKey.toBase58();
-const MINT_BETA = Keypair.generate().publicKey.toBase58();
+let MINT_ALPHA: string;
+let MINT_BETA: string;
 
 function parsedMintAccount(decimals: number) {
   return {
@@ -32,6 +32,8 @@ function parsedMintAccount(decimals: number) {
 describe("useMintDecimals", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    MINT_ALPHA = Keypair.generate().publicKey.toBase58();
+    MINT_BETA = Keypair.generate().publicKey.toBase58();
   });
 
   it("returns empty map for no mint addresses", async () => {
