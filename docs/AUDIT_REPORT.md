@@ -9,7 +9,7 @@
 | **Scope** | `programs/vesting/` (on-chain program only) |
 | **Audit date** | 2026-05-17 |
 | **Last updated** | 2026-05-17 (post-audit hardening + maturity pass) |
-| **Status** | VEL-001 remediated; VEL-009/VEL-010 fixed; CI includes Trident fuzz smoke |
+| **Status** | VEL-001/VEL-012 remediated; VEL-009/VEL-010 fixed; CI includes Trident fuzz smoke |
 | **Frameworks** | Solana DeFi vulnerability analyst, DeFi security audit agent, six-pattern scanner, Trail of Bits code maturity (9-category) |
 | **Tooling** | `cargo audit`, `cargo geiger`, `cargo tarpaulin`, Trident (`trident-tests/`) |
 | **Companion** | [SECURITY.md](./SECURITY.md), [PROGRAM.md](./PROGRAM.md), [MATURITY_REPORT.md](./MATURITY_REPORT.md) |
@@ -25,6 +25,8 @@ A focused security review of the Velthoryn vesting program was performed using t
 **One high-severity issue** was identified in the interaction between `withdraw` and `close_claim_record`, allowing a beneficiary on single-recipient streams to reset per-user claim accounting and receive duplicate payouts for the same vested tranche. **Remediation has been implemented** in program code and covered by regression tests (EXPLOIT 11 in `security.spec.ts` and `vesting.clock.spec.ts`).
 
 **Post-audit hardening (same release train):** on-chain **Merkle proof length bounds** (VEL-009), **timing-safe admin API auth** for the sync route (VEL-010), and **Trident fuzz smoke** in CI. No new high-severity on-chain issues were found in these changes.
+
+**Pause+cancel remediation (2026-05):** **VEL-012** (pause+cancel beneficiary lockout during grace) fixed — `cancel_campaign` / `cancel_stream` now clear `paused`, and `claim` / `withdraw` allow payouts on cancelled campaigns regardless of stale pause state.
 
 No critical arbitrary-CPI, PDA spoofing, or missing-signer issues were found in the reviewed codebase.
 
@@ -104,6 +106,7 @@ Beneficiary ──► claim (Merkle proof)  OR  withdraw (leaf_count == 1)
 | ID | Severity | Title | Status |
 |----|----------|-------|--------|
 | VEL-001 | **High** | Double payout via `withdraw` → `close_claim_record` → `withdraw` | **Fixed** |
+| VEL-012 | **High** | Pause+Cancel Lockout — grace-period claims blocked after pause then cancel | **Fixed** |
 | VEL-002 | Low | Trail of Bits `solana-lints` not enabled in CI | Open |
 | VEL-003 | Informational | `update_root` does not reset existing `ClaimRecord` state | Accepted (governance) |
 | VEL-004 | Informational | Multiple linear leaves per beneficiary share one `ClaimRecord` | Accepted (design) |
@@ -197,17 +200,54 @@ Beneficiary ──► claim (Merkle proof)  OR  withdraw (leaf_count == 1)
 
 ---
 
-### VEL-012 — High (fixed 2026-05) — Pause+cancel locked grace-period claims
+### VEL-012 — High — Pause+Cancel Lockout
 
-**Description:** `cancel_campaign` set `cancelled_at` but left `paused == true`. `claim` and `withdraw` required `!paused`, so beneficiaries could not claim vested tokens during the 7-day grace period. `unpause_campaign` was blocked by `cancelled_at.is_none()` on the account constraint. After grace, `withdraw_unvested` swept the full vault (including vested-but-unclaimed tokens).
+**Affected instructions:** `cancel_campaign`, `cancel_stream`, `claim`, `withdraw`, `pause_campaign` (unpause)  
+**Files:** `programs/vesting/src/instructions/cancel_campaign.rs`, `cancel_stream.rs`, `claim.rs`, `withdraw.rs`, `pause_campaign.rs`
 
-**Remediation (implemented):**
+#### Description
 
-1. **`cancel_campaign.rs`** — `tree.paused = false` after setting `cancelled_at`.
-2. **`claim.rs` / `withdraw.rs`** — `require!(!tree.paused || tree.cancelled_at.is_some(), CampaignPaused)`.
-3. **`cancel_stream.rs`** — allow cancel while paused; clear `paused` on cancel.
+`cancel_campaign` set `cancelled_at` but did **not** reset `paused`. `claim` and `withdraw` required `!tree.paused`, so beneficiaries on a paused-then-cancelled campaign could not claim vested tokens during the 7-day grace period. `unpause_campaign` was blocked by the account constraint `cancelled_at.is_none()`, leaving no on-chain path to clear pause after cancel. After grace, `withdraw_unvested` could sweep the vault including vested-but-unclaimed tokens — a **beneficiary lockout**, not a direct theft vector.
 
-**Verification:** T69, T70, EXPLOIT 12, bankrun clock test (pause T1 → cancel T2 → claim → `withdraw_unvested` 50/50 split).
+#### Attack scenario
+
+1. `pause_campaign` sets `paused = true`.
+2. `cancel_campaign` sets `cancelled_at` but leaves `paused == true`.
+3. Beneficiary calls `claim` or `withdraw` during grace → `CampaignPaused` (6014).
+4. Beneficiary or authority calls `unpause_campaign` → `CampaignCancelled` (account constraint).
+5. After grace ends, creator calls `withdraw_unvested` and recovers vested amounts the beneficiary could not claim.
+
+#### Remediation (implemented)
+
+1. **`cancel_campaign.rs`** — clear pause on cancel so grace claims are not blocked:
+
+```34:36:programs/vesting/src/instructions/cancel_campaign.rs
+    tree.cancelled_at = Some(cancelled_at);
+    // Cancelled campaigns cannot be unpaused; clear pause so grace-period claims work.
+    tree.paused = false;
+```
+
+2. **`claim.rs` / `withdraw.rs`** — defense-in-depth: allow claims on cancelled campaigns regardless of stale pause flag:
+
+```73:75:programs/vesting/src/instructions/claim.rs
+    require!(
+        !tree.paused || tree.cancelled_at.is_some(),
+        VestingError::CampaignPaused
+```
+
+3. **`cancel_stream.rs`** — allow cancel while paused; set `tree.paused = false` on cancel (stream path parity).
+
+#### Verification
+
+- **T69** (`tests/vesting.supplementary.spec.ts`): pause → cancel → claim during grace succeeds.
+- **T70** (`tests/vesting.supplementary.spec.ts`): cancel on paused campaign resets `paused = false`.
+- **EXPLOIT 12** (`tests/security.spec.ts`): pause+cancel exploit blocked — grace claim succeeds.
+- **Clock test** (`tests/vesting.clock.spec.ts`): `clock: pause→cancel→claim with precise vesting math` — vested amount frozen at cancel, `withdraw_unvested` 50/50 split after grace.
+
+#### References
+
+- Internal: [SECURITY.md](./SECURITY.md) — [RESOLVED] Pause+Cancel Exploit
+- Pattern: state invariant gap between `paused` and `cancelled_at` on cancel path
 
 **Status:** Fixed
 
@@ -500,9 +540,9 @@ Structured pass per **solana-defi-vulnerability-analyst-agent** (defensive triag
 | `create_campaign` | No | `init` PDA, empty-root checks |
 | `create_stream` | Yes (fund) | On-chain `leaf_hash` → root, schedule validation |
 | `fund_campaign` | Yes | `has_one` creator/vault, `OverFunded`, not cancelled |
-| `claim` | Yes | pause, beneficiary binding, Merkle proof, CEI, `total_entitled` |
-| `withdraw` | Yes | `leaf_count == 1`, root hash bind, CEI, **`total_entitled` (fixed)** |
-| `cancel_campaign` | No | cancel authority, one-shot `cancelled_at` |
+| `claim` | Yes | pause (defense-in-depth on cancelled), beneficiary binding, Merkle proof, CEI, `total_entitled` |
+| `withdraw` | Yes | `leaf_count == 1`, root hash bind, CEI, **`total_entitled` (fixed)**, pause defense-in-depth (VEL-012) |
+| `cancel_campaign` | No | cancel authority, one-shot `cancelled_at`, **resets `paused` (VEL-012)** |
 | `update_root` | No | cancel authority, cancellable flag |
 | `withdraw_unvested` | Yes | creator, cancelled + grace period |
 | `pause_campaign` / `unpause_campaign` | No | pause authority |
@@ -584,7 +624,7 @@ Instruction handlers require **integration** coverage (see VEL-007).
 
 ## 13. Conclusion
 
-The Velthoryn vesting program demonstrates solid Anchor hygiene on the primary fund-flow instructions. The only **high-severity** issue in this audit—**VEL-001** (stream withdraw / close accounting)—has been **remediated** and **verified** by EXPLOIT 11. Post-audit hardening added **on-chain proof bounds** (VEL-009), **timing-safe admin auth** (VEL-010), and **Trident fuzz smoke** in CI.
+The Velthoryn vesting program demonstrates solid Anchor hygiene on the primary fund-flow instructions. **High-severity** issues **VEL-001** (stream withdraw / close accounting) and **VEL-012** (pause+cancel grace lockout) have been **remediated** and **verified** by EXPLOIT 11 and T69/T70/EXPLOIT 12 respectively. Post-audit hardening added **on-chain proof bounds** (VEL-009), **timing-safe admin auth** (VEL-010), and **Trident fuzz smoke** in CI.
 
 Remaining open items are **low or informational** (VEL-002 lints, VEL-006 upstream `bincode`, VEL-007 in-crate coverage metric, governance trust on `update_root`). They do not block deployment of the remediated build, subject to normal release QA, upgrade-authority review, and keypair-aligned CI runs.
 
@@ -618,6 +658,13 @@ Full report: [MATURITY_REPORT.md](./MATURITY_REPORT.md) (Trail of Bits 9-categor
 |------|--------|
 | `programs/vesting/src/instructions/withdraw.rs` | Set `total_entitled` on `ClaimRecord` first touch (VEL-001) |
 | `programs/vesting/src/instructions/close_claim_record.rs` | Require `total_entitled > 0` for “fully claimed” close (VEL-001) |
+| `programs/vesting/src/instructions/cancel_campaign.rs` | Reset `paused = false` on cancel (VEL-012) |
+| `programs/vesting/src/instructions/cancel_stream.rs` | Allow cancel while paused; clear `paused` on cancel (VEL-012) |
+| `programs/vesting/src/instructions/claim.rs` | Defense-in-depth pause check on cancelled campaigns (VEL-012) |
+| `programs/vesting/src/instructions/withdraw.rs` | Defense-in-depth pause check on cancelled campaigns (VEL-012) |
+| `tests/vesting.supplementary.spec.ts` | T69, T70 (VEL-012 regression) |
+| `tests/security.spec.ts` | EXPLOIT 12 (VEL-012) |
+| `tests/vesting.clock.spec.ts` | Clock test: pause→cancel→claim precise vesting math (VEL-012) |
 | `programs/vesting/src/constants.rs` | `MAX_MERKLE_PROOF_LEN` (VEL-009) |
 | `programs/vesting/src/math/merkle.rs` | `max_proof_len_for_leaf_count` + unit test (VEL-009) |
 | `programs/vesting/src/instructions/claim.rs` | Proof length checks before verify (VEL-009) |

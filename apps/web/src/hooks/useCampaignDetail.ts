@@ -56,6 +56,14 @@ interface CampaignDetail {
   analytics: CampaignAnalytics;
   rootVersions: RootVersion[];
   recipients: CampaignRecipient[];
+  singleLeaf: {
+    beneficiary: string;
+    releaseType: number;
+    startTime: number;
+    cliffTime: number;
+    endTime: number;
+    milestoneIdx: number;
+  } | null;
 }
 
 export function useCampaignDetail(treeAddress: string | undefined) {

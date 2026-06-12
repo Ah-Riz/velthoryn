@@ -1,9 +1,9 @@
 # PRD — Velthoryn Protocol (Lana's Scope)
 
 **Author:** Lana — smart-contract / backend lead  
-**Status:** Week 4 complete — all features implemented and tested on devnet
+**Status:** Phase 4 complete — BE-SC-Merkle on devnet
 **Program ID:** `G6iaigUdi2btFwUc2N65twfxwA8Ew5uKKhKJ5RJa8wvu` (deployed, Solana devnet)
-**Companion docs:** `docs/TDD_LANA.md`, `docs/SECURITY.md`, `docs/PROGRAM.md`
+**Companion docs:** `docs/TDD_LANA.md`, `docs/SECURITY.md`, `docs/PROGRAM.md`, `docs/DEVNET_TEST_RESULTS.md`
 
 ---
 
@@ -84,7 +84,7 @@ Across all six surveyed protocols (Streamflow, Zebec, Magna, Bonfida, Armada, Ji
 
 | Layer | Deliverable | Owner | Phase |
 |---|---|---|---|
-| Smart contract — 12 Anchor instructions | `programs/vesting/src/instructions/` | Lana | Phase 1 (Week 4) |
+| Smart contract — 12 Anchor instructions | `programs/vesting/src/instructions/` | Lana | Phases 1–4 |
 | Schedule math (Cliff / Linear / Milestone) | `programs/vesting/src/math/schedule.rs` | Lana | Phase 1 |
 | Merkle verifier (`leaf_hash`, `verify_merkle_proof`) | `programs/vesting/src/math/merkle.rs` | Lana | Phase 1 |
 | TS Merkle tooling (leaf encoder, tree builder, proof generator) | `clients/ts/src/` | Lana | Phase 1 |
@@ -92,15 +92,15 @@ Across all six surveyed protocols (Streamflow, Zebec, Magna, Bonfida, Armada, Ji
 | Frontend (`apps/web/`) | Geral | Phase 1 |
 | Off-chain Merkle tree builder for the UI | Geral (`apps/web/src/lib/merkle/builder.ts`) | Geral | Phase 1 |
 | IPFS / Pinata leaf pinning | Geral | Phase 1 |
-| Token-2022 mint support | Lana | Phase 2 |
-| Squads v4 multisig for `cancel_authority` | Lana | Phase 2 |
-| Pinocchio, proptest, cargo-fuzz, Mollusk | Lana | Phase 2 |
-| DeFi composability (lending, vesting vouchers) | Lana + partners | Phase 2/3 |
-| DAO governance integration (Realms VSR) | Lana + Realms team | Phase 3 |
+| Token-2022 mint support | Lana | Phase 5 |
+| Squads v4 multisig for `cancel_authority` | Lana | Phase 5 |
+| Pinocchio, proptest, cargo-fuzz, Mollusk | Lana | Phase 5 |
+| DeFi composability (lending, vesting vouchers) | Lana + partners | Phase 6 |
+| DAO governance integration (Realms VSR) | Lana + Realms team | Phase 7 |
 
 ### 2.2 Current implementation status
 
-All features are implemented and tested. 57 tests pass on devnet (56 pass + 1 graceful skip).
+All features are implemented and tested. See `docs/DEVNET_TEST_RESULTS.md` for the current test status (live source, updated with each devnet deployment).
 
 | File / function | Status |
 |---|---|
@@ -110,18 +110,61 @@ All features are implemented and tested. 57 tests pass on devnet (56 pass + 1 gr
 | `math/schedule.rs::get_vested_amount` | **LIVE** — cancel-clamp via `effective_now = min(now, cancelled_at)` |
 | All 12 instruction handlers | **LIVE** — full validation, state mutations, events, SPL CPIs |
 | `create_stream` handler | **LIVE** — atomic single-recipient campaign creation + funding |
-| `withdraw` handler | **LIVE** — proof-less claim for single-recipient streams |
+| `withdraw` handler | **LIVE** — proof-less claim for single-recipient streams (see PDD §1.4 for architecture) |
 | `VestingTree`, `ClaimRecord`, `VestingLeaf` structs | **LIVE** — correct field layout, correct Borsh wire order |
 | `VestingError` (31 variants) | **LIVE** — all variants exercised by named tests |
 | 9 event types | **LIVE** — emitted after state mutations in each instruction |
 | Devnet deploy | **LIVE** at `G6iaigUdi2btFwUc2N65twfxwA8Ew5uKKhKJ5RJa8wvu` |
-| Integration tests (50) | **LIVE** — T1-T5 core, T6-T25 supplementary, golden vector, 10 security exploit tests |
+| Integration tests | **LIVE** — Golden Vector (5), Security Exploit (10), Supplementary (62), Clock-dependent (12), Native SOL (12). See DEVNET_TEST_RESULTS.md for full breakdown. |
+
+---
+
+### 2.3 BE-SC-Merkle canonical model
+
+The protocol follows a single Merkle-compressed campaign model (BE-SC-Merkle). Every campaign is anchored by one `VestingTree` PDA storing a 32-byte Merkle root. Recipient records (`VestingLeaf`) live off-chain in the Merkle tree and are passed as arguments at claim time.
+
+- **Single-recipient case (stream):** When a campaign has exactly one leaf (`leaf_count == 1`), it behaves like a traditional stream — the Merkle root is computed from a single leaf hash (no tree building needed), and `withdraw` verifies `leaf_hash == merkle_root` without requiring a Merkle proof. See PDD §1.4 for the logical model.
+- **Multi-recipient case (bulk):** For campaigns with many leaves, recipients provide a Merkle proof alongside their leaf. The `claim` instruction verifies the proof against the on-chain root.
+- **Cost:** Fixed ~0.005 SOL for any campaign size (see §1.1).
+
+### 2.4 External Stream PDA spec mapping
+
+The tutorial defines a per-recipient Stream PDA spec. The mapping below shows how each concept corresponds to the shipped BE-SC-Merkle implementation:
+
+| External (Stream PDA) | Velthoryn | Notes |
+|---|---|---|
+| `cliff_date` | `cliff_time` (on leaf / WithdrawArgs) | Same semantic; naming difference only |
+| `vesting_type` | `release_type` (0/1/2) | 0=cliff, 1=linear, 2=milestone |
+| `milestone_unlocked` | `effective_now >= cliff_time` | On-chain evaluates at claim time; no creator trigger |
+| `cancel_stream` | `cancel_campaign` + grace + `withdraw_unvested` | Campaign-level cancel with 7-day grace period |
+| `trigger_milestone` | Not supported | Phase 5+ optional design; client may alias `NothingToClaim` |
+| `CliffNotReached` | `VestingError::NothingToClaim` | Same semantic, different error name |
+| `FullyVested` | Client-side classification | No dedicated error; already-claimed check → `NothingToClaim` |
+| Stream PDA per recipient | `VestingTree` (1 per campaign) + `VestingLeaf` (1 per recipient in tree) | Compression trade-off: batch vs. individual |
+
+### 2.5 Non-goals
+
+The following are explicitly out of scope for the current protocol. They are listed to prevent scope creep and manage reader expectations:
+
+- **Per-recipient Stream PDA accounts** — the protocol does not create one PDA per user. All recipients share the same `VestingTree` root.
+- **Creator-triggered `milestone_unlocked` flag** — milestones are time-based, evaluated on-chain from the clock at claim time. There is no on-chain flag for the creator to set.
+- **Instant `cancel_stream` settlement** — all cancellation follows the campaign-level `cancel_campaign` path with a 7-day grace period. No per-stream instant cancel.
+- **Dedicated `CliffNotReached` / `FullyVested` errors** — client-side code aliases `NothingToClaim` for both cases. The on-chain program has no separate error variants.
+
+### 2.6 Phase roadmap
+
+| Phase | Status | Content |
+|---|---|---|
+| **Phases 1–4** | **Delivered** | BE-SC-Merkle MVP: 12 instructions, Merkle compression, 3 schedule types, devnet deployment |
+| **Phase 5** | Planned | Token-2022 mint support, Squads v4 multisig for cancel_authority, Pinocchio/proptest/cargo-fuzz fuzzing |
+| **Phase 6** | Planned | DeFi composability — lending protocol integration, vesting vouchers, CPI consumers of `get_vested_amount` |
+| **Phase 7** | Planned | DAO governance integration (Realms VSR plugin for vote-weight-by-vested-amount) |
 
 ---
 
 ## §3 Feature Requirements
 
-Six BD-validated features map to on-chain obligations. Priority: **P0** = must ship for any campaign to function; **P1** = ships in Week 4; **P2** = ships in a follow-up without blocking a first live campaign.
+Six BD-validated features map to on-chain obligations. Priority: **P0** = must ship for any campaign to function; **P1** = ships in Phase 4; **P2** = ships in a follow-up without blocking a first live campaign.
 
 ---
 
@@ -255,9 +298,9 @@ If root rotates before proofs are pinned, recipients see `InvalidProof` until th
 
 ## §4 Acceptance Criteria
 
-All ACs are machine-checkable. ACs are divided into Week 4 must-pass and stretch goals.
+All ACs are machine-checkable. ACs are divided into Phase 4 must-pass and stretch goals.
 
-### Week 4 must-pass
+### Phase 4 must-pass
 
 | AC | Pre-condition | Verification | Expected on failure |
 |---|---|---|---|
@@ -309,7 +352,7 @@ All ACs are machine-checkable. ACs are divided into Week 4 must-pass and stretch
 
 ### NFR-5 — Devnet availability
 
-**Requirement:** Program reachable at `G6iaigUdi2btFwUc2N65twfxwA8Ew5uKKhKJ5RJa8wvu` throughout Week 4. README walkthrough ≤ 15 min on a fresh machine.  
+**Requirement:** Program reachable at `G6iaigUdi2btFwUc2N65twfxwA8Ew5uKKhKJ5RJa8wvu` throughout Phase 4. README walkthrough ≤ 15 min on a fresh machine.  
 **Verification:** AC11.
 
 ---
@@ -319,9 +362,9 @@ All ACs are machine-checkable. ACs are divided into Week 4 must-pass and stretch
 | # | Question | Default (MVP) | Deadline | Owner |
 |---|---|---|---|---|
 | Q1 | Should `cancel_authority` be a Squads v4 multisig in Phase 1 or a single key? | Single `Pubkey` | Before audit | BD → Lana |
-| Q2 | Are there Week 4 launch partners requiring Token-2022 extensions? | SPL Token only; reject Token-2022 | Before audit | BD |
-| Q3 | `init_if_needed` race on first `claim`: two concurrent first-claim txs — one fails with "account already initialized." Is retry-on-client acceptable UX? | Frontend retries; document in README | Before Week 4 ends | Lana + Geral |
-| Q4 | Proof hosting: Pinata vs. Cloudflare R2 vs. self-hosted GitHub Pages? Lana needs the base URL format for `INTEGRATION.md`. | Pinata (Geral's default) | Before Week 4 ends | Geral |
+| Q2 | Are there Phase 4 launch partners requiring Token-2022 extensions? | SPL Token only; reject Token-2022 | Before audit | BD |
+| Q3 | `init_if_needed` race on first `claim`: two concurrent first-claim txs — one fails with "account already initialized." Is retry-on-client acceptable UX? | Frontend retries; document in README | Before Phase 4 ends | Lana + Geral |
+| Q4 | Proof hosting: Pinata vs. Cloudflare R2 vs. self-hosted GitHub Pages? Lana needs the base URL format for `INTEGRATION.md`. | Pinata (Geral's default) | Before Phase 4 ends | Geral |
 | Q5 | Should `update_root` require proofs to be pinned before the root is committed? Protocol cannot enforce off-chain pinning, but SDK and README should document the sequence. | Document recommended sequence (pin → rotate → notify) in README; SDK emits warning if called without `proofUri` | Before audit | Lana + Geral |
 
 ---

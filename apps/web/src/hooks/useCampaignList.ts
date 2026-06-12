@@ -13,6 +13,8 @@ interface CampaignSummary {
   cancellable: boolean;
   paused: boolean;
   cancelledAt: number | null;
+  instantRefunded: boolean;
+  streamSettled: boolean;
   createdAt: number;
   metadata: { name?: string; description?: string; logoUri?: string } | null;
 }

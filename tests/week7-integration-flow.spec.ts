@@ -1593,19 +1593,25 @@ describe("week7: BE + on-chain integration flows", function () {
           (await getAccount(provider.connection, creatorAta)).amount,
         );
 
-        await program.methods
-          .withdrawUnvested()
-          .accounts({
-            creator: ctx.creator.publicKey,
-            vestingTree: treePda,
-            vaultAuthority: vaultAuthPda,
-            vault,
-            creatorAta,
-            tokenProgram: TOKEN_PROGRAM_ID,
-            systemProgram: SystemProgram.programId,
-          })
-          .signers([ctx.creator])
-          .rpc();
+        try {
+          await program.methods
+            .withdrawUnvested()
+            .accounts({
+              creator: ctx.creator.publicKey,
+              vestingTree: treePda,
+              vaultAuthority: vaultAuthPda,
+              vault,
+              creatorAta,
+              tokenProgram: TOKEN_PROGRAM_ID,
+              systemProgram: SystemProgram.programId,
+            })
+            .signers([ctx.creator])
+            .rpc();
+        } catch (e) {
+          const msg = (e as Error).message || String(e);
+          if (!msg.includes("already been processed")) throw e;
+          // First submission may have succeeded before the RPC retry failed.
+        }
 
         const postCreatorBal = Number(
           (await getAccount(provider.connection, creatorAta)).amount,

@@ -36,19 +36,23 @@ velthoryn/
 
 **Instant refund (B1):** Creator-only immediate refund for **unstarted multi-leaf** campaigns (`now < min_cliff_time`, no milestones released). Single-leaf campaigns still use `cancel_stream`; started campaigns use `cancel_campaign` (7-day grace). BE exposes `instantRefundEligible` and `POST .../instant-refund` tx builder — see [`docs/BACKEND_API.md`](docs/BACKEND_API.md).
 
-**Week 9 QA sweep:** 7 bugs found and fixed across SC/BE/FE layers. Key fixes: (1) out-of-order milestone claiming bug in frontend — greedy `claimedAmount` allocation replaced with on-chain `milestoneBitmap` lookup; (2) `StreamExpired` early-return blocked multi-leaf claims; (3) `total_entitled` now accumulates across milestone claims; (4–5) backend validation added for `milestoneIdx` bounds (0–255) and duplicate `(beneficiary, milestoneIdx)` pairs; (6–7) VestingProgress API checks milestone release flags, MilestoneReleasePanel uses actual milestone indices from leaves. See [`docs/WEEK8_KNOWN_ISSUES.md`](docs/WEEK8_KNOWN_ISSUES.md).
+**Week 8 bug sweep:** 15 bugs found and fixed across SC/BE/FE layers. **L1/P0 fixes (8):** root rotation `minCliffTime`, API auth on root-versions + campaign creation, base58 validation, race condition 409, migration 0010, PDA seed docs. **QA sweep (7):** (1) out-of-order milestone claiming bug in frontend — greedy `claimedAmount` allocation replaced with on-chain `milestoneBitmap` lookup; (2) `StreamExpired` early-return blocked multi-leaf claims; (3) `total_entitled` now accumulates across milestone claims; (4–5) backend validation added for `milestoneIdx` bounds (0–255) and duplicate `(beneficiary, milestoneIdx)` pairs; (6–7) VestingProgress API checks milestone release flags, MilestoneReleasePanel uses actual milestone indices from leaves. See [`docs/WEEK8_KNOWN_ISSUES.md`](docs/WEEK8_KNOWN_ISSUES.md).
 
-**F1-F4 roadmap complete:** F1 Bulk Send (server-side Merkle build, CSV import), F2 Dashboard Transparency (event timeline, vesting progress, auto-sync cron), F3 Clawback (cancel campaign/stream, withdraw unvested, milestone release), F4 Production Hardening (Sentry monitoring, API versioning, vesting simulation, schedule templates). 11 new API routes, 6 event tables, 8 bug fixes from code review.
+**F1–F4 roadmap complete and implemented:** F1 Bulk Send (server-side Merkle build, CSV import), F2 Transparency Dashboard (dashboard rewrite with 6 stat cards + claimable banner + vesting progress + activity feed, portfolio page with per-campaign breakdown + sort, `/api/activity/[address]` cross-campaign feed, `useMintDecimals` for real token amounts), F3 Clawback (cancel campaign/stream, withdraw unvested, milestone release + `CampaignStatusBanner` 7-state banner, `GracePeriodCountdown`, sidebar amber dot badge, "Needs Action" tab, dashboard "Needs Attention" section), F4 Production Hardening (Sentry monitoring, API versioning, vesting simulation, schedule templates). 12 new API routes, 6 event tables, 15 bug fixes from code review.
 
-**Test results: 127+ SC tests PASS** (`pnpm test:localnet`); **553 web Vitest PASS** (13 skipped devnet integration; API routes use Postgres in CI)
+**Week 8 gap closure (BE/infra):** k6 load scripts (`apps/web/tests/load/` — prepare, proof, spike + `run-load-test.sh`); rate-limit baselines in [`docs/TESTING.md`](docs/TESTING.md) §k6; CU budget re-audit in [`docs/CU_BUDGET.md`](docs/CU_BUDGET.md); **Known Issue #29** mitigated at API layer (prepare + import reject multiple cliff/linear leaves per beneficiary — see [`docs/KNOWN_ISSUE_29_DESIGN.md`](docs/KNOWN_ISSUE_29_DESIGN.md) §6).
+
+**Week 8 FE cleanup:** Shared UI primitives extracted (`StatCard`, `ProgressBar`, `CampaignCard`, `SectionHeader`, `FieldRow`, `DetailRow`, `Spinner`, `RecipientListModal`). Centralized `lib/api/serialize.ts` for BigInt-safe JSON. Numbered migrations `0002`–`0005` backfill event-table history. Post-tx indexing uses public `POST /api/events/sync`; operator backfill uses admin-only `POST /api/claims/sync`. E2E helpers support mock wallet + mock send-tx for cancel flows without devnet RPC.
+
+**Test results: 127+ SC tests PASS** (`pnpm test:localnet`); **563 web Vitest PASS** (API routes use Postgres in CI)
 **BE–SC Merkle pipeline verified end-to-end**: 3-leaf campaigns (Cliff/Linear/Milestone) through prepare → POST (all leaves verified) → GET proof → verify. RLS on all Supabase tables. **Bootcamp acceptance: 8/8** — see [`docs/BE-SC-MERKLE-ACCEPTANCE-STATUS.md`](docs/BE-SC-MERKLE-ACCEPTANCE-STATUS.md).
-- Devnet (`pnpm test:devnet`): **93 passing, 9 pending** (T64–T68 bankrun-only; cancel logic covered by T64b–T64d)
+- Devnet + bankrun (`pnpm test:devnet`): **98 passing, 1 pending** — live breakdown in [`docs/DEVNET_TEST_RESULTS.md`](docs/DEVNET_TEST_RESULTS.md) (devnet RPC 75 + bankrun 24; T68 pending on RPC, covered by clock suite)
 - Native SOL tests: `tests/vesting-native-sol.spec.ts` via **solana-bankrun** (12 tests covering full SOL lifecycle)
 - Clock-dependent cases: `tests/vesting.clock.spec.ts` via **solana-bankrun** (T17–T20, T25, T47, T55–T64, EXPLOIT 4)
 - Sealevel-attacks gap tests: `tests/sealevel-attacks-gap.spec.ts` via **solana-bankrun** (4 tests: duplicate accounts #6, PDA sharing #8, close-reinit #9)
 - LiteSVM PoC: `tests/vesting-litesvm.spec.ts` via **LiteSVM** (5 tests: boot, mint, time-travel, program loading, simulation)
 - Mollusk instruction tests: 7 domain-specific test files via **Mollusk** (72 active + 18 ignored): `instructions.rs` (14), `stream.rs` (7), `admin.rs` (18+6), `cancel.rs` (5+9), `claim.rs` (16), `cleanup.rs` (2+3), `lifecycle.rs` (8)
-- Mollusk CU benchmarks: `programs/vesting/tests/benchmarks.rs` via **Mollusk** (2 tests: get_vested_amount 7 scenarios, create_campaign_native 2 configs)
+- Mollusk CU benchmarks: `programs/vesting/tests/benchmarks.rs` via **Mollusk** (9 active + 1 ignored; see [`docs/CU_BUDGET.md`](docs/CU_BUDGET.md))
 - proptest property tests: `programs/vesting/src/math/` via **proptest** (20 tests: schedule 11 invariants, merkle 7 invariants + 10 unit tests)
 
 See [`docs/STREAM_MODEL.md`](docs/STREAM_MODEL.md) (tutorial `Stream` PDA vs campaign model) and [`docs/ERROR_MAP.md`](docs/ERROR_MAP.md).
@@ -74,12 +78,18 @@ See [`docs/STREAM_MODEL.md`](docs/STREAM_MODEL.md) (tutorial `Stream` PDA vs cam
 | `cancel_stream`          | Creator-only single-leaf cancel: vested → beneficiary, rest → creator (SPL + SOL). Milestone-aware. |
 | `instant_refund_campaign` | Creator-only instant refund for unstarted multi-leaf campaigns; drains vault/PDA to creator. |
 
+Full doc index: [`docs/README.md`](docs/README.md).
+
 For deeper reads:
 - [`docs/PROGRAM.md`](docs/PROGRAM.md) — program internals, file map, instruction surface, state layouts.
 - [`docs/INTEGRATION.md`](docs/INTEGRATION.md) — frontend-track guide: program ID, IDL/types location, PDA derivations, Merkle helpers, sample calls.
+- [`docs/FE_INTEGRATION.md`](docs/FE_INTEGRATION.md) — complete FE developer guide: flows, file map, events, error handling.
 - [`docs/NATIVE_SOL_VESTING.md`](docs/NATIVE_SOL_VESTING.md) — native SOL vesting research: architecture, dual-path design, cost comparison, security considerations.
-- [`docs/TESTING.md`](docs/TESTING.md) — how to run tests, clock-dependent tests, native SOL tests, writing new tests.
+- [`docs/TESTING.md`](docs/TESTING.md) — how to run tests, k6 load testing, SC benchmarks, CI matrix, clock/native SOL tests.
 - [`docs/DEVNET_TEST_RESULTS.md`](docs/DEVNET_TEST_RESULTS.md) — full test results matrix with acceptance criteria.
+- [`docs/API_TRUST_BOUNDARIES.md`](docs/API_TRUST_BOUNDARIES.md) — every API route: public / wallet-auth / admin classification.
+- [`docs/PENDING_WORK.md`](docs/PENDING_WORK.md) — prioritized backlog from spec audit (updated as items land).
+- [`docs/KNOWN_ISSUE_29_DESIGN.md`](docs/KNOWN_ISSUE_29_DESIGN.md) — design note for multi-leaf `claimed_amount` undercount (breaking SC change).
 
 ## Prerequisites
 
@@ -118,8 +128,15 @@ Clock-dependent tests (11) use `solana-bankrun` inside the full suite; they are 
 
 For Rust-level CU benchmarks via Mollusk:
 ```bash
-BPF_OUT_DIR=target/deploy cargo test --manifest-path programs/vesting/Cargo.toml -- --show-output
-# Expected: 103 passed, 18 ignored
+BPF_OUT_DIR=target/deploy cargo test --manifest-path programs/vesting/Cargo.toml --test benchmarks -- --show-output
+# Expected: 9 passed, 1 ignored (bench_claim_native)
+```
+
+k6 load tests (from `apps/web/`):
+```bash
+./tests/load/run-load-test.sh prepare
+CAMPAIGN_ADDRESS=... BENEFICIARY_ADDRESS=... ./tests/load/run-load-test.sh proof
+./tests/load/run-load-test.sh all
 ```
 
 ## Frontend (apps/web)
@@ -136,48 +153,72 @@ export DATABASE_URL=postgresql://ci:ci@127.0.0.1:5432/ci
 pnpm db:push && pnpm test
 ```
 
+> **Database schema:** Use `pnpm db:push` for local dev (fast sync, no migration files). Use `pnpm db:migrate` for CI and production — it applies numbered files under `src/lib/db/migrations/` in order. After schema changes, run `pnpm db:generate`, commit the migration, then `pnpm db:migrate` against the target database.
+
 ### Pages
 
 - `/` — Landing page
+- `/dashboard` — Transparency dashboard: 6 stat cards, claimable banner, vesting progress, recent activity feed, needs attention alerts (F2)
+- `/portfolio` — Per-campaign vesting breakdown: progress bars, sort by claimable/progress/next unlock, summary stats (F2)
 - `/campaign/create` — Create a vesting stream (calls `createStream`)
-- `/campaign/[treeAddress]` — View stream & claim tokens (calls `withdraw`)
+- `/campaign/[treeAddress]` — View stream & claim tokens (calls `withdraw`), campaign status banner, grace period countdown, milestone release panel
 
 Wallet connection uses wallet-standard auto-detect (Phantom/Solflare/Backpack). Set `NEXT_PUBLIC_RPC_ENDPOINT` to override the default devnet RPC.
 
+### Shared UI components
+
+Reusable primitives under `apps/web/src/components/ui/`:
+
+| Component | Used by |
+|-----------|---------|
+| `StatCard` | Dashboard, portfolio, campaign detail |
+| `ProgressBar` | Portfolio `CampaignCard`, campaign detail, vesting progress |
+| `SectionHeader`, `FieldRow`, `DetailRow` | Campaign detail page |
+| `Spinner` | Loading states across campaign flows |
+| `CampaignCard` | Dashboard vesting cards, portfolio list (`toCampaignCardData` adapter) |
+| `RecipientListModal` | Campaign detail recipient table |
+
 ### Backend API Routes
 
-| Route | Method | Purpose |
-|---|---|---|
-| `/api/campaigns` | POST | Create campaign + root version + leaves |
-| `/api/campaigns` | GET | List with filters, pagination |
-| `/api/campaigns/[treeAddress]` | GET | Campaign detail + analytics |
-| `/api/campaigns/[treeAddress]/proof` | GET | Leaf + merkle proof for beneficiary |
-| `/api/campaigns/[treeAddress]/claims` | GET | Claim history |
-| `/api/campaigns/[treeAddress]/root-versions` | GET | Root version history |
-| `/api/beneficiary/[address]/campaigns` | GET | All campaigns for address |
-| `/api/admin/sync` | POST | Indexer: backfill claim events (auth: x-admin-key) |
-| `/api/campaigns/prepare` | POST | Build Merkle tree server-side; returns `minCliffTime` (F1, auth: x-admin-key) |
-| `/api/campaigns/[treeAddress]/instant-refund` | POST | Instant refund tx for unstarted multi-leaf campaigns (wallet auth) |
-| `/api/campaigns/import` | POST | CSV import of beneficiaries (F1, auth: x-admin-key) |
-| `/api/campaigns/[treeAddress]/timeline` | GET | Event timeline — cancel, pause, withdraw, milestone (F2) |
-| `/api/beneficiary/[address]/vesting-progress` | GET | Vesting progress for beneficiary (F2) |
-| `/api/cron/sync` | GET | Auto-sync cron — indexer event processing (F2, auth: x-api-key) |
-| `/api/campaigns/[treeAddress]/cancel` | POST | Cancel campaign, start grace period (F3, auth: x-admin-key) |
-| `/api/campaigns/[treeAddress]/withdraw-unvested` | POST | Withdraw unvested tokens after grace (F3, auth: x-admin-key) |
-| `/api/campaigns/[treeAddress]/cancel-stream` | POST | Cancel single stream (F3, auth: x-admin-key) |
-| `/api/campaigns/[treeAddress]/milestones/[idx]` | POST | Release milestone flag (F3, auth: x-admin-key) |
-| `/api/simulate-vesting` | POST | Vesting simulation — linear/cliff/milestone (F4) |
-| `/api/schedule-templates` | GET | Schedule presets — common vesting templates (F4) |
+Auth tiers: **Public** (read + stateless helpers), **Wallet** (ed25519 signature via `Authorization`), **Admin** (`x-admin-key` or cron bearer). See [`docs/API_TRUST_BOUNDARIES.md`](docs/API_TRUST_BOUNDARIES.md) for the full route table.
+
+| Route | Method | Purpose | Auth |
+|---|---|---|---|
+| `/api/campaigns` | POST | Create campaign + root version + leaves | Wallet |
+| `/api/campaigns` | GET | List with filters, pagination | Public |
+| `/api/campaigns/[treeAddress]` | GET | Campaign detail + analytics | Public |
+| `/api/campaigns/[treeAddress]/proof` | GET | Leaf + merkle proof for beneficiary | Public |
+| `/api/campaigns/[treeAddress]/claims` | GET | Claim history | Public |
+| `/api/campaigns/[treeAddress]/root-versions` | POST | Record root version after on-chain `update_root` | Wallet |
+| `/api/beneficiary/[address]/campaigns` | GET | All campaigns for address | Public |
+| `/api/activity/[address]` | GET | Cross-campaign activity feed (F2) | Public |
+| `/api/events/sync` | POST | Index on-chain events from tx signatures (post-claim UI) | Public |
+| `/api/claims/sync` | POST | Operator claim-event backfill | Admin |
+| `/api/admin/sync` | POST | Full indexer run | Admin |
+| `/api/campaigns/prepare` | POST | Build Merkle tree server-side; returns `minCliffTime` (F1) | Public |
+| `/api/campaigns/[treeAddress]/instant-refund` | POST | Instant refund tx for unstarted multi-leaf campaigns | Wallet |
+| `/api/campaigns/import` | POST | CSV import of beneficiaries (F1) | Wallet |
+| `/api/campaigns/[treeAddress]/timeline` | GET | Event timeline — cancel, pause, withdraw, milestone (F2) | Public |
+| `/api/beneficiary/[address]/vesting-progress` | GET | Vesting progress for beneficiary (F2) | Public |
+| `/api/cron/sync` | GET | Auto-sync cron — indexer event processing (F2, daily on Hobby) | Admin |
+| `/api/campaigns/[treeAddress]/cancel` | POST | Cancel campaign, start grace period (F3) | Wallet |
+| `/api/campaigns/[treeAddress]/withdraw-unvested` | POST | Withdraw unvested tokens after grace (F3) | Wallet |
+| `/api/campaigns/[treeAddress]/cancel-stream` | POST | Cancel single stream (F3) | Wallet |
+| `/api/campaigns/[treeAddress]/milestones/[idx]` | POST | Release milestone flag (F3) | Wallet |
+| `/api/simulate-vesting` | POST | Vesting simulation — linear/cliff/milestone (F4) | Public |
+| `/api/schedule-templates` | GET | Schedule presets — common vesting templates (F4) | Public |
 
 All routes deployed at [velthoryn.vercel.app](https://velthoryn.vercel.app/). Supabase tables have Row Level Security enabled (read-public, write-service-role).
 
-See [`docs/BACKEND_API.md`](docs/BACKEND_API.md) for full API documentation.
+See [`docs/BACKEND_API.md`](docs/BACKEND_API.md) for request/response shapes and data flows.
 
 ### Vercel Deployment
 
 Deployed at [velthoryn.vercel.app](https://velthoryn.vercel.app/). Root directory: `apps/web/`. Required env vars: see `apps/web/.env.example`.
 
-Frontend docs: [`docs/PRD_GERAL.md`](docs/PRD_GERAL.md), [`docs/PDD_GERAL.md`](docs/PDD_GERAL.md), [`docs/TDD_GERAL.md`](docs/TDD_GERAL.md), [`docs/SECURITY_GERAL.md`](docs/SECURITY_GERAL.md).
+**Production database:** Do not run `db:push` against production. Apply schema changes with `pnpm db:migrate` (from `apps/web/`, with production `DATABASE_URL` set) after merging migration files. CI (`lint.yml`, `web-ci.yml`) uses `db:migrate` the same way. Local development may still use `db:push` for speed.
+
+Frontend docs: [`docs/PRD_GERAL.md`](docs/PRD_GERAL.md), [`docs/PDD_GERAL.md`](docs/PDD_GERAL.md), [`docs/TDD_GERAL.md`](docs/TDD_GERAL.md), [`docs/SECURITY_GERAL.md`](docs/SECURITY_GERAL.md). Feature docs: [`docs/TRANSPARENCY_DASHBOARD.md`](docs/TRANSPARENCY_DASHBOARD.md), [`docs/AUTOMATIC_CLAWBACK.md`](docs/AUTOMATIC_CLAWBACK.md).
 
 ## Devnet
 

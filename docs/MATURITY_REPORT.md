@@ -23,7 +23,7 @@ Velthoryn’s on-chain vesting program is **well documented** and **structurally
 
 1. **Documentation (Strong)** — `SECURITY.md`, `PDD_LANA.md`, `TDD_LANA.md`, and `AUDIT_REPORT.md` form a threat model, per-instruction attack surface, and cross-language Merkle contract.
 2. **Low-level safety (Strong)** — No `unsafe`/assembly; CPIs limited to typed SPL Token; PDA seeds documented with `CHECK` on `vault_authority`.
-3. **Security regression testing** — 11 exploit scenarios in `tests/security.spec.ts`, golden-vector hash alignment, Trident fuzz in CI.
+3. **Security regression testing** — 12 exploit scenarios in `tests/security.spec.ts` (EXPLOIT 12 resolved), golden-vector hash alignment, Trident fuzz in CI.
 
 ### Top 3 gaps
 
@@ -55,7 +55,7 @@ Velthoryn’s on-chain vesting program is **well documented** and **structurally
 | 6 | Documentation | **Strong** | 4 | Exceptional spec + security docs; golden vector |
 | 7 | Transaction ordering risks | **Satisfactory** | 3 | Not AMM-MEV; root-rotation window documented; on-chain clock for claims |
 | 8 | Low-level manipulation | **Strong** | 4 | Zero `unsafe`; justified `UncheckedAccount` for vault PDA |
-| 9 | Testing & verification | **Moderate** | 2 | 63+ on-chain tests, Trident fuzz CI; low tarpaulin %; no formal methods |
+| 9 | Testing & verification | **Moderate** | 2 | 76 integration + 14 bankrun clock tests, Trident fuzz CI; low tarpaulin %; no formal methods |
 | | **Overall average** | **Moderate–Satisfactory** | **2.8** | |
 
 ---
@@ -105,7 +105,7 @@ Velthoryn’s on-chain vesting program is **well documented** and **structurally
 
 - Privileged operations require explicit signers (`update_root.rs`, `pause_campaign.rs`, etc.).
 - Beneficiary binding before proof check on `claim`.
-- Twelve exploit tests in `tests/security.spec.ts` (EXPLOIT 12: pause+cancel grace lockout, fixed 2026-05).
+- Twelve exploit tests in `tests/security.spec.ts`; **EXPLOIT 12** (pause+cancel grace lockout, VEL-012) **resolved** 2026-05 — verified by T69, T70, EXPLOIT 12, and clock test (`vesting.clock.spec.ts`).
 - Admin API uses timing-safe key compare via `verifyAdminKey()` (VEL-010).
 
 **Gaps**
@@ -195,12 +195,20 @@ No assembly, no manual account deserialization, no arbitrary program invocation.
 
 | Layer | Coverage |
 |-------|----------|
-| Integration | `vesting.supplementary.spec.ts` (~50), `vesting.spec.ts`, `vesting.clock.spec.ts` (7) |
-| Security | `security.spec.ts` (11 exploits) |
-| Cross-lang | `golden_vector.spec.ts` |
+| Integration | **76 total** — `vesting.supplementary.spec.ts` (63, incl. T69/T70), `vesting.spec.ts` (2 smoke), `security.spec.ts` (11 exploits incl. EXPLOIT 12) |
+| Bankrun clock | `vesting.clock.spec.ts` (14, incl. pause→cancel→claim precise vesting + EXPLOIT 11) |
+| Cross-lang | `golden_vector.spec.ts` (5) |
+| Rust unit | `programs/vesting/` math/state (11) |
 | Web | 201 Vitest tests |
 | Fuzz | Trident `fuzz_vesting` — 100×15 flows, CI smoke |
 | CI | `ci.yml` (anchor test + Trident), `lint.yml` (clippy, vitest, next build) |
+
+**Resolved exploit scenarios**
+
+| ID | Scenario | Status | Verification |
+|----|----------|--------|--------------|
+| EXPLOIT 11 | Partial withdraw → close → double payout (VEL-001) | **Resolved** | `vesting.clock.spec.ts` (bankrun) |
+| EXPLOIT 12 | Pause → cancel locks beneficiaries out of grace claims (VEL-012) | **Resolved** | T69, T70, EXPLOIT 12, clock test |
 
 **Gaps**
 
@@ -220,7 +228,7 @@ No assembly, no manual account deserialization, no arbitrary program invocation.
 | Item | Effort | Impact |
 |------|--------|--------|
 | Document **program upgrade authority** and deployment checklist | 0.5 day | Prevents silent program replacement |
-| Verify **VEL-001** + **VEL-009** on deployed binary (EXPLOIT 11, EXPLOIT 4) | 1 day | Confirms remediated build |
+| Verify **VEL-001**, **VEL-009**, **VEL-012** on deployed binary (EXPLOIT 11, EXPLOIT 4, EXPLOIT 12 / T69/T70) | 1 day | Confirms remediated build |
 
 ### HIGH (1–2 months)
 

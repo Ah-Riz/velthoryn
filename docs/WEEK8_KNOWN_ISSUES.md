@@ -1,6 +1,7 @@
 # Week 8 -- Known Issues Report
 
 > Generated from bug audit of L1 and P0 fixes across SC, BE, FE, DB, Docs, Merkle, and Ops layers.
+> **Last updated: June 2026.** All 15 fixed issues verified on `dev_lana`. 12 known limitations remain documented with mitigations.
 
 ## Summary
 
@@ -8,7 +9,7 @@
 |----------|-------|
 | Fixed | 15 |
 | Documented (known limitations) | 12 |
-| Deferred to Week 9+ | 2 |
+| Deferred to Week 9+ | 1 |
 
 ---
 
@@ -53,11 +54,16 @@
 
 ---
 
+## Completed (was deferred)
+
+| # | Issue | Area | Status | Rationale |
+|---|-------|------|--------|-----------|
+| 20 | k6 load test expansion | BE | **Done** | `prepare-load.js`, `proof-load.js`, `spike-load.js` + `run-load-test.sh all`; baselines in `docs/TESTING.md` §k6. |
+
 ## Deferred to Week 9+
 
 | # | Issue | Area | Status | Rationale |
 |---|-------|------|--------|-----------|
-| 20 | k6 load test expansion | BE | Deferred | Existing `api-load.js` covers basic endpoints. |
 | 21 | External audit engagement | Ops | Deferred | Budget $15-40K, not an engineering task. |
 
 ---
@@ -67,4 +73,4 @@
 - Issue #21 (wallet signature auth on root-versions) was previously tracked as deferred but was resolved as part of fix #2 above.
 - All fixed issues have been verified locally and merged to `dev_lana`.
 - Known limitations are accepted risks with documented mitigations. No immediate action required.
-- Deferred items are intentional -- either resource-dependent (external audit) or low-priority (load test expansion).
+- Deferred items are intentional -- resource-dependent (external audit). k6 load test expansion (#20) completed 2026-06-11.

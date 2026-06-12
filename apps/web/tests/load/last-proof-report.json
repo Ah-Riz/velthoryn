@@ -1,0 +1,14 @@
+{
+  "timestamp": "2026-06-11T03:45:59.474Z",
+  "endpoint": "GET /api/campaigns/:treeAddress/proof",
+  "campaign_address": "7xKXtg2CW87d97TXJSDpbD5jBkheTqA83TZRuJosgAsU",
+  "beneficiary_address": "11111111111111111111111111111111",
+  "target_rps": 50,
+  "p95_ms": "41.60",
+  "error_rate_pct": "100.00",
+  "total_requests": 2,
+  "thresholds": {
+    "p95_ms_max": 500,
+    "error_rate_pct_max": 1
+  }
+}

@@ -2,14 +2,14 @@
 
 ## Test Suite Overview
 
-**~695+ tests total** — green on local CI reproduction (June 2026).
+**~705+ tests total** — green on local CI reproduction (June 2026).
 
 - On-chain (Anchor): **127+ passing** across 15 files (`pnpm test:localnet`)
-- Web (Vitest): **553 passing**, 13 skipped (devnet integration; Postgres required)
+- Web (Vitest): **563 passing** (`vitest.unit.config.ts`; Postgres required for API tests)
 - Trident fuzz: smoke test in CI (`trident-tests/fuzz_vesting`)
 - Rust unit tests: **31** (math/merkle + math/schedule proptests + inline)
 - Mollusk instruction tests: **72 active** across 7 test files (18 ignored — Mollusk limitations)
-- Mollusk CU benchmarks: **2** measurements across 2 test functions
+- Mollusk CU benchmarks: **9 active** benchmark functions (17 scenarios) in `programs/vesting/tests/benchmarks.rs`; `bench_claim_native` ignored (Mollusk 0.13 `init_if_needed` blocker)
 
 | Test File | Tests | Purpose |
 |-----------|-------|---------|
@@ -32,7 +32,7 @@
 | `programs/vesting/tests/claim.rs` | 16 | Mollusk — claim (happy, partial, over-claim, wrong-proof, wrong-beneficiary, cancelled, paused, milestone) |
 | `programs/vesting/tests/cleanup.rs` | 2 (+3 ign.) | Mollusk — withdraw_unvested, close_claim_record |
 | `programs/vesting/tests/lifecycle.rs` | 8 | Mollusk — multi-instruction lifecycle sequences (create→pause→unpause, create→cancel→withdraw) |
-| `programs/vesting/tests/benchmarks.rs` | 2 | Mollusk CU benchmarks — get_vested_amount (7 scenarios) + create_campaign_native (2 configs) |
+| `programs/vesting/tests/benchmarks.rs` | 9 (+1 ign.) | Mollusk CU benchmarks — all native handlers; see `docs/CU_BUDGET.md` |
 
 ## Running Tests
 
@@ -383,6 +383,19 @@ pnpm test:e2e
 
 `pnpm test:e2e` starts Next.js on `127.0.0.1:3100` and runs the Playwright smoke tests in `tests/e2e/`.
 
+### E2E mock wallet and send-tx
+
+For UI flows without a live devnet RPC, Playwright uses:
+
+| localStorage key | Purpose |
+|------------------|---------|
+| `velthoryn:e2e-wallet` | Enables mock wallet (`NEXT_PUBLIC_E2E_MOCK_WALLET=true` on localhost) |
+| `velthoryn:e2e-mock-send-tx` | `sendTransaction` returns a fixed signature; skips `confirmTransaction` (cancel flows) |
+
+Helpers in `tests/e2e/helpers.ts`: `mockCampaignApi`, `mockProofApi`, `waitForCampaignListMocks`. Expanded coverage in `campaign-actions.spec.ts`.
+
+Signing specs under `tests/e2e/signing/` use a real local validator on port 3200 — see file headers for the manual dev-server command.
+
 If Chromium exits with `error while loading shared libraries: libnspr4.so`, install the Playwright OS dependencies:
 
 ```bash
@@ -393,6 +406,90 @@ pnpm test:e2e:deps
 On locked-down machines this may fail with `sudo: a password is required`; install `libnspr4`/Playwright Chromium dependencies at the OS level, then rerun `pnpm test:e2e`.
 
 CI runs this in `.github/workflows/web-ci.yml` using a Postgres service container.
+
+### E2E test suites
+
+| File | Tests | Coverage |
+|------|-------|----------|
+| `campaign-actions.spec.ts` | 33+ | Pause, cancel, instant refund, withdraw, milestone, clawback UI (grace banners, needs-action tab, sidebar dot), responsive 375px |
+| `wrap-sol.spec.ts` | 16 | WrapSolModal: trigger, content, tabs, submit, max, close |
+| `campaign-journey.spec.ts` | — | End-to-end campaign creation + funding |
+| `signing/*.spec.ts` | — | Real signing with local validator |
+
+### Native SOL / Token-2022 (T22) manual devnet checklist
+
+These flows require a funded devnet wallet and cannot be fully automated in CI. Run manually before release:
+
+| # | Test | Steps | Expected |
+|---|------|-------|----------|
+| T19 | Token picker shows wSOL | Open create cliff → Select Token | wSOL row appears with balance |
+| T20 | Wrap SOL modal | Token picker → "Wrap / Unwrap SOL" | Modal opens, SOL/wSOL balances shown |
+| T21 | Wrap SOL transaction | Enter amount → click Wrap | wSOL balance increases, SOL decreases |
+| T22 | Create campaign with wSOL | Wrap SOL → select wSOL → create cliff campaign via CSV | Campaign created, funded with wSOL |
+| T23 | Token-2022 mint rejection | Use T22-extension mint in CSV | Parse error: "Token-2022 extensions not supported" |
+| T24 | Unwrap wSOL | Wrap modal → Unwrap tab → enter amount → Unwrap | SOL balance increases |
+
+**Setup:**
+```bash
+# Fund devnet wallet
+solana airdrop 2 --url devnet
+
+# Start dev server against devnet
+cd apps/web
+NEXT_PUBLIC_SOLANA_RPC=https://api.devnet.solana.com pnpm dev
+```
+
+**Automated coverage:** `wrap-sol.spec.ts` covers T19–T20 UI paths with mock wallet. T21–T24 require real transactions.
+
+## k6 load testing
+
+Scripts live in `apps/web/tests/load/`. Run from `apps/web/`:
+
+```bash
+./tests/load/run-load-test.sh api          # default — health, campaigns, simulate-vesting
+./tests/load/run-load-test.sh prepare
+CAMPAIGN_ADDRESS=... BENEFICIARY_ADDRESS=... ./tests/load/run-load-test.sh proof
+./tests/load/run-load-test.sh spike
+./tests/load/run-load-test.sh all
+```
+
+### Baselines (local dev smoke, June 2026)
+
+Measured with `k6 run --vus 2 --iterations 3..5` against `http://localhost:3000`. Full staged runs use the thresholds in each script.
+
+| Script | Endpoint(s) | p95 (smoke) | Error rate | Threshold |
+|--------|-------------|-------------|------------|-----------|
+| `api-load.js` | GET health, campaigns, templates; POST simulate | <500ms | <1% | p95 <500ms |
+| `prepare-load.js` | POST `/api/campaigns/prepare` (10 leaves) | ~77–1434ms | 0% | p95 <2000ms, errors <5% |
+| `proof-load.js` | GET `/api/campaigns/:tree/proof?beneficiary=` | ~42–110ms | 0%* | p95 <500ms, errors <1% |
+| `spike-load.js` | Mixed health + campaigns + prepare (200 VU peak) | ~1038ms | varies† | p95 <3000ms |
+
+\* Requires Postgres with campaign data; without DB the endpoint returns 500 and thresholds fail.
+
+† Spike error rate dominated by health 503 when DB/RPC down; re-run against staging with full stack for production baselines.
+
+Reports written to `tests/load/last-*-report.json` via each script's `handleSummary`.
+
+### Per-route rate limits (requests / 60s window)
+
+| Route | Limit | Rationale |
+|-------|-------|-----------|
+| `POST /api/campaigns/prepare` | 10 | CPU-heavy Merkle build; p95 ~1.4s under load |
+| `POST /api/campaigns/import` | 5 | Large CSV parse |
+| `GET /api/campaigns/:tree/proof` | 60 | Read-only; smoke p95 <110ms |
+| `GET /api/campaigns`, `GET /api/campaigns/:tree` | 60 | Public reads |
+| `POST /api/simulate-vesting` | 30 | Stateless math |
+| Default (via `withRoute`) | 60 | General API |
+
+Configured in per-route `withRoute({ rateLimit: ... })` in `apps/web/src/app/api/**/route.ts`.
+
+## SC benchmarks (Mollusk CU)
+
+```bash
+BPF_OUT_DIR=target/deploy cargo test --manifest-path programs/vesting/Cargo.toml --test benchmarks -- --show-output
+```
+
+9 active tests pass; `bench_claim_native` is `#[ignore]`. Full CU table: [`docs/CU_BUDGET.md`](CU_BUDGET.md).
 
 ## CI workflows (web + API)
 

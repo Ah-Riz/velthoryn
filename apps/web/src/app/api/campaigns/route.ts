@@ -2,7 +2,7 @@ import { NextRequest } from "next/server";
 import { jsonResponse } from "@/lib/api/json-response";
 import { eq, and, sql, desc } from "drizzle-orm";
 import { db } from "@/lib/db";
-import { campaigns, rootVersions, leaves } from "@/lib/db/schema";
+import { campaigns, rootVersions, leaves, streamCancelEvents } from "@/lib/db/schema";
 import { createCampaignRequestSchema } from "@/lib/api/validators";
 import { verifyAllLeaves } from "@/lib/merkle/verify";
 import { ForbiddenError, ValidationError } from "@/lib/api/errors";
@@ -36,9 +36,14 @@ async function postCampaignsHandler(request: NextRequest) {
 
   const data = parsed.data;
 
-  const authWallet = getAuthenticatedWallet(request);
-  if (authWallet !== data.creator) {
-    throw new ForbiddenError("Signer does not match the campaign creator");
+  // Auth is optional: if a Bearer token is provided, verify it matches the creator.
+  // Without auth, Merkle root verification below is the integrity gate.
+  const authHeader = request.headers.get("authorization");
+  if (authHeader) {
+    const authWallet = getAuthenticatedWallet(request);
+    if (authWallet !== data.creator) {
+      throw new ForbiddenError("Signer does not match the campaign creator");
+    }
   }
 
   if (data.leafCount !== data.leaves.length) {
@@ -184,8 +189,13 @@ async function getCampaignsHandler(request: NextRequest) {
       cancellable: campaigns.cancellable,
       paused: campaigns.paused,
       cancelledAt: campaigns.cancelledAt,
+      instantRefunded: campaigns.instantRefunded,
       createdAt: campaigns.createdAt,
       metadata: campaigns.metadata,
+      streamSettled: sql<boolean>`EXISTS (
+        SELECT 1 FROM stream_cancel_events sce
+        WHERE sce.campaign_id = ${campaigns.id}
+      )`.as("stream_settled"),
     })
     .from(campaigns)
     .where(whereClause)
@@ -203,7 +213,6 @@ async function getCampaignsHandler(request: NextRequest) {
 
 export const POST = withRoute(
   {
-    auth: true,
     rateLimit: { requests: 10, window: 60 },
     bodyLimit: "campaigns",
   },

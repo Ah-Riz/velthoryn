@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { Button } from "@/components/ui/button";
 
 export interface RecipientRow {
   id: string;
@@ -129,23 +130,26 @@ export function AllocationEditor({ initialRecipients, loading, onSubmit, canRota
       </div>
 
       <div className="flex items-center justify-between">
-        <button
+        <Button
+          type="button"
+          variant="ghost"
           onClick={addRow}
-          className="rounded-lg border border-white/[0.08] px-3 py-1.5 text-[12px] text-[#8b92a5] transition hover:bg-white/[0.04] hover:text-white"
+          className="h-auto rounded-lg border border-white/[0.08] px-3 py-1.5 text-[12px] text-[#8b92a5] hover:bg-white/[0.04] hover:text-white"
         >
           + Add Recipient
-        </button>
+        </Button>
         <span className="text-[11px] text-[#6f7c95]">{rows.length} recipient{rows.length !== 1 ? "s" : ""}</span>
       </div>
 
       {canRotate && (
-        <button
+        <Button
+          type="button"
           onClick={() => onSubmit(rows)}
           disabled={loading || !valid}
-          className="w-full rounded-xl bg-purple-600 px-4 py-3 text-[13px] font-semibold text-white transition hover:bg-purple-500 disabled:cursor-not-allowed disabled:opacity-50"
+          className="w-full h-auto rounded-xl bg-purple-600 px-4 py-3 text-[13px] font-semibold text-white hover:bg-purple-500"
         >
           {loading ? "Publishing Update..." : "Update Allocations"}
-        </button>
+        </Button>
       )}
 
       {!canRotate && (

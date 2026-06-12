@@ -1,7 +1,7 @@
 # Security Design — Velthoryn Protocol
 
 **Author:** Lana — smart-contract / backend lead
-**Status:** Security audit complete — VEL-001/009/010 remediated, 12 instructions, 31 error variants, 265 tests passing
+**Status:** Security audit complete — VEL-001/009/010/012 remediated, 12 instructions, 31 error variants, 265 tests passing
 **Companion docs:** `docs/TDD_LANA.md`, `docs/PROGRAM.md`, `docs/AUDIT_REPORT.md`, `docs/MATURITY_REPORT.md`
 **External reference:** [Helius: A Hitchhiker's Guide to Solana Program Security](https://www.helius.dev/blog/a-hitchhikers-guide-to-solana-program-security)
 
@@ -14,12 +14,23 @@ Security review performed using Solana six-pattern checklist, manual instruction
 | ID | Severity | Issue | Status |
 |----|----------|-------|--------|
 | **VEL-001** | HIGH | Double payout on stream campaigns via `withdraw → close_claim_record → withdraw` | **Fixed** — `total_entitled` set on first-touch in `withdraw`; `close_claim_record` requires `total_entitled > 0` |
+| **VEL-012** | HIGH | Pause+Cancel Lockout — grace-period claims blocked after pause then cancel | **Fixed** — see [Pause+Cancel Exploit](#resolved-pausecancel-exploit) subsection below |
 | **VEL-009** | LOW | Unbounded Merkle proof length in `claim` (CU griefing) | **Fixed** — `MAX_MERKLE_PROOF_LEN = 32` + `max_proof_len_for_leaf_count()` enforced on-chain; API validators cap at 32 |
 | **VEL-010** | LOW | Timing-unsafe admin API key comparison (`===` on strings) | **Fixed** — `verifyAdminKey` uses SHA-256 + `crypto.timingSafeEqual` |
 | **VEL-011** | MED | `StreamExpired` blocks multi-leaf claims after claiming larger leaf | **Fixed** — removed `fully_claimed` sub-condition in `claim.rs` |
-| **VEL-012** | MED | `milestoneIdx > 255` silently truncated by `writeUInt8` in leaf encoder | **Fixed** — `.max(255)` validation in Zod schemas |
+| **VEL-015** | MED | `milestoneIdx > 255` silently truncated by `writeUInt8` in leaf encoder | **Fixed** — `.max(255)` validation in Zod schemas |
 | **VEL-013** | LOW | Duplicate `(beneficiary, milestoneIdx)` causes permanent unclaimability | **Fixed** — prepare route rejects duplicates with 400 |
 | **VEL-014** | LOW | `total_entitled` stale after first claim — `close_claim_record` check imprecise | **Fixed** — accumulates for each milestone claim |
+| **Known Issue #29** | MED | Multi-leaf cliff/linear cumulative `claimed_amount` undercount | **Mitigated (BE)** — `prepare` and `import` routes reject multiple cliff/linear leaves per beneficiary; see [`docs/KNOWN_ISSUE_29_DESIGN.md`](KNOWN_ISSUE_29_DESIGN.md) §6 |
+
+### [RESOLVED] Pause+Cancel Exploit
+
+**Severity:** High (beneficiary lockout)
+**Status:** Fixed
+**Affected versions:** Pre-remediation
+**Description:** `cancel_campaign` did not reset `paused`, locking beneficiaries out of grace-period claims. A paused-then-cancelled campaign blocked `claim` via `CampaignPaused` while `unpause_campaign` was blocked by `cancelled_at`.
+**Fix:** `cancel_campaign` now resets `paused = false`. Defense-in-depth in `claim` and `withdraw` allows operations on cancelled campaigns regardless of pause state (`!paused || cancelled_at.is_some()`).
+**Tests:** T69, T70, EXPLOIT 12, clock test (`vesting.clock.spec.ts`: pause→cancel→claim precise vesting math)
 
 **Toolchain:** `cargo audit` — 0 vulnerabilities; `cargo geiger` — 0 `unsafe` in vesting crate; `cargo tarpaulin` — 6.68% in-crate (instruction handlers exercised by TS integration tests). **Code maturity:** 2.8 / 4.0 (Trail of Bits framework).
 

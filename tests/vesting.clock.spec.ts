@@ -1382,17 +1382,21 @@ describe("vesting clock-dependent tests (bankrun)", () => {
     }
   });
 
-  it("pause at T1, cancel at T2, claim mid-grace, creator sweeps unvested after grace", async () => {
+  it("clock: pause→cancel→claim with precise vesting math", async () => {
     const { context, provider, program, creator, cancelAuthority, pauseAuthority } =
       freshCtx();
     const beneficiary = await makeBeneficiaryTx(provider);
-    const AMOUNT = 10_000;
+    const AMOUNT = 100_000_000; // 100 tokens, 9 decimals
+    const DAY = 86400;
+    const DURATION = 100 * DAY;
 
     const t0 = await bankrunNow(context);
     const start = t0;
-    const end = t0 + 1000;
-    const t1 = t0 + 100;
-    const t2 = t0 + 500;
+    const end = t0 + DURATION;
+    const day25 = t0 + 25 * DAY;
+    const day50 = t0 + 50 * DAY;
+    const day53 = t0 + 53 * DAY;
+    const day58 = t0 + 58 * DAY;
 
     const leaf: VestingLeaf = {
       leafIndex: 0,
@@ -1410,7 +1414,7 @@ describe("vesting clock-dependent tests (bankrun)", () => {
     const { mint } = await createTestMintTx(provider, creator.publicKey);
     await fundCreatorAtaTx(provider, mint, creator.publicKey, AMOUNT);
 
-    const [treePda] = await treePDA(PROGRAM_ID, creator.publicKey, mint, 908);
+    const [treePda] = await treePDA(PROGRAM_ID, creator.publicKey, mint, 909);
     const [vaultAuthPda] = await vaultAuthorityPDA(PROGRAM_ID, treePda);
     const vault = getAssociatedTokenAddressSync(mint, vaultAuthPda, true);
     const beneficiaryAta = await createBeneficiaryAta(
@@ -1423,7 +1427,7 @@ describe("vesting clock-dependent tests (bankrun)", () => {
 
     await program.methods
       .createCampaign({
-        campaignId: new BN(908),
+        campaignId: new BN(909),
         merkleRoot: Array.from(tree.root),
         leafCount: 1,
         totalSupply: new BN(AMOUNT),
@@ -1453,7 +1457,8 @@ describe("vesting clock-dependent tests (bankrun)", () => {
       .signers([creator])
       .rpc();
 
-    await warpClock(context, t1);
+    // Day 25: pause campaign
+    await warpClock(context, day25);
     await program.methods
       .pauseCampaign()
       .accounts({
@@ -1463,7 +1468,8 @@ describe("vesting clock-dependent tests (bankrun)", () => {
       .signers([pauseAuthority])
       .rpc();
 
-    await warpClock(context, t2);
+    // Day 50: cancel — vested amount frozen at 50%, paused cleared
+    await warpClock(context, day50);
     await program.methods
       .cancelCampaign()
       .accounts({
@@ -1475,8 +1481,10 @@ describe("vesting clock-dependent tests (bankrun)", () => {
 
     const treeAfterCancel = await program.account.vestingTree.fetch(treePda);
     expect(treeAfterCancel.paused).to.equal(false);
+    expect(treeAfterCancel.cancelledAt.toNumber()).to.equal(day50);
 
-    await warpClock(context, t2 + 3 * 86400);
+    // Day 53: claim during grace — 50 tokens (cancelled_at), not 53 (claim time)
+    await warpClock(context, day53);
     await program.methods
       .claim(idlLeaf(leaf), idlProof(tree.proof(0)))
       .accounts({
@@ -1492,10 +1500,11 @@ describe("vesting clock-dependent tests (bankrun)", () => {
       .rpc();
 
     const postBeneficiary = await getAccount(provider.connection, beneficiaryAta);
-    expect(Number(postBeneficiary.amount)).to.equal(5000);
+    expect(Number(postBeneficiary.amount)).to.equal(50_000_000);
 
+    // Day 58: grace expired — creator sweeps remaining 50 tokens
     const preCreator = Number((await getAccount(provider.connection, creatorAta)).amount);
-    await warpClock(context, t2 + GRACE_PERIOD_SECS + 100);
+    await warpClock(context, day58);
     await program.methods
       .withdrawUnvested()
       .accounts({
@@ -1509,7 +1518,7 @@ describe("vesting clock-dependent tests (bankrun)", () => {
       .rpc();
 
     const postCreator = Number((await getAccount(provider.connection, creatorAta)).amount);
-    expect(postCreator - preCreator).to.equal(5000);
+    expect(postCreator - preCreator).to.equal(50_000_000);
     const postVault = await getAccount(provider.connection, vault);
     expect(Number(postVault.amount)).to.equal(0);
   });

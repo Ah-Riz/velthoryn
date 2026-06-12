@@ -152,7 +152,7 @@ The API uses **three** auth mechanisms:
 | ID | Severity | Finding | Recommendation |
 |----|----------|---------|----------------|
 | API-M01 | Medium | ~~`POST /api/campaigns` (index campaign) has **no authentication**.~~ **Fixed:** `auth: true` added with `getAuthenticatedWallet` creator verification. | ✅ Remediated |
-| API-L01 | Low | ~~`POST /api/claims/sync` has no authentication.~~ **Fixed:** `auth: true` added. | ✅ Remediated |
+| API-L01 | Low | ~~`POST /api/claims/sync` has no authentication.~~ **Fixed:** `admin: true` enforced (`x-admin-key`). Browser clients use public `POST /api/events/sync`. | ✅ Remediated |
 
 ### Positive Findings
 

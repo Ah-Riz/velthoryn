@@ -2,9 +2,9 @@
 
 import {
   CARD,
-  INPUT,
   INPUT_ERR,
   Field,
+  Input,
   SectionHeader,
   ToggleCard,
 } from "./shared";
@@ -57,13 +57,16 @@ export function CommonFields({
         />
         <Field
           label={`Amount${mintDecimals !== null ? ` (${mintDecimals} decimals)` : ""}`}
+          inputId="field-amount"
           input={
-            <input
+            <Input
+              id="field-amount"
               type="text"
               placeholder={mintDecimals !== null ? "e.g. 1000" : "e.g. 1000000000 (raw)"}
               value={amount}
               onChange={(e) => onAmountChange(e.target.value)}
-              className={`${INPUT} ${formErrors.amount ? INPUT_ERR : ""}`}
+              aria-invalid={!!formErrors.amount}
+              className={`bg-[#11161f] text-[13px] text-white border-white/[0.08] focus-visible:border-white/20 focus-visible:ring-0 placeholder:text-[#8b92a5] ${formErrors.amount ? INPUT_ERR : ""}`}
             />
           }
           error={formErrors.amount}
@@ -74,13 +77,16 @@ export function CommonFields({
         <SectionHeader title="Recipient" caption="Wallet that will receive the vested tokens" />
         <Field
           label="Beneficiary Wallet"
+          inputId="field-beneficiary"
           input={
-            <input
+            <Input
+              id="field-beneficiary"
               type="text"
               placeholder="Recipient wallet address"
               value={beneficiary}
               onChange={(e) => onBeneficiaryChange(e.target.value)}
-              className={`${INPUT} font-mono ${formErrors.beneficiary ? INPUT_ERR : ""}`}
+              aria-invalid={!!formErrors.beneficiary}
+              className={`bg-[#11161f] font-mono text-[13px] text-white border-white/[0.08] focus-visible:border-white/20 focus-visible:ring-0 placeholder:text-[#8b92a5] ${formErrors.beneficiary ? INPUT_ERR : ""}`}
             />
           }
           error={formErrors.beneficiary}

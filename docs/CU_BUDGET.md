@@ -1,6 +1,6 @@
 # Compute Unit Budget — Velthoryn Vesting Program
 
-> Last updated: 2026-06-06 | Program: `G6iaigUdi2btFwUc2N65twfxwA8Ew5uKKhKJ5RJa8wvu`
+> Last updated: 2026-06-11 | Program: `G6iaigUdi2btFwUc2N65twfxwA8Ew5uKKhKJ5RJa8wvu`
 > Measured with: Mollusk 0.13.1 + Solana CLI 3.1.12 (Agave)
 
 ## Summary
@@ -9,7 +9,7 @@
 |-------------|-----------|-------------------|-------|
 | `get_vested_amount` | 614–916 | 1,200 | Read-only, no accounts mutated |
 | `create_campaign_native` | 9,378–12,372 | 15,000 | Scales with leaf_count |
-| `create_stream_native` | 11,617–13,117 | 16,000 | Single-recipient stream |
+| `create_stream_native` | 11,617–16,117 | 17,000 | Single-recipient stream (includes vault init CPI) |
 | `fund_campaign_native` | 7,891 | 10,000 | SOL transfer to PDA |
 | `cancel_campaign` | 5,672 | 8,000 | Sets cancelled_at, clears paused |
 | `set_milestone_released` | 5,301 | 7,000 | Bit flip on milestone flags |
@@ -53,7 +53,13 @@
 
 | Scenario | CU |
 |----------|-----|
-| Linear, 1 leaf | 11,617–13,117 |
+| Linear, 1 leaf | 11,617–16,117 |
+
+### bench_claim_native (ignored)
+
+| Status | Reason |
+|--------|--------|
+| **Ignored** | Mollusk 0.13.x — `claim` uses `init_if_needed` for `ClaimRecord` PDA. `bench_claim_native` in `programs/vesting/tests/benchmarks.rs` is `#[ignore]`. Re-run when Mollusk 0.14+ supports `init_if_needed`. Estimated CU: ~11,500 (bankrun). |
 
 ### fund_campaign_native
 

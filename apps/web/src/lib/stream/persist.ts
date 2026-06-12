@@ -34,6 +34,7 @@ export interface CachedLocalCampaignSnapshot {
   cancellable: boolean;
   paused: boolean;
   cancelledAt: number | null;
+  instantRefunded: boolean;
   createdAt: number;
   myClaimed?: string;
 }

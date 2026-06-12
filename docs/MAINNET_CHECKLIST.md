@@ -118,6 +118,7 @@
 ### Step 4: Frontend Deploy
 
 - [ ] Vercel production deployment
+- [ ] Database schema up to date: `cd apps/web && pnpm db:migrate` against production `DATABASE_URL` (not `db:push` — use numbered migration files only)
 - [ ] All env vars set in Vercel dashboard
 - [ ] CORS `ALLOWED_ORIGIN` matches production domain
 - [ ] CSP headers include mainnet RPC endpoint

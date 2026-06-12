@@ -79,7 +79,7 @@ export default function MilestoneCreatePage() {
   const [useAutoWrap, setUseAutoWrap] = useState(false);
   const [cancellable, setCancellable] = useState(false);
   const [recipient, setRecipient] = useState("");
-  const [baseCampaignId] = useState(() => Math.floor(Date.now() / 1000) % 1000000);
+  const [baseCampaignId, setBaseCampaignId] = useState(() => Math.floor(Date.now() / 1000) % 1000000);
 
   // Milestone entries
   const [milestones, setMilestones] = useState<MilestoneEntry[]>([newMilestone()]);
@@ -104,6 +104,16 @@ export default function MilestoneCreatePage() {
   const tokenBalance = walletToken?.uiAmount ?? null;
   const totalAmount = milestones.reduce((sum, m) => sum + (Number(m.amount) || 0), 0);
   const manualCreatesCampaign = milestones.length > 1;
+
+  const validateField = useCallback(
+    (key: string, value: string, type: "recipient" | "amount") => {
+      let err: string | null = null;
+      if (type === "recipient") err = validatePublicKey(value);
+      else if (type === "amount") err = validateAmountWithDecimals(value, effectiveMintDecimals);
+      setFormErrors((prev) => ({ ...prev, [key]: err }));
+    },
+    [effectiveMintDecimals],
+  );
 
   const refreshPendingFundings = useCallback(() => {
     if (!publicKey) {
@@ -319,6 +329,7 @@ export default function MilestoneCreatePage() {
           setTxState({ type: "bulk-funded", sig: funded.sig, treeAddress: created.treeAddress, prepared });
           setMilestones([newMilestone()]);
           setFormErrors({});
+          setBaseCampaignId(Math.floor(Date.now() / 1000) % 1000000);
         } catch (error: unknown) {
           if (error instanceof Error && /User rejected|Connection rejected/i.test(error.message)) {
             toast("Funding rejected", "error");
@@ -370,6 +381,7 @@ export default function MilestoneCreatePage() {
       setTxState({ type: "success", results: [result] });
       setMilestones([newMilestone()]);
       setFormErrors({});
+      setBaseCampaignId(Math.floor(Date.now() / 1000) % 1000000);
     } catch (error: unknown) {
       if (error instanceof Error && /User rejected|Connection rejected/i.test(error.message)) {
         toast("Transaction rejected", "error");
@@ -444,6 +456,7 @@ export default function MilestoneCreatePage() {
                     placeholder="Solana wallet address..."
                     value={recipient}
                     onChange={(e) => setRecipient(e.target.value)}
+                    onBlur={(e) => validateField("recipient", e.target.value, "recipient")}
                     className={`${INPUT} font-mono ${formErrors.recipient ? INPUT_ERR : ""}`}
                   />
                 }
@@ -501,6 +514,7 @@ export default function MilestoneCreatePage() {
                           placeholder="e.g. 1000"
                           value={milestone.amount}
                           onChange={(e) => updateMilestone(milestone.id, "amount", e.target.value)}
+                          onBlur={(e) => validateField(`amount_${i}`, e.target.value, "amount")}
                           className={`${INPUT} pr-24 ${formErrors[`amount_${i}`] ? INPUT_ERR : ""}`}
                         />
                         <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-1.5">

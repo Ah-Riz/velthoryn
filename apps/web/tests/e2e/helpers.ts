@@ -62,6 +62,13 @@ export async function enableE2eWallet(page: Page) {
   });
 }
 
+/** Mock wallet sendTransaction for cancel/withdraw E2E without a validator. */
+export async function enableMockOnChainTransactions(page: Page) {
+  await page.addInitScript(() => {
+    window.localStorage.setItem("velthoryn:e2e-mock-send-tx", "1");
+  });
+}
+
 export async function gotoWithRetry(page: Page, path: string, maxRetries = 3) {
   let lastError: Error | undefined;
   for (let i = 0; i < maxRetries; i++) {
@@ -121,6 +128,112 @@ export async function injectStreamSchedule(
   }, {
     key: `velthoryn:stream:${treeAddress}`,
     value: JSON.stringify({ schedule: { milestoneIdx: 0, ...schedule } }),
+  });
+}
+
+function routePathname(url: string | URL): string {
+  return typeof url === "string" ? new URL(url).pathname : url.pathname;
+}
+
+/** Mock sender + recipient campaign list APIs for /campaigns page E2E. */
+export async function mockCampaignListApis(
+  page: Page,
+  options: {
+    senderCampaigns?: Array<Record<string, unknown>>;
+    recipientCampaigns?: Array<Record<string, unknown>>;
+    walletAddress?: string;
+  } = {},
+) {
+  const wallet = options.walletAddress ?? creatorWallet;
+  const senderCampaigns = options.senderCampaigns ?? [];
+  const recipientCampaigns = options.recipientCampaigns ?? [];
+
+  await page.route("**/api/campaigns**", async (route) => {
+    const url = new URL(route.request().url());
+    if (url.pathname !== "/api/campaigns") {
+      await route.continue();
+      return;
+    }
+
+    const creator = url.searchParams.get("creator");
+    if (creator && creator !== wallet) {
+      await route.fulfill({
+        json: { campaigns: [], total: 0, page: 1, limit: 100 },
+        status: 200,
+      });
+      return;
+    }
+    await route.fulfill({
+      json: {
+        campaigns: senderCampaigns,
+        total: senderCampaigns.length,
+        page: 1,
+        limit: 100,
+      },
+      status: 200,
+    });
+  });
+
+  await page.route(
+    (url) => routePathname(url) === `/api/beneficiary/${wallet}/campaigns`,
+    async (route) => {
+      await route.fulfill({
+        json: { campaigns: recipientCampaigns },
+        status: 200,
+      });
+    },
+  );
+}
+
+/** Wait until mocked campaign list APIs have been fetched for the E2E wallet. */
+export async function waitForCampaignListMocks(page: Page, walletAddress = creatorWallet) {
+  await Promise.all([
+    page.waitForResponse(
+      (resp) =>
+        resp.url().includes("/api/campaigns") &&
+        resp.url().includes(`creator=${walletAddress}`) &&
+        resp.ok(),
+      { timeout: 20_000 },
+    ),
+    page.waitForResponse(
+      (resp) =>
+        resp.url().includes(`/api/beneficiary/${walletAddress}/campaigns`) && resp.ok(),
+      { timeout: 20_000 },
+    ),
+  ]);
+}
+
+/**
+ * Stub Solana JSON-RPC getAccountInfo to return null immediately.
+ * E2E campaign/allocations pages try on-chain fetch first; without this,
+ * CI can hang on slow public devnet until Playwright timeouts fire.
+ */
+export async function mockSolanaRpcGetAccountInfoNull(page: Page) {
+  await page.route("**", async (route) => {
+    const req = route.request();
+    if (req.method() !== "POST") {
+      await route.continue();
+      return;
+    }
+    let body: { id?: number | string; method?: string } | null = null;
+    try {
+      body = req.postDataJSON();
+    } catch {
+      await route.continue();
+      return;
+    }
+    if (body?.method !== "getAccountInfo") {
+      await route.continue();
+      return;
+    }
+    await route.fulfill({
+      status: 200,
+      json: {
+        jsonrpc: "2.0",
+        id: body?.id ?? 1,
+        result: { context: { slot: 1 }, value: null },
+      },
+    });
   });
 }
 

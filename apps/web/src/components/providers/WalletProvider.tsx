@@ -33,6 +33,10 @@ const E2E_MOCK_WALLET_KEY = "velthoryn:e2e-wallet";
 const E2E_MOCK_PUBLIC_KEY = "28FQ5wVeihjGnZw93RctyAtUdtBdd6vGXWUkke49mEAw";
 const E2E_SIGNING_KEY = "velthoryn:e2e-signing-key";
 const E2E_PUBLIC_KEY_OVERRIDE = "velthoryn:e2e-public-key";
+const E2E_MOCK_SEND_TX_KEY = "velthoryn:e2e-mock-send-tx";
+// Valid base58 encoding of 64 zero-bytes — satisfies web3.js confirmTransaction decode check.
+const E2E_MOCK_CANCEL_SIG =
+  "2AXDGYSE4f2sz7tvMMzyHvUfcoJmxudvdhBcmiUSo6ijwfYmfZYsKRxboQMPh3R4kUhXRVdtSXFXMheka4Rc4P2";
 
 function e2eMockWalletEnabled() {
   if (typeof window === "undefined") return false;
@@ -41,6 +45,11 @@ function e2eMockWalletEnabled() {
     window.location.hostname === "127.0.0.1";
 
   return isLocalhost && window.localStorage.getItem(E2E_MOCK_WALLET_KEY) === "1";
+}
+
+function e2eMockSendTxEnabled() {
+  if (typeof window === "undefined") return false;
+  return window.localStorage.getItem(E2E_MOCK_SEND_TX_KEY) === "1";
 }
 
 function getE2eKeypair(): Keypair | null {
@@ -88,22 +97,24 @@ function buildMockContext(): WalletContextState {
     select: () => {},
     connect: async () => {},
     disconnect: async () => {},
-    sendTransaction: keypair
-      ? async (transaction, connection, options) => {
-          if (transaction instanceof VersionedTransaction) {
-            transaction.sign([keypair]);
-            return connection.sendRawTransaction(transaction.serialize(), options);
+    sendTransaction: e2eMockSendTxEnabled()
+      ? async () => E2E_MOCK_CANCEL_SIG
+      : keypair
+        ? async (transaction, connection, options) => {
+            if (transaction instanceof VersionedTransaction) {
+              transaction.sign([keypair]);
+              return connection.sendRawTransaction(transaction.serialize(), options);
+            }
+            const tx = transaction as Transaction;
+            tx.feePayer ??= keypair.publicKey;
+            if (!tx.recentBlockhash) {
+              tx.recentBlockhash = (await connection.getLatestBlockhash()).blockhash;
+            }
+            tx.partialSign(keypair);
+            const raw = tx.serialize();
+            return connection.sendRawTransaction(raw, options);
           }
-          const tx = transaction as Transaction;
-          tx.feePayer ??= keypair.publicKey;
-          if (!tx.recentBlockhash) {
-            tx.recentBlockhash = (await connection.getLatestBlockhash()).blockhash;
-          }
-          tx.partialSign(keypair);
-          const raw = tx.serialize();
-          return connection.sendRawTransaction(raw, options);
-        }
-      : async () => { throw new Error("E2E mock wallet cannot send transactions."); },
+        : async () => { throw new Error("E2E mock wallet cannot send transactions."); },
     signTransaction: keypair
       ? async <T extends Transaction | VersionedTransaction>(transaction: T): Promise<T> => {
           if (transaction instanceof VersionedTransaction) {

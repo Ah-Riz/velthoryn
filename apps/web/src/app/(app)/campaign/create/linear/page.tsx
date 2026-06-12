@@ -74,7 +74,7 @@ export default function LinearCreatePage() {
   const [mintDecimals, setMintDecimals] = useState<number | null>(null);
   const [useAutoWrap, setUseAutoWrap] = useState(false);
   const [cancellable, setCancellable] = useState(false);
-  const [baseCampaignId] = useState(() => Math.floor(Date.now() / 1000) % 1000000);
+  const [baseCampaignId, setBaseCampaignId] = useState(() => Math.floor(Date.now() / 1000) % 1000000);
 
   // Stream entries (manual mode)
   const [streams, setStreams] = useState<StreamEntry[]>([newStream()]);
@@ -98,6 +98,17 @@ export default function LinearCreatePage() {
     : walletTokens.find((t) => t.mintAddress === mintAddress && !t.isNativeSol) ?? walletTokens.find((t) => t.mintAddress === mintAddress);
   const tokenBalance = walletToken?.uiAmount ?? null;
   const totalAmount = streams.reduce((sum, s) => sum + (Number(s.amount) || 0), 0);
+
+  const validateField = useCallback(
+    (key: string, value: string, type: "recipient" | "amount" | "start" | "end") => {
+      let err: string | null = null;
+      if (type === "recipient") err = validatePublicKey(value);
+      else if (type === "amount") err = validateAmountWithDecimals(value, effectiveMintDecimals);
+      else if (type === "end") err = value ? null : "End date is required.";
+      setFormErrors((prev) => ({ ...prev, [key]: err }));
+    },
+    [effectiveMintDecimals],
+  );
 
   const refreshPendingFundings = useCallback(() => {
     if (!publicKey) {
@@ -226,6 +237,7 @@ export default function LinearCreatePage() {
           setTxState({ type: "bulk-funded", sig: funded.sig, treeAddress: created.treeAddress, prepared });
           setStreams([newStream()]);
           setFormErrors({});
+          setBaseCampaignId(Math.floor(Date.now() / 1000) % 1000000);
         } catch (error: unknown) {
           if (error instanceof Error && /User rejected|Connection rejected/i.test(error.message)) {
             toast("Funding rejected", "error");
@@ -274,6 +286,7 @@ export default function LinearCreatePage() {
       setTxState({ type: "success", results });
       setStreams([newStream()]);
       setFormErrors({});
+      setBaseCampaignId(Math.floor(Date.now() / 1000) % 1000000);
     } catch (error: unknown) {
       if (error instanceof Error && /User rejected|Connection rejected/i.test(error.message)) {
         toast("Transaction rejected by wallet", "error");
@@ -483,6 +496,7 @@ export default function LinearCreatePage() {
                           placeholder="e.g. 1000"
                           value={stream.amount}
                           onChange={(e) => updateStream(stream.id, "amount", e.target.value)}
+                          onBlur={(e) => validateField(`amount_${i}`, e.target.value, "amount")}
                           className={`${INPUT} pr-24 ${formErrors[`amount_${i}`] ? INPUT_ERR : ""}`}
                         />
                         <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-1.5">
@@ -509,6 +523,7 @@ export default function LinearCreatePage() {
                         placeholder="Solana wallet address..."
                         value={stream.recipient}
                         onChange={(e) => updateStream(stream.id, "recipient", e.target.value)}
+                        onBlur={(e) => validateField(`recipient_${i}`, e.target.value, "recipient")}
                         className={`${INPUT} font-mono ${formErrors[`recipient_${i}`] ? INPUT_ERR : ""}`}
                       />
                     }
@@ -538,6 +553,7 @@ export default function LinearCreatePage() {
                           type="datetime-local"
                           value={stream.endTime}
                           onChange={(e) => updateStream(stream.id, "endTime", e.target.value)}
+                          onBlur={(e) => validateField(`end_${i}`, e.target.value, "end")}
                           className={`${INPUT} flex-1 ${formErrors[`end_${i}`] ? INPUT_ERR : ""}`}
                         />
                         {streams.length > 1 && stream.endTime && (

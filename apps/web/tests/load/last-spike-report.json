@@ -1,0 +1,12 @@
+{
+  "timestamp": "2026-06-11T03:48:30.716Z",
+  "scenario": "mixed spike (health + campaigns + prepare)",
+  "peak_vus": 200,
+  "p95_ms": "1037.59",
+  "error_rate_pct": "75.00",
+  "total_requests": 8,
+  "thresholds": {
+    "p95_ms_max": 3000,
+    "error_rate_pct_max": 10
+  }
+}

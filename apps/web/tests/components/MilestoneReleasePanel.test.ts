@@ -1,12 +1,35 @@
 // @vitest-environment jsdom
-import { describe, it, expect, afterEach } from "vitest";
-import { render, screen, cleanup } from "@testing-library/react";
+import { describe, it, expect, afterEach, beforeEach, vi } from "vitest";
+import { render, screen, cleanup, fireEvent, waitFor } from "@testing-library/react";
 import { createElement } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { PublicKey } from "@solana/web3.js";
 import { MilestoneReleasePanel } from "@/components/campaign/detail/MilestoneReleasePanel";
 
-function withQueryClient(element: React.ReactElement) {
-  const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+const mockSendTransaction = vi.fn();
+const mockConfirmTransaction = vi.fn();
+
+vi.mock("@solana/wallet-adapter-react", () => ({
+  useWallet: () => ({ sendTransaction: mockSendTransaction }),
+  useConnection: () => ({ connection: { confirmTransaction: mockConfirmTransaction } }),
+}));
+
+const TREE_PUBKEY = new PublicKey("11111111111111111111111111111112");
+
+function createMockProgram() {
+  return {
+    methods: {
+      setMilestoneReleased: vi.fn(() => ({
+        accounts: vi.fn(() => ({
+          instruction: vi.fn(async () => ({})),
+        })),
+      })),
+    },
+  };
+}
+
+function withQueryClient(element: React.ReactElement, client?: QueryClient) {
+  const qc = client ?? new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return createElement(QueryClientProvider, { client: qc }, element);
 }
 
@@ -60,5 +83,62 @@ describe("MilestoneReleasePanel", () => {
   it("shows Release button for unreleased milestones", () => {
     renderPanel({ leafCount: 2 });
     expect(screen.getByText("Release #0")).toBeTruthy();
+  });
+});
+
+describe("MilestoneReleasePanel cache invalidation", () => {
+  let queryClient: QueryClient;
+  let invalidateSpy: ReturnType<typeof vi.spyOn>;
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockSendTransaction.mockResolvedValue("test-sig");
+    mockConfirmTransaction.mockResolvedValue({ value: { err: null } });
+    global.fetch = vi.fn().mockResolvedValue({ ok: true }) as typeof fetch;
+
+    queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    invalidateSpy = vi.spyOn(queryClient, "invalidateQueries");
+  });
+
+  afterEach(() => {
+    cleanup();
+    vi.restoreAllMocks();
+  });
+
+  it("invalidates campaign, beneficiaryCampaigns, and timeline after confirmed release", async () => {
+    const onSuccess = vi.fn();
+    const toast = vi.fn();
+
+    render(
+      withQueryClient(
+        createElement(MilestoneReleasePanel, {
+          program: createMockProgram() as never,
+          publicKey: PublicKey.default,
+          treePubkey: TREE_PUBKEY,
+          milestoneReleasedFlags: new Uint8Array(32),
+          milestoneIndices: [0],
+          canRelease: true,
+          onSuccess,
+          toast,
+        }),
+        queryClient,
+      ),
+    );
+
+    fireEvent.click(screen.getByText("Release #0"));
+
+    await waitFor(() => {
+      expect(mockConfirmTransaction).toHaveBeenCalledWith("test-sig", "confirmed");
+    });
+
+    await waitFor(() => {
+      expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ["campaign"] });
+      expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ["beneficiaryCampaigns"] });
+      expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ["timeline", TREE_PUBKEY.toBase58()] });
+    });
+
+    expect(onSuccess).toHaveBeenCalledWith(0);
+    expect(toast).toHaveBeenCalledWith("Milestone #0 released.", "success");
+    expect(global.fetch).toHaveBeenCalledWith("/api/events/sync", expect.objectContaining({ method: "POST" }));
   });
 });

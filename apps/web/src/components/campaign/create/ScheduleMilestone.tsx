@@ -1,6 +1,8 @@
 "use client";
 
-import { CARD, INPUT, INPUT_ERR, Field, SectionHeader, formatDuration } from "./shared";
+import { CARD, INPUT_ERR, Input, Field, SectionHeader, formatDuration } from "./shared";
+
+const DT_INPUT_CLS = "h-auto rounded-xl bg-[#11161f] px-4 py-3 text-[13px] text-white border-white/[0.08] focus-visible:border-white/20 focus-visible:ring-0";
 
 export function ScheduleMilestone({
   startTime,
@@ -27,23 +29,27 @@ export function ScheduleMilestone({
       <div className="grid gap-4 md:grid-cols-2">
         <Field
           label="Start Time"
+          inputId="milestone-start-time"
           input={
-            <input
+            <Input
+              id="milestone-start-time"
               type="datetime-local"
               value={startTime}
               onChange={(e) => onStartTimeChange(e.target.value)}
-              className={INPUT}
+              className={DT_INPUT_CLS}
             />
           }
         />
         <Field
           label="Unlock Time"
+          inputId="milestone-unlock-time"
           input={
-            <input
+            <Input
+              id="milestone-unlock-time"
               type="datetime-local"
               value={unlockTime}
               onChange={(e) => onUnlockTimeChange(e.target.value)}
-              className={INPUT}
+              className={DT_INPUT_CLS}
             />
           }
         />
@@ -56,14 +62,17 @@ export function ScheduleMilestone({
       {scheduleError ? <p className="text-[12px] text-red-400">{scheduleError}</p> : null}
       <Field
         label="Milestone Index"
+        inputId="milestone-idx"
         input={
-          <input
+          <Input
+            id="milestone-idx"
             type="number"
             min="0"
             max="255"
             value={milestoneIdx}
             onChange={(e) => onMilestoneIdxChange(e.target.value)}
-            className={`${INPUT} max-w-[160px] ${milestoneError ? INPUT_ERR : ""}`}
+            aria-invalid={!!milestoneError}
+            className={`h-auto max-w-[160px] rounded-xl bg-[#11161f] px-4 py-3 text-[13px] text-white border-white/[0.08] focus-visible:border-white/20 focus-visible:ring-0 ${milestoneError ? INPUT_ERR : ""}`}
           />
         }
         error={milestoneError}

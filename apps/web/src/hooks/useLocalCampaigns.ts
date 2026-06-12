@@ -21,6 +21,8 @@ type LocalSenderCampaign = {
   cancellable: boolean;
   paused: boolean;
   cancelledAt: number | null;
+  instantRefunded: boolean;
+  streamSettled: boolean;
   createdAt: number;
   metadata: null;
 };
@@ -66,6 +68,7 @@ type VestingTreeAccount = {
   totalSupply: { toString(): string };
   totalClaimed: { toString(): string };
   cancelledAt?: { toString(): string } | null;
+  instantRefunded?: boolean;
   createdAt: { toString(): string };
   leafCount: { toString(): string } | number;
   cancellable: unknown;
@@ -90,6 +93,8 @@ function buildSenderCampaign(
     cancellable: cached.cancellable,
     paused: cached.paused,
     cancelledAt: cached.cancelledAt,
+    instantRefunded: cached.instantRefunded ?? false,
+    streamSettled: false,
     createdAt: cached.createdAt,
     metadata: null,
   };
@@ -213,6 +218,8 @@ export function useLocalCampaigns(address: string | undefined, refreshKey?: numb
               const createdAt = Number(account.createdAt.toString());
               const leafCount = Number(account.leafCount);
 
+              const instantRefunded = Boolean(account.instantRefunded);
+
               const senderCampaign =
                 creator === currentAddress
                   ? {
@@ -226,6 +233,8 @@ export function useLocalCampaigns(address: string | undefined, refreshKey?: numb
                       cancellable: Boolean(account.cancellable),
                       paused: Boolean(account.paused),
                       cancelledAt,
+                      instantRefunded,
+                      streamSettled: false,
                       createdAt,
                       metadata: null,
                     }
@@ -261,6 +270,7 @@ export function useLocalCampaigns(address: string | undefined, refreshKey?: numb
                 cancellable: Boolean(account.cancellable),
                 paused: Boolean(account.paused),
                 cancelledAt,
+                instantRefunded,
                 createdAt,
                 myClaimed,
               });
