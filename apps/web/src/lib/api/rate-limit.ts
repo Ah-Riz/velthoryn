@@ -90,7 +90,17 @@ export async function rateLimit(
   }
 
   const limiter = getUpstashLimiter(limits.requests, limits.window);
-  const result = await limiter.limit(key);
+  let result;
+  try {
+    result = await limiter.limit(key);
+  } catch (err) {
+    // BE-SEC-05 (Week 9): an Upstash error (network/5xx/quota) previously rejected
+    // uncaught → HTTP 500 on EVERY rate-limited request (self-inflicted outage).
+    // Fall back to in-memory limiting so the API stays up and keeps SOME throttling
+    // (per-instance; weaker on serverless, but availability > hard fail-closed here).
+    console.warn("[rate-limit] Upstash error, falling back to in-memory limiter", err);
+    return memoryRateLimit(key, limits);
+  }
 
   return {
     success: result.success,
