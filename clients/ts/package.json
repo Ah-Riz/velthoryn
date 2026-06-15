@@ -6,15 +6,17 @@
   "types": "dist/index.d.ts",
   "scripts": {
     "build": "tsc",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test": "node --import tsx --test src/__tests__/*.test.ts"
   },
   "dependencies": {
-    "js-sha3": "^0.9.3",
+    "@solana/web3.js": "^1.98.0",
     "bn.js": "^5.2.1",
-    "@solana/web3.js": "^1.98.0"
+    "js-sha3": "^0.9.3"
   },
   "devDependencies": {
-    "typescript": "^5.6.0",
-    "@types/node": "^22.10.0"
+    "@types/node": "^22.10.0",
+    "fast-check": "^4.8.0",
+    "typescript": "^5.6.0"
   }
 }
