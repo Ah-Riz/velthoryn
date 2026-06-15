@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Space_Grotesk, JetBrains_Mono, Geist } from "next/font/google";
 import "./globals.css";
 import "./landing/landing.css";
+import { ThemeProvider } from "@/components/providers/ThemeProvider";
 import { WalletProvider } from "@/components/providers/WalletProvider";
 import { WalletTokensProvider } from "@/components/providers/WalletTokensProvider";
 import { QueryProvider } from "@/components/providers/QueryProvider";
@@ -45,13 +46,15 @@ export default function RootLayout({
   return (
     <html lang="en" className={cn(spaceGrotesk.variable, jetbrainsMono.variable, "font-sans", geist.variable)}>
       <body suppressHydrationWarning>
-        <QueryProvider>
-          <WalletProvider>
-            <WalletTokensProvider>
+        <ThemeProvider>
+          <QueryProvider>
+            <WalletProvider>
+              <WalletTokensProvider>
                 <TooltipProvider delayDuration={300}>{children}</TooltipProvider>
               </WalletTokensProvider>
-          </WalletProvider>
-        </QueryProvider>
+            </WalletProvider>
+          </QueryProvider>
+        </ThemeProvider>
         {analyticsEnabled ? <Analytics /> : null}
       </body>
     </html>

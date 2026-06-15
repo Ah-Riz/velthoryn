@@ -71,14 +71,14 @@ export function BulkCsvSection({
             a.click();
             URL.revokeObjectURL(url);
           }}
-          className="h-auto gap-2 rounded-lg border border-white/[0.08] px-3 py-2 text-[12px] font-medium text-[#8b92a5] hover:border-white/[0.16] hover:bg-transparent hover:text-white"
+          className="h-auto gap-2 rounded-lg border border-foreground/[0.08] px-3 py-2 text-[12px] font-medium text-muted-foreground hover:border-foreground/[0.16] hover:bg-transparent hover:text-foreground"
         >
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg>
           Download {vestingType} CSV template
         </Button>
 
         {/* File upload */}
-        <label className="flex cursor-pointer items-center justify-center gap-2 rounded-xl border border-dashed border-white/[0.12] bg-white/[0.02] px-4 py-6 text-[13px] text-[#8b92a5] transition hover:border-white/[0.2] hover:bg-white/[0.04]">
+        <label className="flex cursor-pointer items-center justify-center gap-2 rounded-xl border border-dashed border-foreground/[0.12] bg-foreground/[0.02] px-4 py-6 text-[13px] text-muted-foreground transition hover:border-foreground/[0.2] hover:bg-foreground/[0.04]">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M17 8l-5-5-5 5M12 3v12"/></svg>
           <span>{vestingType === "milestone" ? "Drop milestone CSV here or click to upload" : "Drop CSV file here or click to upload"}</span>
           <input
@@ -110,7 +110,7 @@ export function BulkCsvSection({
         <Button
           type="button"
           onClick={onParse}
-          className="h-auto rounded-xl bg-white/[0.06] px-4 py-2.5 text-[13px] font-medium text-white hover:bg-white/[0.1]"
+          className="h-auto rounded-xl bg-foreground/[0.06] px-4 py-2.5 text-[13px] font-medium text-foreground hover:bg-foreground/[0.1]"
         >
           Parse & Validate
         </Button>
@@ -118,7 +118,7 @@ export function BulkCsvSection({
         {csvResult?.issues.length ? (
           <div className="space-y-1">
             {csvResult.issues.map((issue, index) => (
-              <p key={`${issue.rowNumber}-${index}`} className="text-[12px] text-red-400">
+              <p key={`${issue.rowNumber}-${index}`} className="text-[12px] text-red-700 dark:text-red-400">
                 {formatIssueLabel(issue.rowNumber)}: {issue.message}
               </p>
             ))}
@@ -126,9 +126,9 @@ export function BulkCsvSection({
         ) : null}
 
         {previewRows.length ? (
-          <div className="overflow-hidden rounded-2xl border border-white/[0.06]">
+          <div className="overflow-hidden rounded-2xl border border-foreground/[0.06]">
             <table className="w-full text-left text-[12px]">
-              <thead className="bg-white/[0.03] text-[#8b92a5]">
+              <thead className="bg-foreground/[0.03] text-muted-foreground">
                 <tr>
                   <th className="px-3 py-2 font-medium">{vestingType === "milestone" ? "Beneficiary" : "Recipient"}</th>
                   <th className="px-3 py-2 font-medium">Amount</th>
@@ -140,7 +140,7 @@ export function BulkCsvSection({
               </thead>
               <tbody>
                 {previewRows.map((row) => (
-                  <tr key={row.rowNumber} className="border-t border-white/[0.06] text-white">
+                  <tr key={row.rowNumber} className="border-t border-foreground/[0.06] text-foreground">
                     <td className="px-3 py-2 font-mono">{row.beneficiary}</td>
                     <td className="px-3 py-2">{row.amountInput}</td>
                     <td className="px-3 py-2">{row.releaseType === 0 ? "Cliff" : row.releaseType === 1 ? "Linear" : "Milestone"}</td>

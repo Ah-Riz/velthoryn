@@ -245,7 +245,7 @@ export function ClaimWithProofButton({
 
   if (allLeavesQuery.isLoading) {
     return (
-      <button disabled className="cursor-not-allowed w-full rounded-xl bg-violet-600/50 py-3.5 text-[15px] font-semibold text-white/60">
+      <button disabled className="cursor-not-allowed w-full rounded-xl bg-violet-700/50 dark:bg-violet-600/50 py-3.5 text-[15px] font-semibold text-white/60">
         Loading proof...
       </button>
     );
@@ -254,7 +254,7 @@ export function ClaimWithProofButton({
   if (allLeavesQuery.isError || !allLeavesQuery.data?.length) {
     if (isCreator) return null;
     return (
-      <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] px-4 py-3 text-[13px] text-[#555d73]">
+      <div className="rounded-xl border border-foreground/[0.06] bg-foreground/[0.02] px-4 py-3 text-[13px] text-muted-foreground">
         No allocation found for your wallet in this campaign.
       </div>
     );
@@ -650,7 +650,7 @@ export function ClaimWithProofButton({
       <button
         onClick={handleClaim}
         disabled={loading || leafFullyClaimed[selectedIdx] || waitBeforeUnlock || paused || milestoneNotReleased || selectedClaimableAmount === 0n}
-        className="w-full rounded-xl bg-violet-600 py-3.5 text-[15px] font-semibold text-white transition hover:bg-violet-500 active:bg-violet-700 disabled:cursor-not-allowed disabled:opacity-40"
+        className="w-full rounded-xl bg-violet-700 dark:bg-violet-600 py-3.5 text-[15px] font-semibold text-white transition hover:bg-violet-600 dark:hover:bg-violet-500 active:bg-violet-800 dark:active:bg-violet-700 disabled:cursor-not-allowed disabled:opacity-40"
       >
         {leafFullyClaimed[selectedIdx]
           ? "Already Claimed"
@@ -706,10 +706,10 @@ function LeafSelector({
   return (
     <div className="space-y-2">
       <div className="flex items-center justify-between">
-        <p className="text-[12px] font-medium text-[#8b92a5]">
+        <p className="text-[12px] font-medium text-muted-foreground">
           {hasMilestones ? "Select milestone to claim" : "Select allocation to claim"}
         </p>
-        <span className="text-[11px] text-[#6f7c95]">
+        <span className="text-[11px] text-muted-foreground">
           {claimedCount}/{leaves.length} claimed
         </span>
       </div>
@@ -741,22 +741,22 @@ function LeafSelector({
                       ? "border-emerald-500/20 bg-emerald-500/5 cursor-default"
                       : i === selectedIdx
                         ? "border-violet-500/40 bg-violet-500/10"
-                        : "border-white/[0.06] bg-white/[0.02] hover:border-violet-500/30 hover:bg-violet-500/5"
+                        : "border-foreground/[0.06] bg-foreground/[0.02] hover:border-violet-500/30 hover:bg-violet-500/5"
                   }`}
                 >
                   <span className={`text-[11px] font-semibold ${
-                    claimed ? "text-emerald-400" : i === selectedIdx ? "text-violet-400" : "text-white"
+                    claimed ? "text-emerald-700 dark:text-emerald-400" : i === selectedIdx ? "text-violet-700 dark:text-violet-400" : "text-foreground"
                   }`}>
                     {isMilestone ? `#${entry.leaf.milestoneIdx}` : `#${entry.leaf.leafIndex}`}
                   </span>
                   <span className={`mt-0.5 text-[9px] ${
                     claimed
-                      ? "text-emerald-400/60"
+                      ? "text-emerald-700/60 dark:text-emerald-400/60"
                       : !milestoneReleased
-                        ? "text-amber-400/60"
+                        ? "text-amber-700/60 dark:text-amber-400/60"
                         : claimableNow > 0n
-                          ? "text-violet-400/80"
-                          : "text-[#555d73]"
+                          ? "text-violet-700/80 dark:text-violet-400/80"
+                          : "text-muted-foreground"
                   }`}>
                     {claimed ? "done" : !milestoneReleased ? "locked" : claimableNow > 0n ? "ready" : "pending"}
                   </span>
@@ -770,16 +770,16 @@ function LeafSelector({
                 type="button"
                 onClick={() => setPage((p) => Math.max(0, p - 1))}
                 disabled={page === 0}
-                className="rounded-md border border-white/[0.08] px-2 py-1 text-[11px] text-[#8b92a5] transition hover:bg-white/[0.04] disabled:opacity-30"
+                className="rounded-md border border-foreground/[0.08] px-2 py-1 text-[11px] text-muted-foreground transition hover:bg-foreground/[0.04] disabled:opacity-30"
               >
                 Prev
               </button>
-              <span className="text-[11px] text-[#6f7c95]">{page + 1}/{totalPages}</span>
+              <span className="text-[11px] text-muted-foreground">{page + 1}/{totalPages}</span>
               <button
                 type="button"
                 onClick={() => setPage((p) => Math.min(totalPages - 1, p + 1))}
                 disabled={page >= totalPages - 1}
-                className="rounded-md border border-white/[0.08] px-2 py-1 text-[11px] text-[#8b92a5] transition hover:bg-white/[0.04] disabled:opacity-30"
+                className="rounded-md border border-foreground/[0.08] px-2 py-1 text-[11px] text-muted-foreground transition hover:bg-foreground/[0.04] disabled:opacity-30"
               >
                 Next
               </button>
@@ -799,17 +799,17 @@ function LeafSelector({
                 disabled={claimed}
                 className={`w-full flex items-center justify-between rounded-lg border px-3 py-2 text-left text-[12px] transition ${
                   claimed
-                    ? "border-white/[0.04] bg-white/[0.01] text-[#555d73] cursor-not-allowed"
+                    ? "border-foreground/[0.04] bg-foreground/[0.01] text-muted-foreground cursor-not-allowed"
                     : i === selectedIdx
-                    ? "border-violet-500/40 bg-violet-500/10 text-white"
-                    : "border-white/[0.06] text-[#8b92a5] hover:border-white/[0.12]"
+                    ? "border-violet-500/40 bg-violet-500/10 text-foreground"
+                    : "border-foreground/[0.06] text-muted-foreground hover:border-foreground/[0.12]"
                 }`}
               >
                 <span>
                   {entry.leaf.releaseType === 2 ? `Milestone #${entry.leaf.milestoneIdx}` : `Leaf #${entry.leaf.leafIndex}`} — {fmtAmount(claimableNow.toString(), mintDecimals)} claimable
                 </span>
                 {claimed ? (
-                  <span className="text-[10px] text-emerald-400">Claimed</span>
+                  <span className="text-[10px] text-emerald-700 dark:text-emerald-400">Claimed</span>
                 ) : (
                   <span className="text-[10px]">{entry.leaf.releaseType === 0 ? "Cliff" : entry.leaf.releaseType === 1 ? "Linear" : "Milestone"}</span>
                 )}

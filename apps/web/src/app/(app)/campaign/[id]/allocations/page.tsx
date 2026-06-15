@@ -284,24 +284,24 @@ export default function CampaignAllocationsPage({
   return (
     <div className="mx-auto max-w-5xl space-y-6 pb-12">
       {/* Header */}
-      <div className="rounded-2xl border border-white/[0.08] bg-[#0d1117] p-6">
+      <div className="rounded-2xl border border-foreground/[0.08] bg-card p-6">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
           <div className="space-y-2">
             <Link
               href={`/campaign/${treeAddress}`}
-              className="inline-flex items-center gap-2 text-[12px] font-medium text-[#8b92a5] transition hover:text-white"
+              className="inline-flex items-center gap-2 text-[12px] font-medium text-muted-foreground transition hover:text-foreground"
             >
               <span aria-hidden="true">←</span> Back to campaign
             </Link>
-            <h1 className="text-[24px] font-semibold text-white">Allocation Editor</h1>
-            <p className="max-w-3xl text-[14px] leading-7 text-[#8b92a5]">
+            <h1 className="text-[24px] font-semibold text-foreground">Allocation Editor</h1>
+            <p className="max-w-3xl text-[14px] leading-7 text-muted-foreground">
               Add, remove, or update recipients. Changes take effect after you approve the transaction.
             </p>
           </div>
           {currentMerkleRoot && (
-            <div className="rounded-xl border border-white/[0.08] bg-white/[0.02] px-4 py-3">
-              <p className="text-[11px] uppercase tracking-[0.18em] text-[#6f7c95]">Active Root</p>
-              <p className="mt-2 font-mono text-[12px] text-white">{truncateHash(currentMerkleRoot)}</p>
+            <div className="rounded-xl border border-foreground/[0.08] bg-foreground/[0.02] px-4 py-3">
+              <p className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">Active Root</p>
+              <p className="mt-2 font-mono text-[12px] text-foreground">{truncateHash(currentMerkleRoot)}</p>
             </div>
           )}
         </div>
@@ -309,47 +309,47 @@ export default function CampaignAllocationsPage({
 
       {/* Info cards */}
       <div className="grid gap-3 md:grid-cols-3">
-        <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-4">
-          <p className="text-[11px] uppercase tracking-[0.18em] text-[#6f7c95]">Step 1</p>
-          <p className="mt-2 text-[13px] font-medium text-white">Edit recipients</p>
-          <p className="mt-1 text-[12px] text-[#8b92a5]">Add, remove, or change amounts below.</p>
+        <div className="rounded-xl border border-foreground/[0.06] bg-foreground/[0.02] p-4">
+          <p className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">Step 1</p>
+          <p className="mt-2 text-[13px] font-medium text-foreground">Edit recipients</p>
+          <p className="mt-1 text-[12px] text-muted-foreground">Add, remove, or change amounts below.</p>
         </div>
-        <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-4">
-          <p className="text-[11px] uppercase tracking-[0.18em] text-[#6f7c95]">Step 2</p>
-          <p className="mt-2 text-[13px] font-medium text-white">Click Update</p>
-          <p className="mt-1 text-[12px] text-[#8b92a5]">We rebuild the Merkle tree automatically.</p>
+        <div className="rounded-xl border border-foreground/[0.06] bg-foreground/[0.02] p-4">
+          <p className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">Step 2</p>
+          <p className="mt-2 text-[13px] font-medium text-foreground">Click Update</p>
+          <p className="mt-1 text-[12px] text-muted-foreground">We rebuild the Merkle tree automatically.</p>
         </div>
-        <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-4">
-          <p className="text-[11px] uppercase tracking-[0.18em] text-[#6f7c95]">Step 3</p>
-          <p className="mt-2 text-[13px] font-medium text-white">Approve transaction</p>
-          <p className="mt-1 text-[12px] text-[#8b92a5]">Sign once — old proofs are replaced.</p>
+        <div className="rounded-xl border border-foreground/[0.06] bg-foreground/[0.02] p-4">
+          <p className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">Step 3</p>
+          <p className="mt-2 text-[13px] font-medium text-foreground">Approve transaction</p>
+          <p className="mt-1 text-[12px] text-muted-foreground">Sign once — old proofs are replaced.</p>
         </div>
       </div>
 
       {/* States */}
       {!publicKey && (
-        <div className="rounded-2xl border border-white/[0.06] bg-white/[0.02] p-6 text-[13px] text-[#8b92a5]">
+        <div className="rounded-2xl border border-foreground/[0.06] bg-foreground/[0.02] p-6 text-[13px] text-muted-foreground">
           Connect your wallet to edit allocations.
         </div>
       )}
 
       {publicKey && loading && (
-        <div className="rounded-2xl border border-white/[0.06] bg-white/[0.02] p-6 text-[13px] text-[#8b92a5]">
+        <div className="rounded-2xl border border-foreground/[0.06] bg-foreground/[0.02] p-6 text-[13px] text-muted-foreground">
           Loading…
         </div>
       )}
 
       {publicKey && error && (
-        <div className="rounded-2xl border border-red-500/20 bg-red-500/5 p-6 text-[13px] text-red-400">
+        <div className="rounded-2xl border border-red-500/20 bg-red-500/5 p-6 text-[13px] text-red-700 dark:text-red-400">
           {error}
         </div>
       )}
 
       {/* Editor */}
       {publicKey && !loading && !error && (
-        <div className="rounded-2xl border border-white/[0.06] bg-white/[0.02] p-5">
+        <div className="rounded-2xl border border-foreground/[0.06] bg-foreground/[0.02] p-5">
           {leavesLoading ? (
-            <p className="text-[13px] text-[#8b92a5]">Loading recipient data…</p>
+            <p className="text-[13px] text-muted-foreground">Loading recipient data…</p>
           ) : (
             <AllocationEditor
               initialRecipients={initialRows.length > 0 ? initialRows : [emptyRow()]}

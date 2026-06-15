@@ -22,7 +22,7 @@ function PortfolioSkeleton() {
       {[...Array(3)].map((_, i) => (
         <div
           key={i}
-          className="h-48 animate-pulse rounded-2xl border border-[#222838] bg-[#13161f]"
+          className="h-48 animate-pulse rounded-2xl border border-line bg-foreground/10"
         />
       ))}
     </div>
@@ -99,21 +99,21 @@ export default function PortfolioPage() {
   return (
     <div className="mx-auto max-w-5xl space-y-5 sm:space-y-8">
       <div>
-        <div className="mb-2 font-mono text-[11px] font-medium uppercase tracking-[0.18em] text-[#7c3aed]/70">Recipient</div>
-        <h1 className="text-[22px] sm:text-[28px] font-semibold tracking-tight text-[#e5e7eb]">Portfolio</h1>
-        <p className="mt-1 font-mono text-[12px] text-[#64748b]">Your vesting portfolio at a glance</p>
+        <div className="mb-2 font-mono text-[11px] font-medium uppercase tracking-[0.18em] text-primary/70">Recipient</div>
+        <h1 className="text-[22px] sm:text-[28px] font-semibold tracking-tight text-foreground">Portfolio</h1>
+        <p className="mt-1 font-mono text-[12px] text-muted-foreground">Your vesting portfolio at a glance</p>
       </div>
 
       {!address ? (
-        <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-[#222838] bg-[#13161f]/60 px-8 py-16 text-center">
-          <div className="flex h-14 w-14 items-center justify-center rounded-2xl border border-[#7c3aed]/20 bg-[#7c3aed]/10 text-[#a78bfa]">
+        <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-line bg-muted/60 px-8 py-16 text-center">
+          <div className="flex h-14 w-14 items-center justify-center rounded-2xl border border-primary/20 bg-primary/10 text-accent-light">
             <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <rect x="2" y="7" width="20" height="14" rx="2" ry="2" />
               <path d="M16 7V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v2" />
             </svg>
           </div>
-          <h2 className="mt-4 text-[15px] font-medium text-[#e5e7eb]">No wallet connected</h2>
-          <p className="mt-1 text-[13px] text-[#64748b]">
+          <h2 className="mt-4 text-[15px] font-medium text-foreground">No wallet connected</h2>
+          <p className="mt-1 text-[13px] text-muted-foreground">
             Connect your wallet to view your vesting allocations.
           </p>
         </div>
@@ -152,14 +152,14 @@ export default function PortfolioPage() {
 
           <div>
             <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
-              <h2 className="font-mono text-[11px] font-medium uppercase tracking-[0.18em] text-[#64748b]">
+              <h2 className="font-mono text-[11px] font-medium uppercase tracking-[0.18em] text-muted-foreground">
                 Vesting Progress
               </h2>
               {campaigns.length > 0 && (
                 <select
                   value={sortKey}
                   onChange={(e) => setSortKey(e.target.value as SortKey)}
-                  className="rounded-lg border border-[#222838] bg-[#13161f] px-3 py-1.5 font-mono text-[11px] text-[#64748b] outline-none transition focus:border-[#7c3aed]/40 focus:text-[#b4b9c5]"
+                  className="rounded-lg border border-line bg-muted px-3 py-1.5 font-mono text-[11px] text-muted-foreground outline-none transition focus:border-primary/40 focus:text-secondary-foreground"
                 >
                   <option value="claimable">Sort: Claimable</option>
                   <option value="progress">Sort: Progress</option>
@@ -171,15 +171,15 @@ export default function PortfolioPage() {
             {statsLoading ? (
               <PortfolioSkeleton />
             ) : campaigns.length === 0 ? (
-              <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-[#222838] bg-[#13161f]/60 px-8 py-16 text-center">
-                <div className="flex h-14 w-14 items-center justify-center rounded-2xl border border-[#7c3aed]/20 bg-[#7c3aed]/10 text-[#a78bfa]">
+              <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-line bg-muted/60 px-8 py-16 text-center">
+                <div className="flex h-14 w-14 items-center justify-center rounded-2xl border border-primary/20 bg-primary/10 text-accent-light">
                   <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                     <rect x="2" y="7" width="20" height="14" rx="2" ry="2" />
                     <path d="M16 7V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v2" />
                   </svg>
                 </div>
-                <h2 className="mt-4 text-[15px] font-medium text-[#e5e7eb]">No vesting allocations yet</h2>
-                <p className="mt-1 text-[13px] text-[#64748b]">
+                <h2 className="mt-4 text-[15px] font-medium text-foreground">No vesting allocations yet</h2>
+                <p className="mt-1 text-[13px] text-muted-foreground">
                   You&apos;ll see your vesting streams here once you&apos;re added as a recipient to a campaign.
                 </p>
               </div>

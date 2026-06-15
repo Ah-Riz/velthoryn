@@ -86,11 +86,11 @@ export function CampaignCard({ campaign }: CampaignCardProps) {
   return (
     <Link
       href={`/campaign/${campaign.address}`}
-      className="group block rounded-xl border border-white/[0.06] bg-white/[0.02] p-3.5 sm:rounded-2xl sm:p-5 transition-colors hover:border-violet-500/20 hover:bg-violet-500/[0.03]"
+      className="group block rounded-xl border border-foreground/[0.06] bg-foreground/[0.02] p-3.5 sm:rounded-2xl sm:p-5 transition-colors hover:border-violet-500/20 hover:bg-violet-500/[0.03]"
     >
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h3 className="text-[14px] sm:text-[15px] font-medium text-white group-hover:text-violet-300">
+          <h3 className="text-[14px] sm:text-[15px] font-medium text-foreground group-hover:text-violet-700 dark:text-violet-300">
             {campaign.name}
           </h3>
         </div>
@@ -112,28 +112,28 @@ export function CampaignCard({ campaign }: CampaignCardProps) {
       />
 
       <div className="mt-3 sm:mt-4 grid gap-1.5 sm:gap-2 text-[11px] sm:text-[12px] sm:grid-cols-2">
-        <div className="text-[#8b92a5]">
-          Entitled: <span className="text-white">{campaign.entitled}</span>
+        <div className="text-muted-foreground">
+          Entitled: <span className="text-foreground">{campaign.entitled}</span>
         </div>
-        <div className="text-[#8b92a5]">
-          Vested: <span className="text-white">{campaign.vested}</span>
+        <div className="text-muted-foreground">
+          Vested: <span className="text-foreground">{campaign.vested}</span>
         </div>
-        <div className="text-[#8b92a5]">
-          Claimed: <span className="text-white">{campaign.claimed}</span>
+        <div className="text-muted-foreground">
+          Claimed: <span className="text-foreground">{campaign.claimed}</span>
         </div>
-        <div className="text-[#8b92a5]">
-          Claimable: <span className={campaign.hasClaimable ? "text-emerald-400" : "text-white"}>
+        <div className="text-muted-foreground">
+          Claimable: <span className={campaign.hasClaimable ? "text-emerald-700 dark:text-emerald-400" : "text-foreground"}>
             {campaign.claimable}
           </span>
         </div>
       </div>
 
       <div className="mt-3 sm:mt-4 flex items-center justify-between">
-        <span className="text-[12px] text-[#555d73]">
+        <span className="text-[12px] text-muted-foreground">
           Next unlock: {campaign.nextUnlock}
         </span>
         {campaign.hasClaimable && (
-          <span className="text-[12px] font-medium text-emerald-400">
+          <span className="text-[12px] font-medium text-emerald-700 dark:text-emerald-400">
             Claim →
           </span>
         )}

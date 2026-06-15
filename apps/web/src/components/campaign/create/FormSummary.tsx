@@ -42,24 +42,24 @@ export function FormSummary({
     <aside className={`${CARD} sticky top-6 h-fit space-y-5 p-5`}>
       {/* Chain */}
       <div className="flex items-center gap-2">
-        <svg width="18" height="18" viewBox="0 0 128 128" className="text-[#14F1D9]">
+        <svg width="18" height="18" viewBox="0 0 128 128" className="text-violet">
           <circle cx="64" cy="64" r="64" fill="currentColor" opacity="0.15" />
           <path d="M28 95h72l-12-12H40l-12 12zm0-31h72L88 52H40L28 64zm72-31H28l12 12h48l12-12z" fill="currentColor" />
         </svg>
-        <span className="text-[13px] font-medium text-white">Solana</span>
-        <span className="ml-auto rounded-full border border-white/[0.08] px-2 py-0.5 text-[10px] text-[#8b92a5]">Devnet</span>
+        <span className="text-[13px] font-medium text-foreground">Solana</span>
+        <span className="ml-auto rounded-full border border-foreground/[0.08] px-2 py-0.5 text-[10px] text-muted-foreground">Devnet</span>
       </div>
 
-      <div className="space-y-3 border-t border-white/[0.06] pt-4">
+      <div className="space-y-3 border-t border-foreground/[0.06] pt-4">
         {/* Total Deposit */}
         <div className="flex items-center justify-between">
-          <p className="text-[12px] text-[#8b92a5]">Total Deposit</p>
+          <p className="text-[12px] text-muted-foreground">Total Deposit</p>
           <div className="text-right">
-            <p className="text-[13px] font-medium text-white">
+            <p className="text-[13px] font-medium text-foreground">
               {totalDepositStr} {tokenSymbol || "—"}
             </p>
             {showMultiplier && (
-              <p className="text-[11px] text-[#6f7c95]">
+              <p className="text-[11px] text-muted-foreground">
                 ({amount} × {streamCount} recipients)
               </p>
             )}
@@ -68,16 +68,16 @@ export function FormSummary({
 
         {/* Your Balance */}
         <div className="flex items-center justify-between">
-          <p className="text-[12px] text-[#8b92a5]">Your Balance</p>
-          <p className="text-[13px] text-white">
+          <p className="text-[12px] text-muted-foreground">Your Balance</p>
+          <p className="text-[13px] text-foreground">
             {tokenBalance !== null ? `${tokenBalance} ${tokenSymbol}` : "—"}
           </p>
         </div>
 
         {/* Gas Estimate */}
         <div className="flex items-center justify-between">
-          <p className="text-[12px] text-[#8b92a5]">Network Fee (est.)</p>
-          <p className="font-mono text-[12px] text-[#8b92a5]">
+          <p className="text-[12px] text-muted-foreground">Network Fee (est.)</p>
+          <p className="font-mono text-[12px] text-muted-foreground">
             ~{gasFee.toFixed(6)} SOL
             {streamCount > 1 && mode === "single" ? ` (${streamCount} tx)` : ""}
           </p>
@@ -86,7 +86,7 @@ export function FormSummary({
 
       {/* Insufficient balance warning */}
       {insufficientBalance && (
-        <div className="rounded-lg border border-red-500/20 bg-red-500/10 px-3 py-2 text-[12px] text-red-400">
+        <div className="rounded-lg border border-red-500/20 bg-red-500/10 px-3 py-2 text-[12px] text-red-700 dark:text-red-400">
           Insufficient balance. Need {totalDepositStr} {tokenSymbol}, have {tokenBalance}.
         </div>
       )}
@@ -97,7 +97,7 @@ export function FormSummary({
           type="button"
           onClick={onSubmit}
           disabled={disabled || loading || insufficientBalance}
-          className="w-full rounded-xl bg-purple-600 px-4 py-3 text-[14px] font-semibold text-white transition hover:bg-purple-500 disabled:opacity-50 disabled:cursor-not-allowed"
+          className="w-full rounded-xl bg-violet-700 dark:bg-violet-600 px-4 py-3 text-[14px] font-semibold text-foreground transition hover:bg-violet-600 dark:hover:bg-violet-500 disabled:opacity-50 disabled:cursor-not-allowed"
         >
           {loading ? (
             <span className="flex items-center justify-center gap-2">

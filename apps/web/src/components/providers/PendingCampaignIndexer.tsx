@@ -1,15 +1,37 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useMemo } from "react";
+import { useWallet } from "@solana/wallet-adapter-react";
 import {
   indexCampaign,
   listPendingCampaignIndexesLocal,
+  removePendingCampaignIndexLocal,
 } from "@/lib/stream/persist";
+import type { WalletSigner } from "@/lib/api/client-auth";
+
+function isUserRejection(error: unknown): boolean {
+  if (!(error instanceof Error)) return false;
+  const msg = error.message.toLowerCase();
+  return (
+    error.name === "WalletSignMessageError" ||
+    msg.includes("user rejected") ||
+    msg.includes("transaction cancelled") ||
+    msg.includes("user denied")
+  );
+}
 
 export function PendingCampaignIndexer() {
   const runningRef = useRef(false);
+  const { publicKey, signMessage } = useWallet();
+
+  const wallet: WalletSigner | undefined = useMemo(
+    () => (publicKey && signMessage ? { publicKey, signMessage } : undefined),
+    [publicKey, signMessage],
+  );
 
   useEffect(() => {
+    if (!wallet) return;
+
     let cancelled = false;
 
     async function flushPendingIndexes() {
@@ -23,9 +45,11 @@ export function PendingCampaignIndexer() {
         for (const payload of pending) {
           if (cancelled) break;
           try {
-            await indexCampaign(payload);
-          } catch {
-            // keep pending payload for a later retry
+            await indexCampaign(payload, wallet);
+          } catch (error) {
+            if (isUserRejection(error)) {
+              removePendingCampaignIndexLocal(payload.treeAddress);
+            }
           }
         }
       } finally {
@@ -54,7 +78,7 @@ export function PendingCampaignIndexer() {
       window.removeEventListener("online", handleOnline);
       window.removeEventListener("focus", handleFocus);
     };
-  }, []);
+  }, [wallet]);
 
   return null;
 }

@@ -397,7 +397,7 @@ export default function MilestoneCreatePage() {
       <div className="mx-auto max-w-3xl space-y-6">
         <PageHeader title="Milestone Vesting" description="Tokens unlock when the creator triggers each milestone. Not time-based." />
         <div className={`${CARD} p-5`}>
-          <p className="text-[13px] text-[#8b92a5]">Connect your wallet to create milestone vesting streams.</p>
+          <p className="text-[13px] text-muted-foreground">Connect your wallet to create milestone vesting streams.</p>
         </div>
       </div>
     );
@@ -428,14 +428,14 @@ export default function MilestoneCreatePage() {
               <button
                 type="button"
                 onClick={() => { setMode("single"); setTxState({ type: "idle" }); }}
-                className={`flex-1 rounded-lg px-3 py-2.5 text-[12px] font-medium transition ${mode === "single" ? "bg-white/[0.1] text-white" : "text-[#8b92a5] hover:text-white"}`}
+                className={`flex-1 rounded-lg px-3 py-2.5 text-[12px] font-medium transition ${mode === "single" ? "bg-foreground/[0.1] text-foreground" : "text-muted-foreground hover:text-foreground"}`}
               >
                 Manual
               </button>
               <button
                 type="button"
                 onClick={() => { setMode("bulk"); setTxState({ type: "idle" }); }}
-                className={`flex-1 rounded-lg px-3 py-2.5 text-[12px] font-medium transition ${mode === "bulk" ? "bg-white/[0.1] text-white" : "text-[#8b92a5] hover:text-white"}`}
+                className={`flex-1 rounded-lg px-3 py-2.5 text-[12px] font-medium transition ${mode === "bulk" ? "bg-foreground/[0.1] text-foreground" : "text-muted-foreground hover:text-foreground"}`}
               >
                 CSV Campaign
               </button>
@@ -468,9 +468,9 @@ export default function MilestoneCreatePage() {
                 }
               />
             ) : (
-              <div className="rounded-xl border border-white/[0.08] bg-white/[0.02] px-4 py-3">
-                <p className="text-[12px] font-medium text-white">Recipients come from the CSV file</p>
-                <p className="mt-1 text-[12px] text-[#8b92a5]">
+              <div className="rounded-xl border border-foreground/[0.08] bg-foreground/[0.02] px-4 py-3">
+                <p className="text-[12px] font-medium text-foreground">Recipients come from the CSV file</p>
+                <p className="mt-1 text-[12px] text-muted-foreground">
                   Paste one or more beneficiary rows below. You do not need to enter a separate recipient here.
                 </p>
               </div>
@@ -487,17 +487,17 @@ export default function MilestoneCreatePage() {
                 <div key={milestone.id} className={`${CARD} space-y-4 p-5`}>
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2">
-                      <span className="flex h-6 w-6 items-center justify-center rounded-full bg-violet-500/20 text-[11px] font-bold text-violet-400">{i}</span>
-                      <p className="text-[13px] font-medium text-white">
+                      <span className="flex h-6 w-6 items-center justify-center rounded-full bg-violet-500/20 text-[11px] font-bold text-violet-700 dark:text-violet-400">{i}</span>
+                      <p className="text-[13px] font-medium text-foreground">
                         {manualCreatesCampaign ? `Campaign Milestone #${i}` : `Milestone #${i}`}
                       </p>
                     </div>
                     <div className="flex gap-1.5">
-                      <button type="button" onClick={() => duplicateMilestone(i)} className="rounded-md border border-white/[0.08] px-2 py-1 text-[10px] text-[#8b92a5] hover:text-white">
+                      <button type="button" onClick={() => duplicateMilestone(i)} className="rounded-md border border-foreground/[0.08] px-2 py-1 text-[10px] text-muted-foreground hover:text-foreground">
                         Duplicate
                       </button>
                       {milestones.length > 1 && (
-                        <button type="button" onClick={() => removeMilestone(i)} className="rounded-md border border-red-500/20 px-2 py-1 text-[10px] text-red-400 hover:text-red-300">
+                        <button type="button" onClick={() => removeMilestone(i)} className="rounded-md border border-red-500/20 px-2 py-1 text-[10px] text-red-700 dark:text-red-400 hover:text-red-600 dark:text-red-300">
                           Remove
                         </button>
                       )}
@@ -518,11 +518,11 @@ export default function MilestoneCreatePage() {
                           className={`${INPUT} pr-24 ${formErrors[`amount_${i}`] ? INPUT_ERR : ""}`}
                         />
                         <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-1.5">
-                          <span className="text-[10px] text-[#555d73]">{tokenSymbol}</span>
+                          <span className="text-[10px] text-muted-foreground">{tokenSymbol}</span>
                           <button
                             type="button"
                             onClick={() => { if (walletToken) updateMilestone(milestone.id, "amount", walletToken.uiAmount); }}
-                            className="rounded-md bg-white/[0.06] px-2 py-0.5 text-[10px] font-medium text-[#8b92a5] hover:text-white"
+                            className="rounded-md bg-foreground/[0.06] px-2 py-0.5 text-[10px] font-medium text-muted-foreground hover:text-foreground"
                           >
                             Max
                           </button>
@@ -550,14 +550,14 @@ export default function MilestoneCreatePage() {
 
               {/* Add Milestone Button */}
               {milestones.length >= 256 ? (
-                <p className="text-center text-[12px] text-amber-400/80">
+                <p className="text-center text-[12px] text-amber-700/80 dark:text-amber-400/80">
                   Maximum 256 milestones reached (on-chain bitmap limit).
                 </p>
               ) : (
                 <button
                   type="button"
                   onClick={() => setMilestones((prev) => [...prev, newMilestone()])}
-                  className="w-full rounded-xl border border-dashed border-white/[0.12] py-3 text-[13px] font-medium text-[#8b92a5] transition hover:border-white/[0.2] hover:text-white"
+                  className="w-full rounded-xl border border-dashed border-foreground/[0.12] py-3 text-[13px] font-medium text-muted-foreground transition hover:border-foreground/[0.2] hover:text-foreground"
                 >
                   + Add Milestone ({milestones.length}/256)
                 </button>
@@ -589,7 +589,7 @@ export default function MilestoneCreatePage() {
           {/* Results */}
           {txState.type === "success" && (
             <div className="space-y-3">
-              <p className="text-[13px] font-medium text-emerald-400">Milestone stream created!</p>
+              <p className="text-[13px] font-medium text-emerald-700 dark:text-emerald-400">Milestone stream created!</p>
               {txState.results.map((r) => (
                 <TxResultCard key={r.sig} title="Milestone Stream" sig={r.sig} href={r.shareUrl} linkLabel="Open stream" />
               ))}
@@ -598,9 +598,9 @@ export default function MilestoneCreatePage() {
           {txState.type === "error" && <ErrorCard title="Transaction Failed" body={txState.msg} />}
           {txState.type === "bulk-created-unfunded" && (
             <div className={`${CARD} p-5`}>
-              <p className="text-[13px] font-medium text-amber-300">Campaign created, funding pending</p>
-              <p className="mt-2 text-[12px] leading-6 text-[#d8c58f]">{txState.msg}</p>
-              <p className="mt-3 break-all font-mono text-[11px] text-[#8b92a5]">Create signature: {txState.createSig}</p>
+              <p className="text-[13px] font-medium text-amber-700 dark:text-amber-300">Campaign created, funding pending</p>
+              <p className="mt-2 text-[12px] leading-6 text-warning">{txState.msg}</p>
+              <p className="mt-3 break-all font-mono text-[11px] text-muted-foreground">Create signature: {txState.createSig}</p>
               <div className="mt-4 flex flex-wrap gap-2">
                 <button
                   type="button"
@@ -616,7 +616,7 @@ export default function MilestoneCreatePage() {
                 </button>
                 <a
                   href={`/campaign/${txState.treeAddress}`}
-                  className="rounded-lg border border-white/[0.12] px-3 py-2 text-[12px] font-medium text-white"
+                  className="rounded-lg border border-foreground/[0.12] px-3 py-2 text-[12px] font-medium text-foreground"
                 >
                   View campaign
                 </a>

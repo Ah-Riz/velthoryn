@@ -1120,16 +1120,16 @@ export default function CampaignPage({ params }: { params: Promise<{ id: string 
             : "Active";
 
   const statusBadgeClass = treeState?.instantRefunded
-    ? "border-amber-500/20 bg-amber-500/10 text-amber-400"
+    ? "border-amber-500/20 bg-amber-500/10 text-amber-700 dark:text-amber-400"
     : treeState?.paused
-      ? "border-amber-500/20 bg-amber-500/10 text-amber-400"
+      ? "border-amber-500/20 bg-amber-500/10 text-amber-700 dark:text-amber-400"
       : isWithdrawn
-        ? "border-emerald-500/20 bg-emerald-500/10 text-emerald-400"
+        ? "border-emerald-500/20 bg-emerald-500/10 text-emerald-700 dark:text-emerald-400"
         : treeState?.cancelledAt
-          ? "border-red-500/20 bg-red-500/10 text-red-400"
+          ? "border-red-500/20 bg-red-500/10 text-red-700 dark:text-red-400"
           : displaySupply > 0n && displayClaimed >= displaySupply
-            ? "border-sky-500/20 bg-sky-500/10 text-sky-400"
-            : "border-emerald-500/20 bg-emerald-500/10 text-emerald-400";
+            ? "border-sky-500/20 bg-sky-500/10 text-sky-700 dark:text-sky-400"
+            : "border-emerald-500/20 bg-emerald-500/10 text-emerald-700 dark:text-emerald-400";
 
   async function handleFundExistingCampaign() {
     if (!treeState || fundingRemaining <= 0n) return;
@@ -1745,7 +1745,7 @@ export default function CampaignPage({ params }: { params: Promise<{ id: string 
     return (
       <div className="mx-auto max-w-5xl py-16">
         <div className="rounded-2xl border border-red-500/20 bg-red-500/5 p-6">
-          <p className="text-[13px] text-red-400">{error}</p>
+          <p className="text-[13px] text-red-700 dark:text-red-400">{error}</p>
         </div>
       </div>
     );
@@ -1755,7 +1755,7 @@ export default function CampaignPage({ params }: { params: Promise<{ id: string 
   if (!publicKey) {
     return (
       <div className="mx-auto max-w-5xl flex flex-col items-center justify-center py-32">
-        <p className="text-[15px] text-[#555d73]">Connect your wallet to view and claim tokens</p>
+        <p className="text-[15px] text-muted-foreground">Connect your wallet to view and claim tokens</p>
       </div>
     );
   }
@@ -1788,7 +1788,7 @@ export default function CampaignPage({ params }: { params: Promise<{ id: string 
                 {getVestingTypeLabel(releaseType)}
               </Badge>
               {isCliff && cliffTime && nowTs < cliffTsBigint && (
-                <Badge variant="outline" className="h-auto rounded-full border-amber-500/20 bg-amber-500/10 px-3 py-1 text-[12px] font-medium text-amber-400">
+                <Badge variant="outline" className="h-auto rounded-full border-indigo-500/20 bg-indigo-500/10 px-3 py-1 text-[12px] font-medium text-indigo-700 dark:text-indigo-400">
                   Unlocks in {formatCountdown(cliffTsBigint, nowTs)}
                 </Badge>
               )}
@@ -1798,8 +1798,8 @@ export default function CampaignPage({ params }: { params: Promise<{ id: string 
                   className={cn(
                     "h-auto rounded-full px-3 py-1 text-[12px] font-medium",
                     milestoneTriggered
-                      ? "border-emerald-500/20 bg-emerald-500/10 text-emerald-400"
-                      : "border-white/[0.08] bg-white/[0.02] text-muted-foreground",
+                      ? "border-emerald-500/20 bg-emerald-500/10 text-emerald-700 dark:text-emerald-400"
+                      : "border-foreground/[0.08] bg-foreground/[0.02] text-muted-foreground",
                   )}
                 >
                   {milestoneLifecycleLabel}
@@ -1824,7 +1824,7 @@ export default function CampaignPage({ params }: { params: Promise<{ id: string 
       />
 
       {fundingStatus.type === "error" && isCreator && (
-        <div className="rounded-xl border border-red-500/20 bg-red-500/10 px-4 py-3 text-[12px] text-red-300">
+        <div className="rounded-xl border border-red-500/20 bg-red-500/10 px-4 py-3 text-[12px] text-red-600 dark:text-red-300">
           {fundingStatus.msg}
         </div>
       )}
@@ -1916,7 +1916,7 @@ export default function CampaignPage({ params }: { params: Promise<{ id: string 
                   <DetailRow label="Beneficiary" value={expectedBeneficiary} mono />
                 )}
                 {isMultiWallet && (
-                  <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] px-4 py-4">
+                  <div className="rounded-xl border border-foreground/[0.06] bg-foreground/[0.02] px-4 py-4">
                     <div className="flex items-start justify-between gap-4">
                       <div>
                         <p className="text-[11px] uppercase tracking-[0.14em] text-muted-foreground">Recipients</p>
@@ -1928,13 +1928,13 @@ export default function CampaignPage({ params }: { params: Promise<{ id: string 
                             <Badge
                               key={recipient.beneficiary}
                               variant="outline"
-                              className="h-auto rounded-full border-white/[0.08] bg-white/[0.03] px-3 py-1 font-mono text-[11px] text-foreground"
+                              className="h-auto rounded-full border-foreground/[0.08] bg-foreground/[0.03] px-3 py-1 font-mono text-[11px] text-foreground"
                             >
                               {truncateAddress(recipient.beneficiary)}
                             </Badge>
                           ))}
                           {campaignRecipients.length > 3 && (
-                            <Badge variant="outline" className="h-auto rounded-full border-white/[0.08] bg-white/[0.03] px-3 py-1 text-[11px] text-muted-foreground">
+                            <Badge variant="outline" className="h-auto rounded-full border-foreground/[0.08] bg-foreground/[0.03] px-3 py-1 text-[11px] text-muted-foreground">
                               +{campaignRecipients.length - 3} more
                             </Badge>
                           )}
@@ -1943,7 +1943,7 @@ export default function CampaignPage({ params }: { params: Promise<{ id: string 
                       <button
                         type="button"
                         onClick={() => setRecipientsOpen(true)}
-                        className="shrink-0 rounded-xl border border-white/[0.08] bg-white/[0.03] px-3 py-2 text-[12px] font-medium text-foreground transition hover:bg-white/[0.06]"
+                        className="shrink-0 rounded-xl border border-foreground/[0.08] bg-foreground/[0.03] px-3 py-2 text-[12px] font-medium text-foreground transition hover:bg-foreground/[0.06]"
                       >
                         View All
                       </button>
@@ -2032,7 +2032,7 @@ export default function CampaignPage({ params }: { params: Promise<{ id: string 
                           value={startTime}
                           onChange={(e) => setStartTime(e.target.value)}
                           disabled={scheduleLocked}
-                          className="w-full rounded-xl border border-white/[0.08] bg-[#11161f] px-4 py-3 text-[13px] text-white outline-none transition focus:border-white/20 disabled:opacity-50"
+                          className="w-full rounded-xl border border-foreground/[0.08] bg-muted px-4 py-3 text-[13px] text-foreground outline-none transition focus:border-foreground/20 disabled:opacity-50"
                         />
                       )}
                     />
@@ -2044,7 +2044,7 @@ export default function CampaignPage({ params }: { params: Promise<{ id: string 
                           value={cliffTime}
                           onChange={(e) => setCliffTime(e.target.value)}
                           disabled={scheduleLocked}
-                          className="w-full rounded-xl border border-white/[0.08] bg-[#11161f] px-4 py-3 text-[13px] text-white outline-none transition focus:border-white/20 disabled:opacity-50"
+                          className="w-full rounded-xl border border-foreground/[0.08] bg-muted px-4 py-3 text-[13px] text-foreground outline-none transition focus:border-foreground/20 disabled:opacity-50"
                         />
                       )}
                     />
@@ -2056,7 +2056,7 @@ export default function CampaignPage({ params }: { params: Promise<{ id: string 
                           value={endTime}
                           onChange={(e) => setEndTime(e.target.value)}
                           disabled={scheduleLocked}
-                          className="w-full rounded-xl border border-white/[0.08] bg-[#11161f] px-4 py-3 text-[13px] text-white outline-none transition focus:border-white/20 disabled:opacity-50"
+                          className="w-full rounded-xl border border-foreground/[0.08] bg-muted px-4 py-3 text-[13px] text-foreground outline-none transition focus:border-foreground/20 disabled:opacity-50"
                         />
                       )}
                     />
@@ -2073,7 +2073,7 @@ export default function CampaignPage({ params }: { params: Promise<{ id: string 
                           value={milestoneIdx}
                           onChange={(e) => setMilestoneIdx(e.target.value)}
                           disabled={scheduleLocked}
-                          className="w-full rounded-xl border border-white/[0.08] bg-[#11161f] px-4 py-3 text-[13px] text-white outline-none transition focus:border-white/20 disabled:opacity-50"
+                          className="w-full rounded-xl border border-foreground/[0.08] bg-muted px-4 py-3 text-[13px] text-foreground outline-none transition focus:border-foreground/20 disabled:opacity-50"
                         />
                       )}
                     />
@@ -2096,19 +2096,19 @@ export default function CampaignPage({ params }: { params: Promise<{ id: string 
             />
 
             {scheduleSource === "url" && (
-              <div className="mt-3 sm:mt-5 rounded-xl border border-amber-500/20 bg-amber-500/5 px-3 py-2.5 sm:px-4 sm:py-3 text-[11px] sm:text-[12px] leading-5 sm:leading-6 text-amber-300">
+              <div className="mt-3 sm:mt-5 rounded-xl border border-amber-500/20 bg-amber-500/5 px-3 py-2.5 sm:px-4 sm:py-3 text-[11px] sm:text-[12px] leading-5 sm:leading-6 text-amber-700 dark:text-amber-300">
                 <strong>Unverified:</strong> Schedule parameters were loaded from the URL. Values shown (including claimable amount) may not reflect actual on-chain state.
               </div>
             )}
 
             {isSingleLeaf && beneficiaryMismatch && expectedBeneficiary && (
-              <div className="mt-5 rounded-xl border border-amber-500/20 bg-amber-500/5 px-4 py-3 text-[12px] leading-6 text-amber-300">
+              <div className="mt-5 rounded-xl border border-amber-500/20 bg-amber-500/5 px-4 py-3 text-[12px] leading-6 text-amber-700 dark:text-amber-300">
                 Connected wallet does not match the beneficiary.
               </div>
             )}
 
             {isSingleLeaf && !expectedBeneficiary && scheduleSource !== "api" && scheduleSource !== "url" && (
-              <div className="mt-5 rounded-xl border border-white/[0.06] bg-white/[0.02] px-4 py-3 text-[12px] leading-6 text-[#8b92a5]">
+              <div className="mt-5 rounded-xl border border-foreground/[0.06] bg-foreground/[0.02] px-4 py-3 text-[12px] leading-6 text-muted-foreground">
                 Beneficiary could not be verified from indexed data.
               </div>
             )}
@@ -2138,7 +2138,7 @@ export default function CampaignPage({ params }: { params: Promise<{ id: string 
                 <button
                   type="button"
                   disabled
-                  className="w-full cursor-not-allowed rounded-xl bg-white px-4 py-3 text-[14px] font-semibold text-[#0d1117] opacity-50"
+                  className="w-full cursor-not-allowed rounded-xl bg-foreground px-4 py-3 text-[14px] font-semibold text-background opacity-50"
                 >
                   {claimFundingDisabledReason}
                 </button>
@@ -2146,7 +2146,7 @@ export default function CampaignPage({ params }: { params: Promise<{ id: string 
                 <button
                   onClick={handleWithdraw}
                   disabled={!!withdrawDisabledReason || !!claimFundingDisabledReason}
-                  className="w-full rounded-xl bg-white px-4 py-3 text-[14px] font-semibold text-[#0d1117] transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
+                  className="w-full rounded-xl bg-foreground px-4 py-3 text-[14px] font-semibold text-background transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   {txStatus.type === "loading" ? "Claiming..." : claimActionLabel}
                 </button>
@@ -2215,7 +2215,7 @@ export default function CampaignPage({ params }: { params: Promise<{ id: string 
               {program && (
                 <>
                   {treeState.pauseAuthority && treeState.creator && !treeState.pauseAuthority.equals(treeState.creator) && (
-                    <p className="text-[11px] text-amber-400/80">Pause authority differs from creator. Pausing blocks all claims.</p>
+                    <p className="text-[11px] text-amber-700/80 dark:text-amber-400/80">Pause authority differs from creator. Pausing blocks all claims.</p>
                   )}
                   <PauseToggleButton
                   program={program}
@@ -2249,7 +2249,7 @@ export default function CampaignPage({ params }: { params: Promise<{ id: string 
               {canShowInstantRefund && (
                 <button
                   onClick={() => setCancelOpen(true)}
-                  className="w-full rounded-xl border border-amber-500/20 px-4 py-3 text-[13px] font-medium text-amber-400 transition hover:border-amber-500/40 hover:bg-amber-500/5"
+                  className="w-full rounded-xl border border-amber-500/20 px-4 py-3 text-[13px] font-medium text-amber-700 dark:text-amber-400 transition hover:border-amber-500/40 hover:bg-amber-500/5"
                 >
                   Instant Refund
                 </button>
@@ -2258,7 +2258,7 @@ export default function CampaignPage({ params }: { params: Promise<{ id: string 
               {canShowCancel && !canShowInstantRefund && (
                 <button
                   onClick={() => setCancelOpen(true)}
-                  className="w-full rounded-xl border border-red-500/20 px-4 py-3 text-[13px] font-medium text-red-400 transition hover:border-red-500/40 hover:bg-red-500/5"
+                  className="w-full rounded-xl border border-red-500/20 px-4 py-3 text-[13px] font-medium text-red-700 dark:text-red-400 transition hover:border-red-500/40 hover:bg-red-500/5"
                 >
                   {isSingleLeaf ? "Cancel Stream" : "Cancel Campaign"}
                 </button>
@@ -2306,18 +2306,18 @@ export default function CampaignPage({ params }: { params: Promise<{ id: string 
                       </p>
                     </div>
                     <div className="mt-4 grid gap-3 md:grid-cols-2">
-                      <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] px-4 py-3">
+                      <div className="rounded-xl border border-foreground/[0.06] bg-foreground/[0.02] px-4 py-3">
                         <p className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">Current Root</p>
                         <p className="mt-2 font-mono text-[12px] text-foreground">{currentMerkleRootHex ? `${currentMerkleRootHex.slice(0, 10)}...${currentMerkleRootHex.slice(-8)}` : "—"}</p>
                       </div>
-                      <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] px-4 py-3">
+                      <div className="rounded-xl border border-foreground/[0.06] bg-foreground/[0.02] px-4 py-3">
                         <p className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">Current Version</p>
                         <p className="mt-2 text-[13px] text-foreground">v{rootVersions[0]?.version ?? 1} · {treeState.leafCount} leaves</p>
                       </div>
                     </div>
                     <a
                       href={`/campaign/${treeAddress}/allocations`}
-                      className="mt-4 inline-flex w-full items-center justify-center rounded-xl border border-white/[0.08] bg-white px-4 py-3 text-[13px] font-medium text-[#0d1117] transition hover:opacity-90"
+                      className="mt-4 inline-flex w-full items-center justify-center rounded-xl border border-foreground/[0.08] bg-foreground px-4 py-3 text-[13px] font-medium text-background transition hover:opacity-90"
                     >
                       Open Allocation Editor
                     </a>
@@ -2328,15 +2328,15 @@ export default function CampaignPage({ params }: { params: Promise<{ id: string 
 
             {txStatus.type === "success" && (
               <div className="mt-5 rounded-xl border border-emerald-500/20 bg-emerald-500/5 p-4">
-                <p className="text-[12px] font-medium text-emerald-400">Transaction submitted.</p>
+                <p className="text-[12px] font-medium text-emerald-700 dark:text-emerald-400">Transaction submitted.</p>
                 <p className="mt-2 break-all font-mono text-[11px] text-muted-foreground">{txStatus.sig}</p>
                 {isWrappedSolStream && (
                   <div className="mt-3 flex items-center gap-2 rounded-lg border border-amber-500/20 bg-amber-500/5 p-3">
-                    <span className="text-[12px] text-amber-300">Claimed tokens are in wSOL.</span>
+                    <span className="text-[12px] text-amber-700 dark:text-amber-300">Claimed tokens are in wSOL.</span>
                     <button
                       type="button"
                       onClick={() => setWrapModalOpen(true)}
-                      className="rounded-md bg-amber-500/20 px-3 py-1 text-[11px] font-medium text-amber-300 transition hover:bg-amber-500/30"
+                      className="rounded-md bg-amber-500/20 px-3 py-1 text-[11px] font-medium text-amber-700 dark:text-amber-300 transition hover:bg-amber-500/30"
                     >
                       Unwrap to SOL
                     </button>
@@ -2412,8 +2412,8 @@ function SectionHeader({
 }) {
   return (
     <div>
-      <h2 className="text-[14px] font-semibold text-white">{title}</h2>
-      <p className="mt-0.5 text-[11px] text-[#8b92a5]">{caption}</p>
+      <h2 className="text-[14px] font-semibold text-foreground">{title}</h2>
+      <p className="mt-0.5 text-[11px] text-muted-foreground">{caption}</p>
     </div>
   );
 }
@@ -2427,7 +2427,7 @@ function FieldRow({
 }) {
   return (
     <div>
-      <label className="mb-2 block text-[12px] font-medium text-[#8b92a5]">{label}</label>
+      <label className="mb-2 block text-[12px] font-medium text-muted-foreground">{label}</label>
       {input}
     </div>
   );
@@ -2447,7 +2447,7 @@ function MetricCard({
     <Card className="rounded-xl">
       <CardContent className="px-4 py-3">
         <p className="text-[10px] uppercase tracking-[0.12em] text-muted-foreground">{label}</p>
-        <p className={cn("mt-1 text-lg font-semibold tabular-nums sm:text-xl", accent ? "text-violet-400" : "text-foreground")}>
+        <p className={cn("mt-1 text-lg font-semibold tabular-nums sm:text-xl", accent ? "text-violet-700 dark:text-violet-400" : "text-foreground")}>
           {value}
         </p>
       </CardContent>
@@ -2576,7 +2576,7 @@ function RecipientListModal({
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Search recipient wallet"
-            className="w-full rounded-2xl border border-white/[0.08] bg-[#11161f] px-4 py-3 text-[13px] text-white outline-none transition focus:border-white/20"
+            className="w-full rounded-2xl border border-foreground/[0.08] bg-muted px-4 py-3 text-[13px] text-foreground outline-none transition focus:border-foreground/20"
           />
         </div>
 
@@ -2598,7 +2598,7 @@ function RecipientListModal({
                             {recipient.beneficiary}
                           </p>
                           {viewer === recipient.beneficiary && (
-                            <Badge variant="outline" className="h-auto rounded-full border-violet-500/20 bg-violet-500/10 px-2 py-0.5 text-[10px] font-medium text-violet-300">
+                            <Badge variant="outline" className="h-auto rounded-full border-violet-500/20 bg-violet-500/10 px-2 py-0.5 text-[10px] font-medium text-violet-700 dark:text-violet-300">
                               You
                             </Badge>
                           )}
@@ -2607,10 +2607,10 @@ function RecipientListModal({
                             className={cn(
                               "h-auto rounded-full px-2 py-0.5 text-[10px] font-medium",
                               fullyClaimed
-                                ? "border-emerald-500/20 bg-emerald-500/10 text-emerald-300"
+                                ? "border-emerald-500/20 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300"
                                 : partiallyClaimed
-                                  ? "border-amber-500/20 bg-amber-500/10 text-amber-300"
-                                  : "border-white/[0.08] bg-white/[0.03] text-muted-foreground",
+                                  ? "border-amber-500/20 bg-amber-500/10 text-amber-700 dark:text-amber-300"
+                                  : "border-foreground/[0.08] bg-foreground/[0.03] text-muted-foreground",
                             )}
                           >
                             {fullyClaimed ? "Fully claimed" : partiallyClaimed ? "Partially claimed" : "Unclaimed"}
@@ -2623,18 +2623,18 @@ function RecipientListModal({
                       <button
                         type="button"
                         onClick={() => handleCopy(recipient.beneficiary)}
-                        className="shrink-0 rounded-xl border border-white/[0.08] bg-white/[0.03] px-3 py-2 text-[11px] font-medium text-foreground transition hover:bg-white/[0.06]"
+                        className="shrink-0 rounded-xl border border-foreground/[0.08] bg-foreground/[0.03] px-3 py-2 text-[11px] font-medium text-foreground transition hover:bg-foreground/[0.06]"
                       >
                         {copied === recipient.beneficiary ? "Copied" : "Copy"}
                       </button>
                     </div>
 
                     <div className="mt-4 grid gap-3 sm:grid-cols-2">
-                      <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] px-3 py-3">
+                      <div className="rounded-xl border border-foreground/[0.06] bg-foreground/[0.02] px-3 py-3">
                         <p className="text-[10px] uppercase tracking-[0.14em] text-muted-foreground">Allocation</p>
                         <p className="mt-1.5 text-[14px] font-medium tabular-nums text-foreground">{formatAmount(recipient.allocation)}</p>
                       </div>
-                      <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] px-3 py-3">
+                      <div className="rounded-xl border border-foreground/[0.06] bg-foreground/[0.02] px-3 py-3">
                         <p className="text-[10px] uppercase tracking-[0.14em] text-muted-foreground">Claimed</p>
                         <p className="mt-1.5 text-[14px] font-medium tabular-nums text-foreground">{formatAmount(recipient.claimedAmount)}</p>
                       </div>
@@ -2645,7 +2645,7 @@ function RecipientListModal({
             })}
 
             {filteredRecipients.length === 0 && (
-              <div className="rounded-2xl border border-white/[0.06] bg-white/[0.02] px-4 py-8 text-center text-[13px] text-muted-foreground">
+              <div className="rounded-2xl border border-foreground/[0.06] bg-foreground/[0.02] px-4 py-8 text-center text-[13px] text-muted-foreground">
                 No recipient matched that wallet.
               </div>
             )}

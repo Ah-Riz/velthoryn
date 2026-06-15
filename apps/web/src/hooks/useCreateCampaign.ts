@@ -19,8 +19,10 @@ import {
   indexCampaign,
   removePendingCampaignFundingLocal,
   savePendingCampaignFundingLocal,
+  savePendingCampaignIndexLocal,
   saveStreamScheduleLocal,
 } from "@/lib/stream/persist";
+import { createAuthHeader } from "@/lib/api/client-auth";
 
 import { useVestingProgram } from "./useVestingProgram";
 import { buildWrapSolInstructions, isNativeSol } from "@/lib/sol/auto-wrap";
@@ -61,12 +63,16 @@ export interface CreateAndFundCampaignResult {
 
 export function useCreateCampaign() {
   const program = useVestingProgram();
-  const { publicKey, sendTransaction } = useWallet();
+  const { publicKey, sendTransaction, signMessage } = useWallet();
   const { connection } = useConnection();
 
   const createCampaign = useCallback(
     async (params: CreateCampaignParams): Promise<CreateCampaignResult> => {
       if (!program || !publicKey) throw new Error("Wallet not connected");
+
+      const authHeader = signMessage
+        ? await createAuthHeader({ publicKey, signMessage })
+        : undefined;
 
       const mintKey = new PublicKey(params.mintAddress);
       const nativeSol = isNativeSol(mintKey);
@@ -145,20 +151,21 @@ export function useCreateCampaign() {
         createSig: sig,
       });
 
+      const indexPayload = buildCreateCampaignIndexPayload({
+        treeAddress,
+        creator: publicKey.toBase58(),
+        mint: mintKey.toBase58(),
+        campaignId: Number(params.campaignId),
+        cancellable: params.cancellable,
+        cancelAuthority: params.cancellable ? publicKey.toBase58() : null,
+        pauseAuthority: publicKey.toBase58(),
+        prepared: params.prepared,
+      });
+
       try {
-        await indexCampaign(
-          buildCreateCampaignIndexPayload({
-            treeAddress,
-            creator: publicKey.toBase58(),
-            mint: mintKey.toBase58(),
-            campaignId: Number(params.campaignId),
-            cancellable: params.cancellable,
-            cancelAuthority: params.cancellable ? publicKey.toBase58() : null,
-            pauseAuthority: publicKey.toBase58(),
-            prepared: params.prepared,
-          }),
-        );
+        await indexCampaign(indexPayload, authHeader);
       } catch (error) {
+        savePendingCampaignIndexLocal(indexPayload);
         indexWarning =
           error instanceof Error
             ? `Campaign created on-chain, but DB indexing failed and was queued for retry: ${error.message}`
@@ -172,7 +179,7 @@ export function useCreateCampaign() {
         indexWarning,
       };
     },
-    [program, publicKey, connection, sendTransaction],
+    [program, publicKey, connection, sendTransaction, signMessage],
   );
 
   const fundCampaign = useCallback(

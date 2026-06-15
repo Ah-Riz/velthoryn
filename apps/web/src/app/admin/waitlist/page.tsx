@@ -148,9 +148,9 @@ export default function AdminWaitlistPage() {
 
   if (!ready) {
     return (
-      <main className="min-h-screen bg-[#0b0d12] text-[#e5e7eb]">
+      <main className="min-h-screen bg-background text-foreground">
         <div className="mx-auto flex min-h-screen max-w-6xl items-center justify-center px-6 py-10">
-          <div className="rounded-3xl border border-white/10 bg-white/[0.03] px-6 py-4 text-sm text-[#b4b9c5]">
+          <div className="rounded-3xl border border-foreground/10 bg-foreground/[0.03] px-6 py-4 text-sm text-secondary-foreground">
             Checking admin session...
           </div>
         </div>
@@ -159,38 +159,38 @@ export default function AdminWaitlistPage() {
   }
 
   return (
-    <main className="min-h-screen bg-[#0b0d12] text-[#e5e7eb]">
+    <main className="min-h-screen bg-background text-foreground">
       <div className="mx-auto flex w-full max-w-6xl flex-col gap-8 px-6 py-10 lg:px-10">
-        <header className="flex flex-col gap-4 rounded-3xl border border-white/10 bg-white/[0.03] p-6 shadow-[0_24px_80px_rgba(0,0,0,0.35)]">
+        <header className="flex flex-col gap-4 rounded-3xl border border-foreground/10 bg-foreground/[0.03] p-6 shadow-[0_24px_80px_rgba(0,0,0,0.35)]">
           <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
             <div>
               <div className="mb-3 inline-flex items-center gap-2 rounded-full border border-emerald-400/20 bg-emerald-400/10 px-3 py-1 text-xs font-medium uppercase tracking-[0.18em] text-emerald-200">
                 Admin
               </div>
-              <h1 className="text-3xl font-semibold tracking-tight text-white">Waitlist Inbox</h1>
-              <p className="mt-2 max-w-2xl text-sm leading-6 text-[#b4b9c5]">
+              <h1 className="text-3xl font-semibold tracking-tight text-foreground">Waitlist Inbox</h1>
+              <p className="mt-2 max-w-2xl text-sm leading-6 text-secondary-foreground">
                 Lihat email waitlist yang masuk dari landing page, cari cepat, lalu export CSV untuk marketing follow-up.
               </p>
             </div>
             <div className="grid gap-3 sm:grid-cols-[repeat(3,minmax(0,1fr))_auto]">
-              <div className="rounded-2xl border border-white/10 bg-black/20 px-4 py-3">
-                <div className="text-xs uppercase tracking-[0.16em] text-[#64748b]">Total loaded</div>
-                <div className="mt-2 text-2xl font-semibold text-white">{rows.length}</div>
+              <div className="rounded-2xl border border-foreground/10 bg-black/20 px-4 py-3">
+                <div className="text-xs uppercase tracking-[0.16em] text-muted-foreground">Total loaded</div>
+                <div className="mt-2 text-2xl font-semibold text-foreground">{rows.length}</div>
               </div>
-              <div className="rounded-2xl border border-white/10 bg-black/20 px-4 py-3">
-                <div className="text-xs uppercase tracking-[0.16em] text-[#64748b]">Filtered</div>
-                <div className="mt-2 text-2xl font-semibold text-white">{filteredRows.length}</div>
+              <div className="rounded-2xl border border-foreground/10 bg-black/20 px-4 py-3">
+                <div className="text-xs uppercase tracking-[0.16em] text-muted-foreground">Filtered</div>
+                <div className="mt-2 text-2xl font-semibold text-foreground">{filteredRows.length}</div>
               </div>
-              <div className="rounded-2xl border border-white/10 bg-black/20 px-4 py-3">
-                <div className="text-xs uppercase tracking-[0.16em] text-[#64748b]">Last action</div>
-                <div className="mt-2 text-sm font-medium text-[#e5e7eb]">
+              <div className="rounded-2xl border border-foreground/10 bg-black/20 px-4 py-3">
+                <div className="text-xs uppercase tracking-[0.16em] text-muted-foreground">Last action</div>
+                <div className="mt-2 text-sm font-medium text-foreground">
                   {loaded ? "Fetched from API" : "Not loaded yet"}
                 </div>
               </div>
               <button
                 type="button"
                 onClick={handleLogout}
-                className="rounded-2xl border border-white/10 bg-white/5 px-5 py-3 text-sm font-medium text-white transition hover:bg-white/10"
+                className="rounded-2xl border border-foreground/10 bg-foreground/5 px-5 py-3 text-sm font-medium text-foreground transition hover:bg-foreground/10"
                 suppressHydrationWarning
               >
                 Logout
@@ -199,16 +199,16 @@ export default function AdminWaitlistPage() {
           </div>
         </header>
 
-        <section className="rounded-3xl border border-white/10 bg-white/[0.03] p-6">
+        <section className="rounded-3xl border border-foreground/10 bg-foreground/[0.03] p-6">
           <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_auto]">
-            <div className="rounded-2xl border border-dashed border-white/10 bg-black/20 px-4 py-3 text-sm text-[#b4b9c5]">
-              Session: <span className="font-mono text-white">saved in this browser tab</span>
+            <div className="rounded-2xl border border-dashed border-foreground/10 bg-black/20 px-4 py-3 text-sm text-secondary-foreground">
+              Session: <span className="font-mono text-foreground">saved in this browser tab</span>
             </div>
             <button
               type="button"
               onClick={() => void loadWaitlist()}
               disabled={loading}
-              className="h-12 self-end rounded-2xl bg-violet-600 px-5 text-sm font-medium text-white transition hover:bg-violet-500 disabled:cursor-not-allowed disabled:opacity-60"
+              className="h-12 self-end rounded-2xl bg-violet-700 dark:bg-violet-600 px-5 text-sm font-medium text-white transition hover:bg-violet-600 dark:hover:bg-violet-500 disabled:cursor-not-allowed disabled:opacity-60"
               suppressHydrationWarning
             >
               {loading ? "Loading..." : "Load waitlist"}
@@ -217,7 +217,7 @@ export default function AdminWaitlistPage() {
               type="button"
               onClick={exportCsv}
               disabled={exporting}
-              className="h-12 self-end rounded-2xl border border-white/10 bg-white/5 px-5 text-sm font-medium text-white transition hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-60"
+              className="h-12 self-end rounded-2xl border border-foreground/10 bg-foreground/5 px-5 text-sm font-medium text-foreground transition hover:bg-foreground/10 disabled:cursor-not-allowed disabled:opacity-60"
               suppressHydrationWarning
             >
               {exporting ? "Exporting..." : "Export CSV"}
@@ -226,18 +226,18 @@ export default function AdminWaitlistPage() {
 
           <div className="mt-4 grid gap-4 lg:grid-cols-[minmax(0,1fr)_220px]">
             <label className="flex flex-col gap-2">
-              <span className="text-sm font-medium text-white">Search</span>
+              <span className="text-sm font-medium text-foreground">Search</span>
               <input
                 type="search"
                 value={query}
                 onChange={(event) => setQuery(event.target.value)}
                 placeholder="Search by email"
-                className="h-12 rounded-2xl border border-white/10 bg-[#11141c] px-4 text-sm text-white outline-none transition focus:border-emerald-400/60"
+                className="h-12 rounded-2xl border border-foreground/10 bg-muted px-4 text-sm text-foreground outline-none transition focus:border-emerald-400/60"
                 suppressHydrationWarning
               />
             </label>
-            <div className="rounded-2xl border border-dashed border-white/10 bg-black/20 px-4 py-3 text-sm text-[#b4b9c5]">
-              Route: <span className="font-mono text-white">/admin/waitlist</span>
+            <div className="rounded-2xl border border-dashed border-foreground/10 bg-black/20 px-4 py-3 text-sm text-secondary-foreground">
+              Route: <span className="font-mono text-foreground">/admin/waitlist</span>
             </div>
           </div>
 
@@ -248,29 +248,29 @@ export default function AdminWaitlistPage() {
           ) : null}
         </section>
 
-        <section className="overflow-hidden rounded-3xl border border-white/10 bg-white/[0.03]">
-          <div className="flex items-center justify-between border-b border-white/10 px-6 py-4">
+        <section className="overflow-hidden rounded-3xl border border-foreground/10 bg-foreground/[0.03]">
+          <div className="flex items-center justify-between border-b border-foreground/10 px-6 py-4">
             <div>
-              <h2 className="text-lg font-semibold text-white">Entries</h2>
-              <p className="mt-1 text-sm text-[#b4b9c5]">
+              <h2 className="text-lg font-semibold text-foreground">Entries</h2>
+              <p className="mt-1 text-sm text-secondary-foreground">
                 {loaded ? `${filteredRows.length} rows ready` : "Load waitlist to see entries"}
               </p>
             </div>
           </div>
 
           {loaded && filteredRows.length === 0 ? (
-            <div className="px-6 py-12 text-center text-sm text-[#b4b9c5]">
+            <div className="px-6 py-12 text-center text-sm text-secondary-foreground">
               Tidak ada email yang cocok dengan filter sekarang.
             </div>
           ) : !loaded ? (
-            <div className="px-6 py-12 text-center text-sm text-[#b4b9c5]">
-              Belum ada data ditampilkan. Masukkan admin key lalu klik <span className="text-white">Load waitlist</span>.
+            <div className="px-6 py-12 text-center text-sm text-secondary-foreground">
+              Belum ada data ditampilkan. Masukkan admin key lalu klik <span className="text-foreground">Load waitlist</span>.
             </div>
           ) : (
             <div className="overflow-x-auto">
               <table className="min-w-full border-collapse">
                 <thead>
-                  <tr className="border-b border-white/10 bg-black/20 text-left text-xs uppercase tracking-[0.16em] text-[#64748b]">
+                  <tr className="border-b border-foreground/10 bg-black/20 text-left text-xs uppercase tracking-[0.16em] text-muted-foreground">
                     <th className="px-6 py-4 font-medium">#</th>
                     <th className="px-6 py-4 font-medium">Email</th>
                     <th className="px-6 py-4 font-medium">Joined</th>
@@ -278,10 +278,10 @@ export default function AdminWaitlistPage() {
                 </thead>
                 <tbody>
                   {filteredRows.map((row, index) => (
-                    <tr key={row.id} className="border-b border-white/5 text-sm text-[#e5e7eb] last:border-b-0">
-                      <td className="px-6 py-4 text-[#b4b9c5]">{index + 1}</td>
+                    <tr key={row.id} className="border-b border-foreground/5 text-sm text-foreground last:border-b-0">
+                      <td className="px-6 py-4 text-secondary-foreground">{index + 1}</td>
                       <td className="px-6 py-4 font-mono">{row.email}</td>
-                      <td className="px-6 py-4 text-[#b4b9c5]">{formatJoinedAt(row.createdAt)}</td>
+                      <td className="px-6 py-4 text-secondary-foreground">{formatJoinedAt(row.createdAt)}</td>
                     </tr>
                   ))}
                 </tbody>

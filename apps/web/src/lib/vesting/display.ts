@@ -7,9 +7,9 @@ const TYPE_LABELS: Record<number, string> = {
 };
 
 const TYPE_BADGE_COLORS: Record<number, string> = {
-  0: "bg-amber-500/20 text-amber-400 border-amber-500/40",
-  1: "bg-purple-500/20 text-purple-400 border-purple-500/40",
-  2: "bg-blue-500/20 text-blue-400 border-blue-500/40",
+  0: "bg-indigo-500/20 text-indigo-700 dark:text-indigo-400 border-indigo-500/40",
+  1: "bg-violet-500/20 text-violet-700 dark:text-violet-400 border-violet-500/40",
+  2: "bg-blue-500/20 text-blue-700 dark:text-blue-400 border-blue-500/40",
 };
 
 /**

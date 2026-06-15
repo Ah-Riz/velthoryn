@@ -6,6 +6,7 @@ import { derivePda } from "@/lib/anchor/client";
 import {
   listLocalStreamRecords,
   saveLocalCampaignSnapshotLocal,
+  isStreamSettledLocal,
   type CachedLocalCampaignSnapshot,
 } from "@/lib/stream/persist";
 import { useVestingProgram } from "./useVestingProgram";
@@ -94,7 +95,7 @@ function buildSenderCampaign(
     paused: cached.paused,
     cancelledAt: cached.cancelledAt,
     instantRefunded: cached.instantRefunded ?? false,
-    streamSettled: false,
+    streamSettled: isStreamSettledLocal(treeAddress),
     createdAt: cached.createdAt,
     metadata: null,
   };
@@ -234,7 +235,7 @@ export function useLocalCampaigns(address: string | undefined, refreshKey?: numb
                       paused: Boolean(account.paused),
                       cancelledAt,
                       instantRefunded,
-                      streamSettled: false,
+                      streamSettled: isStreamSettledLocal(treeAddress),
                       createdAt,
                       metadata: null,
                     }

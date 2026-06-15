@@ -18,6 +18,7 @@ import {
   getSenderStreamStatus,
   type StreamStatus,
 } from "@/lib/vesting/list";
+import { isStreamSettledLocal } from "@/lib/stream/persist";
 import { POPULAR_TOKENS } from "@/lib/constants/popular-tokens";
 
 type TabKey = "all" | "recipient" | "sender" | "action";
@@ -51,6 +52,7 @@ type RecipientCampaign = {
   createdAt: number;
   metadata: { name?: string; description?: string; logoUri?: string } | null;
   myClaimed: number | string;
+  streamSettled?: boolean;
   myLeaf: {
     leafIndex: number;
     amount: number | string;
@@ -149,6 +151,7 @@ function getSenderStateText(campaign: SenderCampaign): string {
   if (status === "Claimed") return "Fully claimed";
   if (status === "Paused") return "Paused";
   if (status === "Settled") return "Settled";
+  if (status === "Grace Period") return "Grace period";
   if (status === "Cancelled") return "Cancelled";
   return `${campaign.leafCount} ${campaign.leafCount === 1 ? "recipient" : "recipients"}`;
 }
@@ -186,7 +189,12 @@ export default function CampaignsPage() {
   const senderCampaigns = useMemo(() => {
     const dbSenderCampaigns = ((senderCampaignsQuery.data?.campaigns ?? []) as SenderCampaign[]).filter(
       (campaign) => campaign.creator === walletAddress,
-    );
+    ).map((campaign) => {
+      if (!campaign.streamSettled && isStreamSettledLocal(campaign.treeAddress)) {
+        return { ...campaign, streamSettled: true };
+      }
+      return campaign;
+    });
 
     const seen = new Set(dbSenderCampaigns.map((campaign) => campaign.treeAddress));
     const localOnly = localCampaigns.senderCampaigns.filter(
@@ -202,7 +210,14 @@ export default function CampaignsPage() {
 
   const recipientCampaigns = useMemo(
     () => {
-      const dbRecipientCampaigns = (recipientCampaignsQuery.data?.campaigns ?? []) as RecipientCampaign[];
+      const dbRecipientCampaigns = ((recipientCampaignsQuery.data?.campaigns ?? []) as RecipientCampaign[]).map(
+        (campaign) => {
+          if (!campaign.streamSettled && isStreamSettledLocal(campaign.treeAddress)) {
+            return { ...campaign, streamSettled: true };
+          }
+          return campaign;
+        },
+      );
 
       const seen = new Set(dbRecipientCampaigns.map((campaign) => campaign.treeAddress));
       const localOnly = localCampaigns.recipientCampaigns.filter(
@@ -368,7 +383,7 @@ export default function CampaignsPage() {
     for (const row of rows) {
       if (row.role === "sender" || row.role === "both") {
         const senderMatch = senderCampaigns.find((c) => c.treeAddress === row.treeAddress);
-        if (senderMatch && senderMatch.cancelledAt !== null && !senderMatch.instantRefunded && !senderMatch.streamSettled) {
+        if (senderMatch && getSenderStreamStatus(senderMatch) === "Grace Period") {
           n++;
           continue;
         }
@@ -386,7 +401,7 @@ export default function CampaignsPage() {
     if (activeTab === "action") {
       if (row.role === "sender" || row.role === "both") {
         const senderMatch = senderCampaigns.find((c) => c.treeAddress === row.treeAddress);
-        if (senderMatch && senderMatch.cancelledAt !== null && !senderMatch.instantRefunded && !senderMatch.streamSettled) return true;
+        if (senderMatch && getSenderStreamStatus(senderMatch) === "Grace Period") return true;
       }
       if (row.status === "Claimable") return true;
       return false;
@@ -437,12 +452,12 @@ export default function CampaignsPage() {
 
   return (
     <div className="mx-auto max-w-6xl space-y-6 pb-12">
-      <div className="rounded-xl sm:rounded-2xl border border-[#222838] bg-[#13161f] p-4 sm:p-6">
+      <div className="rounded-xl sm:rounded-2xl border border-line bg-muted p-4 sm:p-6">
         <div className="flex flex-col gap-3 sm:gap-4 lg:flex-row lg:items-end lg:justify-between">
           <div>
-            <div className="mb-2 font-mono text-[11px] font-medium uppercase tracking-[0.18em] text-[#7c3aed]/70">Streams</div>
-            <h1 className="text-[22px] sm:text-[28px] font-semibold tracking-tight text-[#e5e7eb]">Vesting Streams</h1>
-            <p className="mt-1 font-mono text-[12px] text-[#64748b]">
+            <div className="mb-2 font-mono text-[11px] font-medium uppercase tracking-[0.18em] text-primary/70">Streams</div>
+            <h1 className="text-[22px] sm:text-[28px] font-semibold tracking-tight text-foreground">Vesting Streams</h1>
+            <p className="mt-1 font-mono text-[12px] text-muted-foreground">
               Track streams you received and streams you created.
             </p>
           </div>
@@ -452,14 +467,14 @@ export default function CampaignsPage() {
               <button
                 onClick={refreshAll}
                 disabled={isLoading}
-                className="rounded-xl border border-[#222838] bg-[#161a25] px-4 py-2.5 text-[13px] text-[#b4b9c5] transition hover:border-[#2e3648] hover:text-[#e5e7eb] disabled:opacity-50"
+                className="rounded-xl border border-line bg-surface-hover px-4 py-2.5 text-[13px] text-secondary-foreground transition hover:border-line-hover hover:text-foreground disabled:opacity-50"
               >
                 Refresh
               </button>
             )}
             <Link
               href="/campaign/create"
-              className="rounded-xl bg-[#7c3aed] px-4 py-2.5 text-[13px] font-medium text-white transition hover:bg-[#8b50f1]"
+              className="rounded-xl bg-primary px-4 py-2.5 text-[13px] font-medium text-white transition hover:bg-primary"
             >
               New Stream
             </Link>
@@ -468,22 +483,22 @@ export default function CampaignsPage() {
       </div>
 
       {!publicKey ? (
-        <div className="rounded-2xl border border-dashed border-[#222838] bg-[#13161f]/60 px-8 py-16 text-center">
-          <h2 className="text-[16px] font-semibold text-[#e5e7eb]">Connect your wallet</h2>
-          <p className="mt-2 font-mono text-[12px] text-[#64748b]">
+        <div className="rounded-2xl border border-dashed border-line bg-muted/60 px-8 py-16 text-center">
+          <h2 className="text-[16px] font-semibold text-foreground">Connect your wallet</h2>
+          <p className="mt-2 font-mono text-[12px] text-muted-foreground">
             Your sender and recipient streams will appear here.
           </p>
         </div>
       ) : (
         <>
-          <div className="rounded-xl sm:rounded-2xl border border-[#222838] bg-[#13161f] p-3 sm:p-4">
+          <div className="rounded-xl sm:rounded-2xl border border-line bg-muted p-3 sm:p-4">
             <div className="flex flex-col gap-3 sm:gap-4 lg:flex-row lg:items-center lg:justify-between">
               {/* Mobile: native select */}
               <div className="sm:hidden">
                 <select
                   value={activeTab}
                   onChange={(e) => setActiveTab(e.target.value as TabKey)}
-                  className="w-full rounded-xl border border-[#222838] bg-[#0b0d12] px-3 py-2.5 font-mono text-[12px] text-[#b4b9c5] outline-none transition focus:border-[#7c3aed]/40"
+                  className="w-full rounded-xl border border-line bg-background px-3 py-2.5 font-mono text-[12px] text-secondary-foreground outline-none transition focus:border-primary/40"
                 >
                   {TABS.map((tab) => (
                     <option key={tab.key} value={tab.key}>
@@ -503,13 +518,13 @@ export default function CampaignsPage() {
                       onClick={() => setActiveTab(tab.key)}
                       className={`rounded-full px-3 py-1.5 sm:px-4 sm:py-2 font-mono text-[11px] transition ${
                         active
-                          ? "border border-[#7c3aed]/40 bg-[#7c3aed]/15 text-[#a78bfa]"
-                          : "border border-[#222838] bg-transparent text-[#64748b] hover:border-[#2e3648] hover:text-[#b4b9c5]"
+                          ? "border border-primary/40 bg-primary/15 text-accent-light"
+                          : "border border-line bg-transparent text-muted-foreground hover:border-line-hover hover:text-secondary-foreground"
                       }`}
                     >
                       {tab.label} ({tabCounts[tab.key]})
                       {tab.key === "action" && !active && actionCount > 0 && (
-                        <span className="ml-1.5 inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-amber-500/20 px-1 text-[10px] font-medium text-amber-400">
+                        <span className="ml-1.5 inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-amber-500/20 px-1 text-[10px] font-medium text-amber-700 dark:text-amber-400">
                           {actionCount}
                         </span>
                       )}
@@ -524,7 +539,7 @@ export default function CampaignsPage() {
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
                   placeholder="Search by campaign, address, or token"
-                  className="w-full rounded-xl border border-[#222838] bg-[#0b0d12] px-4 py-2.5 font-mono text-[12px] text-[#b4b9c5] outline-none placeholder:text-[#64748b] transition focus:border-[#7c3aed]/40"
+                  className="w-full rounded-xl border border-line bg-background px-4 py-2.5 font-mono text-[12px] text-secondary-foreground outline-none placeholder:text-muted-foreground transition focus:border-primary/40"
                 />
               </div>
             </div>
@@ -532,7 +547,7 @@ export default function CampaignsPage() {
 
           {showingLocalFallback ? (
             <div className="flex items-center gap-3 rounded-2xl border border-amber-500/20 bg-amber-500/[0.06] px-5 py-3.5">
-              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="shrink-0 text-amber-400">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="shrink-0 text-amber-700 dark:text-amber-400">
                 <path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" /><line x1="12" y1="9" x2="12" y2="13" /><line x1="12" y1="17" x2="12.01" y2="17" />
               </svg>
               <p className="flex-1 text-[12px] text-amber-200">
@@ -540,7 +555,7 @@ export default function CampaignsPage() {
               </p>
               <button
                 onClick={() => window.location.reload()}
-                className="shrink-0 rounded-lg border border-amber-500/30 px-3 py-1.5 text-[11px] font-medium text-amber-300 transition hover:bg-amber-500/10"
+                className="shrink-0 rounded-lg border border-amber-500/30 px-3 py-1.5 text-[11px] font-medium text-amber-700 dark:text-amber-300 transition hover:bg-amber-500/10"
               >
                 Retry
               </button>
@@ -552,46 +567,46 @@ export default function CampaignsPage() {
               {[...Array(5)].map((_, i) => (
                 <div
                   key={i}
-                  className="flex animate-pulse items-center gap-4 rounded-2xl border border-[#222838] bg-[#13161f] px-5 py-4"
+                  className="flex animate-pulse items-center gap-4 rounded-2xl border border-line bg-foreground/10 px-5 py-4"
                 >
-                  <div className="h-9 w-9 shrink-0 rounded-xl bg-[#1c2130]" />
+                  <div className="h-9 w-9 shrink-0 rounded-xl bg-foreground/10" />
                   <div className="flex-1 space-y-2">
-                    <div className="h-3.5 w-1/3 rounded-full bg-[#1c2130]" />
-                    <div className="h-2.5 w-1/2 rounded-full bg-[#161a25]" />
+                    <div className="h-3.5 w-1/3 rounded-full bg-foreground/10" />
+                    <div className="h-2.5 w-1/2 rounded-full bg-foreground/[0.06]" />
                   </div>
                   <div className="hidden space-y-2 sm:block">
-                    <div className="h-3 w-20 rounded-full bg-[#1c2130]" />
-                    <div className="h-2.5 w-16 rounded-full bg-[#161a25]" />
+                    <div className="h-3 w-20 rounded-full bg-secondary" />
+                    <div className="h-2.5 w-16 rounded-full bg-surface-hover" />
                   </div>
-                  <div className="h-6 w-16 shrink-0 rounded-lg bg-[#1c2130]" />
+                  <div className="h-6 w-16 shrink-0 rounded-lg bg-secondary" />
                 </div>
               ))}
             </div>
           ) : error ? (
-            <div className="rounded-2xl border border-red-500/25 bg-[#13161f] p-5">
+            <div className="rounded-2xl border border-red-500/25 bg-muted p-5">
               <div className="flex items-start gap-3">
-                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-red-500/20 bg-red-500/10 text-red-400">
+                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-red-500/20 bg-red-500/10 text-red-700 dark:text-red-400">
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                     <circle cx="12" cy="12" r="10" /><line x1="12" y1="8" x2="12" y2="12" /><line x1="12" y1="16" x2="12.01" y2="16" />
                   </svg>
                 </div>
                 <div>
-                  <p className="text-[13px] font-medium text-red-300">Failed to load streams</p>
-                  <p className="mt-1 font-mono text-[11px] text-[#64748b]">{error}</p>
+                  <p className="text-[13px] font-medium text-red-600 dark:text-red-300">Failed to load streams</p>
+                  <p className="mt-1 font-mono text-[11px] text-muted-foreground">{error}</p>
                 </div>
               </div>
             </div>
           ) : filteredRows.length === 0 ? (
             activeTab === "action" ? (
-              <div className="rounded-2xl border border-[#222838] bg-[#13161f] px-8 py-16 text-center">
-                <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-2xl border border-[#14f1d9]/20 bg-[#14f1d9]/10">
+              <div className="rounded-2xl border border-line bg-muted px-8 py-16 text-center">
+                <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-2xl border border-violet/20 bg-violet/10">
                   <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#14f1d9" strokeWidth="2">
                     <path d="M22 11.08V12a10 10 0 11-5.93-9.14" />
                     <polyline points="22 4 12 14.01 9 11.01" />
                   </svg>
                 </div>
-                <h2 className="text-[16px] font-semibold text-[#e5e7eb]">All caught up</h2>
-                <p className="mt-2 font-mono text-[12px] text-[#64748b]">No campaigns need attention right now.</p>
+                <h2 className="text-[16px] font-semibold text-foreground">All caught up</h2>
+                <p className="mt-2 font-mono text-[12px] text-muted-foreground">No campaigns need attention right now.</p>
               </div>
             ) : search.trim() ? (
               <EmptyState
@@ -638,9 +653,9 @@ export default function CampaignsPage() {
                     ? senderCampaigns.find((c) => c.treeAddress === row.treeAddress)
                     : undefined;
                 const actionNote =
-                  senderMatch?.cancelledAt != null && !senderMatch.instantRefunded && !senderMatch.streamSettled ? (
+                  senderMatch && getSenderStreamStatus(senderMatch) === "Grace Period" ? (
                     <GracePeriodCountdown
-                      cancelledAt={BigInt(senderMatch.cancelledAt)}
+                      cancelledAt={BigInt(senderMatch.cancelledAt!)}
                       className="text-[12px]"
                     />
                   ) : undefined;

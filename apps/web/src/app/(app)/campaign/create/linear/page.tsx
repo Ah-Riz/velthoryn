@@ -413,7 +413,7 @@ export default function LinearCreatePage() {
       <div className="mx-auto max-w-3xl space-y-6">
         <PageHeader title="Linear Vesting" description="Tokens unlock gradually over time, from start to end date." />
         <div className={`${CARD} p-5`}>
-          <p className="text-[13px] text-[#8b92a5]">Connect your wallet to create a linear vesting stream.</p>
+          <p className="text-[13px] text-muted-foreground">Connect your wallet to create a linear vesting stream.</p>
         </div>
       </div>
     );
@@ -444,14 +444,14 @@ export default function LinearCreatePage() {
               <button
                 type="button"
                 onClick={() => { setMode("single"); setTxState({ type: "idle" }); }}
-                className={`flex-1 rounded-lg px-3 py-2.5 text-[12px] font-medium transition ${mode === "single" ? "bg-white/[0.1] text-white" : "text-[#8b92a5] hover:text-white"}`}
+                className={`flex-1 rounded-lg px-3 py-2.5 text-[12px] font-medium transition ${mode === "single" ? "bg-foreground/[0.1] text-foreground" : "text-muted-foreground hover:text-foreground"}`}
               >
                 Manual
               </button>
               <button
                 type="button"
                 onClick={() => { setMode("bulk"); setTxState({ type: "idle" }); }}
-                className={`flex-1 rounded-lg px-3 py-2.5 text-[12px] font-medium transition ${mode === "bulk" ? "bg-white/[0.1] text-white" : "text-[#8b92a5] hover:text-white"}`}
+                className={`flex-1 rounded-lg px-3 py-2.5 text-[12px] font-medium transition ${mode === "bulk" ? "bg-foreground/[0.1] text-foreground" : "text-muted-foreground hover:text-foreground"}`}
               >
                 Use CSV
               </button>
@@ -473,13 +473,13 @@ export default function LinearCreatePage() {
               {streams.map((stream, i) => (
                 <div key={stream.id} className={`${CARD} space-y-4 p-5`}>
                   <div className="flex items-center justify-between">
-                    <p className="text-[13px] font-medium text-white">{streams.length > 1 ? `Recipient #${i + 1}` : `Stream #${i + 1}`}</p>
+                    <p className="text-[13px] font-medium text-foreground">{streams.length > 1 ? `Recipient #${i + 1}` : `Stream #${i + 1}`}</p>
                     <div className="flex gap-1.5">
-                      <button type="button" onClick={() => duplicateStream(i)} className="rounded-md border border-white/[0.08] px-2 py-1 text-[10px] text-[#8b92a5] hover:text-white">
+                      <button type="button" onClick={() => duplicateStream(i)} className="rounded-md border border-foreground/[0.08] px-2 py-1 text-[10px] text-muted-foreground hover:text-foreground">
                         Add Recipient
                       </button>
                       {streams.length > 1 && (
-                        <button type="button" onClick={() => removeStream(i)} className="rounded-md border border-red-500/20 px-2 py-1 text-[10px] text-red-400 hover:text-red-300">
+                        <button type="button" onClick={() => removeStream(i)} className="rounded-md border border-red-500/20 px-2 py-1 text-[10px] text-red-700 dark:text-red-400 hover:text-red-600 dark:text-red-300">
                           Remove
                         </button>
                       )}
@@ -500,11 +500,11 @@ export default function LinearCreatePage() {
                           className={`${INPUT} pr-24 ${formErrors[`amount_${i}`] ? INPUT_ERR : ""}`}
                         />
                         <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-1.5">
-                          <span className="text-[10px] text-[#555d73]">{tokenSymbol}</span>
+                          <span className="text-[10px] text-muted-foreground">{tokenSymbol}</span>
                           <button
                             type="button"
                             onClick={() => { if (walletToken) updateStream(stream.id, "amount", walletToken.uiAmount); }}
-                            className="rounded-md bg-white/[0.06] px-2 py-0.5 text-[10px] font-medium text-[#8b92a5] hover:text-white"
+                            className="rounded-md bg-foreground/[0.06] px-2 py-0.5 text-[10px] font-medium text-muted-foreground hover:text-foreground"
                           >
                             Max
                           </button>
@@ -560,7 +560,7 @@ export default function LinearCreatePage() {
                           <button
                             type="button"
                             onClick={() => setStreams((prev) => prev.map((s) => ({ ...s, startTime: stream.startTime || s.startTime, cliffTime: stream.cliffTime || s.cliffTime, endTime: stream.endTime })))}
-                            className="shrink-0 rounded-md border border-white/[0.08] px-2 py-1 text-[10px] text-[#8b92a5] hover:text-white"
+                            className="shrink-0 rounded-md border border-foreground/[0.08] px-2 py-1 text-[10px] text-muted-foreground hover:text-foreground"
                             title="Apply schedule to all streams"
                           >
                             Apply all
@@ -591,7 +591,7 @@ export default function LinearCreatePage() {
               <button
                 type="button"
                 onClick={() => setStreams((prev) => [...prev, newStream()])}
-                className="w-full rounded-xl border border-dashed border-white/[0.12] py-3 text-[13px] font-medium text-[#8b92a5] transition hover:border-white/[0.2] hover:text-white"
+                className="w-full rounded-xl border border-dashed border-foreground/[0.12] py-3 text-[13px] font-medium text-muted-foreground transition hover:border-foreground/[0.2] hover:text-foreground"
               >
                 + Add Recipient
               </button>
@@ -622,7 +622,7 @@ export default function LinearCreatePage() {
           {/* Results */}
           {txState.type === "success" && (
             <div className="space-y-3">
-              <p className="text-[13px] font-medium text-emerald-400">{txState.results.length} linear stream(s) created!</p>
+              <p className="text-[13px] font-medium text-emerald-700 dark:text-emerald-400">{txState.results.length} linear stream(s) created!</p>
               {txState.results.map((r, i) => (
                 <TxResultCard key={r.sig} title={`Stream #${i + 1}`} sig={r.sig} href={r.shareUrl} linkLabel="Open stream" />
               ))}
@@ -630,9 +630,9 @@ export default function LinearCreatePage() {
           )}
           {txState.type === "bulk-created-unfunded" && (
             <div className={`${CARD} p-5`}>
-              <p className="text-[13px] font-medium text-amber-300">Campaign created, funding pending</p>
-              <p className="mt-2 text-[12px] leading-6 text-[#d8c58f]">{txState.msg}</p>
-              <p className="mt-3 break-all font-mono text-[11px] text-[#8b92a5]">Create signature: {txState.createSig}</p>
+              <p className="text-[13px] font-medium text-amber-700 dark:text-amber-300">Campaign created, funding pending</p>
+              <p className="mt-2 text-[12px] leading-6 text-warning">{txState.msg}</p>
+              <p className="mt-3 break-all font-mono text-[11px] text-muted-foreground">Create signature: {txState.createSig}</p>
               <div className="mt-4 flex flex-wrap gap-2">
                 <button
                   type="button"
@@ -648,7 +648,7 @@ export default function LinearCreatePage() {
                 </button>
                 <a
                   href={`/campaign/${txState.treeAddress}`}
-                  className="rounded-lg border border-white/[0.12] px-3 py-2 text-[12px] font-medium text-white"
+                  className="rounded-lg border border-foreground/[0.12] px-3 py-2 text-[12px] font-medium text-foreground"
                 >
                   View campaign
                 </a>

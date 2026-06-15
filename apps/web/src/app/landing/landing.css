@@ -1,11 +1,11 @@
 /* Velthoryn Landing Page Styles */
 :root {
-  --lp-ink:       #0B0D12;
-  --lp-graphite:  #13161f;
-  --lp-ink-2:     #161a25;
-  --lp-ink-3:     #1c2130;
-  --lp-line:      #222838;
-  --lp-line-2:    #2e3648;
+  --lp-ink:       #06070a;
+  --lp-graphite:  #11141c;
+  --lp-ink-2:     #141820;
+  --lp-ink-3:     #1a1f2d;
+  --lp-line:      #1e2333;
+  --lp-line-2:    #262d3e;
   --lp-silver:    #E5E7EB;
   --lp-silver-2:  #B4B9C5;
   --lp-slate:     #64748B;
@@ -55,7 +55,7 @@ body:has(.landing-page)::-webkit-scrollbar {
   position: absolute;
   inset: 0 0 auto;
   height: 140%;
-  background: linear-gradient(180deg, rgba(11, 13, 18, 0.36), rgba(11, 13, 18, 0));
+  background: linear-gradient(180deg, rgba(6, 7, 10, 0.36), rgba(6, 7, 10, 0));
   pointer-events: none;
   z-index: -1;
 }
@@ -67,7 +67,7 @@ body:has(.landing-page)::-webkit-scrollbar {
   border-radius: 999px;
   background:
     linear-gradient(135deg, rgba(124, 58, 237, 0.16), rgba(20, 241, 217, 0.08)),
-    rgba(11, 13, 18, 0.78);
+    rgba(6, 7, 10, 0.78);
   backdrop-filter: blur(22px) saturate(150%);
   -webkit-backdrop-filter: blur(22px) saturate(150%);
   box-shadow:
@@ -1025,7 +1025,7 @@ body:has(.landing-page)::-webkit-scrollbar {
     border-radius: 18px;
     background:
       linear-gradient(135deg, rgba(124, 58, 237, 0.16), rgba(20, 241, 217, 0.08)),
-      rgba(11, 13, 18, 0.94);
+      rgba(6, 7, 10, 0.94);
     border: 1px solid rgba(124, 58, 237, 0.16);
     box-shadow:
       0 18px 42px rgba(0, 0, 0, 0.42),

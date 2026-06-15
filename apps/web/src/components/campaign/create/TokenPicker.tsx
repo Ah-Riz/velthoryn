@@ -59,17 +59,17 @@ export function TokenPicker({
         <button
           type="button"
           onClick={() => void refetch()}
-          className="rounded-full border border-white/[0.08] px-3 py-1 text-[11px] font-medium text-[#8b92a5] transition hover:border-white/15 hover:text-white"
+          className="rounded-full border border-foreground/[0.08] px-3 py-1 text-[11px] font-medium text-muted-foreground transition hover:border-foreground/15 hover:text-foreground"
         >
           Refresh tokens
         </button>
       </div>
 
-      <div className="rounded-2xl border border-white/[0.06] bg-white/[0.02] p-3">
+      <div className="rounded-2xl border border-foreground/[0.06] bg-foreground/[0.02] p-3">
         <div className="mb-3 flex items-center justify-between gap-3">
           <div>
-            <p className="text-[13px] font-medium text-white">Wallet Tokens</p>
-            <p className="mt-1 text-[12px] text-[#8b92a5]">
+            <p className="text-[13px] font-medium text-foreground">Wallet Tokens</p>
+            <p className="mt-1 text-[12px] text-muted-foreground">
               Select a mint from your wallet, or switch to manual paste.
             </p>
           </div>
@@ -77,7 +77,7 @@ export function TokenPicker({
             <button
               type="button"
               onClick={() => setManualMode(true)}
-              className="rounded-full border border-white/[0.08] px-3 py-1 text-[11px] font-medium text-white transition hover:border-white/20"
+              className="rounded-full border border-foreground/[0.08] px-3 py-1 text-[11px] font-medium text-foreground transition hover:border-foreground/20"
             >
               Use manual mint address
             </button>
@@ -85,7 +85,7 @@ export function TokenPicker({
             <button
               type="button"
               onClick={() => setManualMode(false)}
-              className="rounded-full border border-white/[0.08] px-3 py-1 text-[11px] font-medium text-white transition hover:border-white/20"
+              className="rounded-full border border-foreground/[0.08] px-3 py-1 text-[11px] font-medium text-foreground transition hover:border-foreground/20"
             >
               Back to wallet tokens
             </button>
@@ -93,13 +93,13 @@ export function TokenPicker({
         </div>
 
         {loading ? (
-          <p className="text-[12px] text-[#8b92a5]">Loading wallet tokens...</p>
+          <p className="text-[12px] text-muted-foreground">Loading wallet tokens...</p>
         ) : walletError ? (
-          <p className="text-[12px] text-amber-300">
+          <p className="text-[12px] text-amber-700 dark:text-amber-300">
             Could not load wallet tokens. Manual mint paste is still available.
           </p>
         ) : tokens.length === 0 ? (
-          <p className="text-[12px] text-[#8b92a5]">
+          <p className="text-[12px] text-muted-foreground">
             No SPL token accounts were detected for this wallet. Paste a mint address manually to continue.
           </p>
         ) : (
@@ -119,17 +119,17 @@ export function TokenPicker({
                   className={`w-full rounded-2xl border px-3 py-3 text-left transition ${
                     isSelected
                       ? "border-emerald-400/40 bg-emerald-500/10"
-                      : "border-white/[0.06] bg-[#11161f] hover:border-white/[0.14]"
+                      : "border-foreground/[0.06] bg-muted hover:border-foreground/[0.14]"
                   }`}
                 >
                   <div className="flex items-start justify-between gap-4">
                     <div>
-                      <p className="font-mono text-[12px] text-white">{shortenMintAddress(token.mintAddress)}</p>
-                      <p className="mt-1 text-[11px] text-[#8b92a5]">{token.mintAddress}</p>
+                      <p className="font-mono text-[12px] text-foreground">{shortenMintAddress(token.mintAddress)}</p>
+                      <p className="mt-1 text-[11px] text-muted-foreground">{token.mintAddress}</p>
                     </div>
                     <div className="text-right">
-                      <p className="text-[12px] font-medium text-white">{formatBalanceLabel(token.uiAmount)}</p>
-                      <p className="mt-1 text-[11px] text-[#8b92a5]">
+                      <p className="text-[12px] font-medium text-foreground">{formatBalanceLabel(token.uiAmount)}</p>
+                      <p className="mt-1 text-[11px] text-muted-foreground">
                         {token.decimals !== null ? `${token.decimals} decimals` : "Decimals unavailable"}
                       </p>
                     </div>
@@ -156,13 +156,13 @@ export function TokenPicker({
 
       {selectedWalletToken && !manualMode ? (
         <div className="rounded-2xl border border-emerald-500/20 bg-emerald-500/5 px-4 py-3">
-          <p className="text-[12px] font-medium text-emerald-300">Selected mint</p>
-          <p className="mt-1 break-all font-mono text-[12px] text-white">{selectedWalletToken.mintAddress}</p>
+          <p className="text-[12px] font-medium text-emerald-700 dark:text-emerald-300">Selected mint</p>
+          <p className="mt-1 break-all font-mono text-[12px] text-foreground">{selectedWalletToken.mintAddress}</p>
         </div>
       ) : null}
 
-      {error ? <p className="text-[12px] text-red-400">{error}</p> : null}
-      {!error && hint ? <p className="text-[12px] text-[#8b92a5]">{hint}</p> : null}
+      {error ? <p className="text-[12px] text-red-700 dark:text-red-400">{error}</p> : null}
+      {!error && hint ? <p className="text-[12px] text-muted-foreground">{hint}</p> : null}
     </div>
   );
 }

@@ -5,11 +5,11 @@ export const EVENT_CONFIG: Record<
   { icon: string; color: string; label: string }
 > = {
   claimed: { icon: "↓", color: "text-green-400", label: "Claimed" },
-  cancelled: { icon: "✕", color: "text-red-400", label: "Campaign Cancelled" },
+  cancelled: { icon: "✕", color: "text-red-700 dark:text-red-400", label: "Campaign Cancelled" },
   paused: { icon: "⏸", color: "text-yellow-400", label: "Paused" },
   root_updated: { icon: "↻", color: "text-blue-400", label: "Root Updated" },
-  withdrawn: { icon: "↑", color: "text-amber-400", label: "Unvested Withdrawn" },
-  milestone_released: { icon: "◆", color: "text-purple-400", label: "Milestone Released" },
+  withdrawn: { icon: "↑", color: "text-amber-700 dark:text-amber-400", label: "Unvested Withdrawn" },
+  milestone_released: { icon: "◆", color: "text-violet-700 dark:text-violet-400", label: "Milestone Released" },
   stream_cancelled: { icon: "⚡", color: "text-orange-400", label: "Stream Settled" },
   instant_refunded: { icon: "↩", color: "text-rose-400", label: "Instant Refund" },
 };
