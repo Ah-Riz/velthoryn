@@ -56,12 +56,19 @@ pub fn handler(ctx: Context<WithdrawUnvested>) -> Result<()> {
     let tree = &ctx.accounts.vesting_tree;
 
     if tree.is_native() {
-        // Native SOL: drain all remaining lamports from the PDA to the creator.
-        // After grace period, the PDA no longer needs to hold any funds.
+        // Native SOL: transfer unvested lamports to the creator, but preserve the
+        // rent-exempt minimum so the VestingTree PDA is NOT garbage-collected.
+        // Mirrors the SPL branch (which only moves `vault.amount` and leaves the
+        // tree account alive) and the non-final-claim behavior in claim.rs /
+        // withdraw.rs. Draining to 0 would GC the tree, breaking indexers/BE.
+        // SC-FIND-02 (Week 9): previously drained ALL lamports incl. rent.
         let pda_info = ctx.accounts.vesting_tree.to_account_info();
         let creator_info = ctx.accounts.creator.to_account_info();
-        let amount = pda_info.lamports();
-        require!(amount > 0, VestingError::NothingToClaim);
+        let rent_min = Rent::get()?.minimum_balance(pda_info.data_len());
+        let balance = pda_info.lamports();
+        require!(balance > rent_min, VestingError::NothingToClaim);
+        // Safe: balance > rent_min is required above.
+        let amount = balance.checked_sub(rent_min).expect("balance > rent_min");
 
         **pda_info.try_borrow_mut_lamports()? = pda_info
             .lamports()
