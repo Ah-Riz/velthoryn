@@ -2,7 +2,34 @@
 
 > Generated from full spec audit across 12 specs in `.claude/specs/`.
 > Purpose: Give Cursor clear, prioritized work items. Separate "already done" from "actually missing".
-> **Last refresh:** 2026-06-11 — week8-lana-remnants: BigInt route audit, ops-verification tests (pool, sync_state, txn, RLS), PENDING_WORK refresh.
+> **Last refresh:** 2026-06-14 — **Week 9**: detect→triage→fix→docs pass across SC/MERKLE/BE/DB (5 fixes + 7 documented; new integrator docs in `docs/week9/`). See `docs/week9/BUG_LIST.md`. (Prior: 2026-06-11 — week8-lana-remnants.)
+
+---
+
+## ✅ WEEK 9 (2026-06-14) — Detection + hardening + docs
+
+Detect → triage → fix → docs pass across SC / MERKLE / BE / DB. Full detail: [`docs/week9/BUG_LIST.md`](week9/BUG_LIST.md).
+
+**Fixed (code + verified):**
+
+| Item | Resolution |
+|------|------------|
+| BE-SEC-01 — `POST /api/campaigns` wallet auth | `auth:true` + unconditional `signer===creator` (`campaigns/route.ts`); +2 route tests staged |
+| BE-SEC-06 — cron timing-safe compare | `timingSafeCompare` in `cron/sync/route.ts` (was plain `!==`) |
+| BE-SEC-05 — rate-limit resilience | try/catch around `limiter.limit` → in-memory fallback on Upstash error |
+| SC-FIND-02 — native-SOL rent drain | `withdraw_unvested` preserves `rent_min` (re-classified High→Low: availability-only, no fund loss) |
+| SC-FIND-03 — withdraw guard | `!instant_refunded` guard added (mirrors `claim.rs`) |
+| DB-DOC-01 — bigint mode doc divergence | `BE-SC-MERKLE-ACCEPTANCE-STATUS.md:27,122` corrected `mode:"string"` → `mode:"bigint"` |
+
+**Documented (no code change — rationale in BUG_LIST §Phase 6):** SC-FIND-04/05/06, BE-SEC-02/03/04/08. **SC-#29** Option B reaffirmed (ADR-003). **Merkle surface** independently audited — sound; Rust↔TS parity proven byte-for-byte + `fast-check` property tests added.
+
+**New integrator docs:** `docs/week9/INSTRUCTION_REFERENCE.md`, `INTEGRATION_GUIDE.md`, `ADRs/` (ADR-001/002/003), refreshed root `README.md`.
+
+**Still open / deferred:**
+- BE route-level tests (`tests/api/**`, incl. BE-SEC-01 401/403 + rate-limit cluster) → need a Postgres-backed env to execute (tests are staged).
+- SC Mollusk coverage of 4 `init_if_needed`/`Optional<T>` handlers → blocked on Mollusk 0.14.
+- FE validation for Issue #29 → Geral (handoff, unchanged).
+- `BE-SEC-02` (XFF trust) + `BE-SEC-04` (Redis prod assertion) → revisit if moving off Vercel.
 
 ---
 

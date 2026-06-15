@@ -316,4 +316,200 @@ mod tests {
             }
         }
     }
+
+    // =========================================================================
+    // Merkle forgery / second-preimage regression suite
+    // (Week 9 detection — retained: proves no proof-forgery path exists.)
+    // =========================================================================
+    /// Build a complete n-leaf tree (handles odd-layer duplicate-last-node padding)
+    /// identically to the off-chain TS builder (clients/ts/src/merkle.ts).
+    fn build_audit_tree(n: usize) -> ([u8; 32], Vec<[u8; 32]>, Vec<Vec<[u8; 32]>>) {
+        let leaves: Vec<VestingLeaf> = (0..n)
+            .map(|i| VestingLeaf {
+                leaf_index: i as u32,
+                beneficiary: Pubkey::new_unique(),
+                amount: 1_000 + i as u64,
+                release_type: 1,
+                start_time: 0,
+                cliff_time: 0,
+                end_time: 1_000,
+                milestone_idx: 0,
+            })
+            .collect();
+        let hashes: Vec<[u8; 32]> = leaves.iter().map(leaf_hash).collect();
+
+        let mut layers: Vec<Vec<[u8; 32]>> = vec![hashes.clone()];
+        let mut current = hashes.clone();
+        while current.len() > 1 {
+            // odd-layer duplicate-last-node padding (matches TS builder)
+            let working = if current.len() % 2 == 1 {
+                let mut w = current.clone();
+                w.push(*current.last().unwrap());
+                w
+            } else {
+                current.clone()
+            };
+            let mut next = Vec::new();
+            for chunk in working.chunks(2) {
+                next.push(node_hash(chunk[0], chunk[1]));
+            }
+            layers.push(next.clone());
+            current = next;
+        }
+        let root = current[0];
+        (root, hashes, layers)
+    }
+
+    /// Compute a proof for `idx` from a layered tree (matches TS `proof()`).
+    fn proof_for(layers: &[Vec<[u8; 32]>], idx: usize) -> Vec<[u8; 32]> {
+        let mut proof = Vec::new();
+        let mut i = idx;
+        for layer in 0..layers.len() - 1 {
+            let cur = &layers[layer];
+            let sibling_idx = if i % 2 == 0 {
+                if i + 1 >= cur.len() {
+                    cur.len() - 1 // duplicate last
+                } else {
+                    i + 1
+                }
+            } else {
+                i - 1
+            };
+            proof.push(cur[sibling_idx]);
+            i /= 2;
+        }
+        proof
+    }
+
+    #[test]
+    fn audit_claim2_shortened_proof_never_verifies() {
+        // 8-leaf tree -> depth 3. Drop top-level sibling -> depth 2 / 1.
+        let (root, hashes, layers) = build_audit_tree(8);
+        for idx in 0..8u32 {
+            let full = proof_for(&layers, idx as usize);
+            assert_eq!(full.len(), 3);
+            for trunc_len in [1usize, 2] {
+                let short = &full[..trunc_len];
+                let verifies = verify_merkle_proof(hashes[idx as usize], short, idx, root);
+                assert!(
+                    !verifies,
+                    "FORGERY: truncated proof (len={}, leaf={}) verified against 8-leaf root!",
+                    trunc_len, idx
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn audit_claim2_padded_proof_never_verifies() {
+        // 8-leaf tree -> depth 3. Append bogus trailing siblings -> must fail.
+        let (root, hashes, layers) = build_audit_tree(8);
+        let valid_proof = proof_for(&layers, 0);
+        let mut padded = valid_proof.clone();
+        padded.push([0xab; 32]); // extra trailing sibling
+        assert!(
+            !verify_merkle_proof(hashes[0], &padded, 0, root),
+            "FORGERY: padded proof verified!"
+        );
+        let mut all_zero = valid_proof.clone();
+        all_zero.push([0u8; 32]);
+        assert!(!verify_merkle_proof(hashes[0], &all_zero, 0, root));
+    }
+
+    #[test]
+    fn audit_claim2_single_leaf_empty_proof_is_root() {
+        // n=1: leaf hash IS the root, proof = []. Only empty proof verifies.
+        let (root, hashes, _layers) = build_audit_tree(1);
+        assert_eq!(root, hashes[0]);
+        assert!(verify_merkle_proof(hashes[0], &[], 0, root));
+        let bogus = [0x42u8; 32];
+        assert!(!verify_merkle_proof(hashes[0], &[bogus], 0, root));
+    }
+
+    #[test]
+    fn audit_claim2_index_shift_short_proof_cannot_coincide() {
+        // For depth d, any proof of length < d recomputes to a layer hash,
+        // never the root, regardless of index. Brute-force small trees.
+        for n in [2usize, 3, 4, 5, 7, 8, 16] {
+            let (root, hashes, layers) = build_audit_tree(n);
+            let depth = layers.len() - 1;
+            for idx in 0..n as u32 {
+                let full = proof_for(&layers, idx as usize);
+                assert_eq!(full.len(), depth);
+                for trunc in 0..depth {
+                    let short = &full[..trunc];
+                    assert!(
+                        !verify_merkle_proof(hashes[idx as usize], short, idx, root),
+                        "FORGERY: n={} leaf={} trunc={} verified!",
+                        n, idx, trunc
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn audit_claim2_wrong_position_proof_fails() {
+        // Leaf A's hash with leaf B's proof (different path) -> must fail.
+        let (root, hashes, layers) = build_audit_tree(8);
+        let proof_a = proof_for(&layers, 0);
+        assert!(!verify_merkle_proof(hashes[1], &proof_a, 0, root));
+        let proof_b = proof_for(&layers, 1);
+        assert!(!verify_merkle_proof(hashes[0], &proof_b, 1, root));
+        assert!(!verify_merkle_proof(hashes[0], &proof_a, 3, root));
+    }
+
+    #[test]
+    fn audit_claim2_second_preimage_node_as_leaf_fails() {
+        // A node hash (NODE_PREFIX=0x01) is 32 bytes, same length as a leaf hash.
+        // Try to verify a *computed node hash* as if it were a leaf with an empty
+        // proof against the root. Domain separation makes this fail.
+        let (root, hashes, layers) = build_audit_tree(4);
+        let _ = hashes;
+        // The internal level-1 node from leaves 0,1:
+        let internal_node = layers[1][0];
+        // An attacker who submits internal_node as a "leaf" with proof=[] and
+        // claims index 0 must NOT verify (otherwise second-preimage forgery).
+        assert!(
+            !verify_merkle_proof(internal_node, &[], 0, root),
+            "SECOND-PREIMAGE: a node hash verified as a leaf against the root!"
+        );
+    }
+
+    #[test]
+    fn distinct_indices_yield_distinct_hashes() {
+        // leaf_index is serialized into the leaf hash, so two leaves at distinct
+        // positions ALWAYS hash differently — even with identical beneficiary/amount/
+        // schedule. This binds every leaf to its tree position, which is why a proof
+        // for leaf A cannot be replayed at leaf B's index (cf. wrong_position_proof_fails
+        // and the per-position ClaimRecord accounting behind Issue #29).
+        let base = |idx: u32| VestingLeaf {
+            leaf_index:    idx,
+            beneficiary:   Pubkey::new_from_array([0xAB; 32]), // identical across leaves
+            amount:        5_000,
+            release_type:  1,
+            start_time:    0,
+            cliff_time:    0,
+            end_time:      1_000,
+            milestone_idx: 0,
+        };
+        let h0 = leaf_hash(&base(0));
+        let h1 = leaf_hash(&base(1));
+        let h2 = leaf_hash(&base(2));
+        assert_ne!(h0, h1, "leaves at indices 0 and 1 must hash differently");
+        assert_ne!(h0, h2, "leaves at indices 0 and 2 must hash differently");
+        assert_ne!(h1, h2, "leaves at indices 1 and 2 must hash differently");
+    }
+
+    #[test]
+    fn max_depth_boundary_proof_length() {
+        // MAX_TREE_DEPTH (on- and off-chain) = 20; claim.rs caps proofs at
+        // MAX_MERKLE_PROOF_LEN = 32. 2^20 leaves -> depth exactly 20 (the off-chain
+        // builder's max); one more leaf -> depth 21 (the builder rejects >2^20 leaves,
+        // but on-chain only the 32-sibling cap applies). Either stays within the cap.
+        assert_eq!(max_proof_len_for_leaf_count(1 << 20), 20);
+        assert_eq!(max_proof_len_for_leaf_count((1 << 20) + 1), 21);
+        assert!(max_proof_len_for_leaf_count(1 << 20) <= MAX_MERKLE_PROOF_LEN);
+        assert!(max_proof_len_for_leaf_count(u32::MAX) <= MAX_MERKLE_PROOF_LEN);
+    }
 }

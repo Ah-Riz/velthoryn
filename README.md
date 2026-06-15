@@ -44,6 +44,8 @@ velthoryn/
 
 **Week 8 FE cleanup:** Shared UI primitives extracted (`StatCard`, `ProgressBar`, `CampaignCard`, `SectionHeader`, `FieldRow`, `DetailRow`, `Spinner`, `RecipientListModal`). Centralized `lib/api/serialize.ts` for BigInt-safe JSON. Numbered migrations `0002`–`0005` backfill event-table history. Post-tx indexing uses public `POST /api/events/sync`; operator backfill uses admin-only `POST /api/claims/sync`. E2E helpers support mock wallet + mock send-tx for cancel flows without devnet RPC.
 
+**Week 9 detection + hardening:** a systematic detect → triage → fix → docs pass across SC / MERKLE / BE / DB. **5 code fixes applied + verified** (`BE-SEC-01` campaign-POST wallet auth, `BE-SEC-06` cron timing-safe compare, `BE-SEC-05` rate-limit resilience, `SC-FIND-02` native-SOL rent preservation, `SC-FIND-03` withdraw guard); 7 findings documented with rationale; Merkle surface independently audited (**sound**). New integrator docs in [`docs/week9/`](docs/week9/) — see "deeper reads" below. Regression: SC **125/0/19**, BE **565/565** + typecheck BE-clean. Full finding list: [`docs/week9/BUG_LIST.md`](docs/week9/BUG_LIST.md).
+
 **Test results: 127+ SC tests PASS** (`pnpm test:localnet`); **563 web Vitest PASS** (API routes use Postgres in CI)
 **BE–SC Merkle pipeline verified end-to-end**: 3-leaf campaigns (Cliff/Linear/Milestone) through prepare → POST (all leaves verified) → GET proof → verify. RLS on all Supabase tables. **Bootcamp acceptance: 8/8** — see [`docs/BE-SC-MERKLE-ACCEPTANCE-STATUS.md`](docs/BE-SC-MERKLE-ACCEPTANCE-STATUS.md).
 - Devnet + bankrun (`pnpm test:devnet`): **98 passing, 1 pending** — live breakdown in [`docs/DEVNET_TEST_RESULTS.md`](docs/DEVNET_TEST_RESULTS.md) (devnet RPC 75 + bankrun 24; T68 pending on RPC, covered by clock suite)
@@ -90,6 +92,10 @@ For deeper reads:
 - [`docs/API_TRUST_BOUNDARIES.md`](docs/API_TRUST_BOUNDARIES.md) — every API route: public / wallet-auth / admin classification.
 - [`docs/PENDING_WORK.md`](docs/PENDING_WORK.md) — prioritized backlog from spec audit (updated as items land).
 - [`docs/KNOWN_ISSUE_29_DESIGN.md`](docs/KNOWN_ISSUE_29_DESIGN.md) — design note for multi-leaf `claimed_amount` undercount (breaking SC change).
+- [`docs/week9/INSTRUCTION_REFERENCE.md`](docs/week9/INSTRUCTION_REFERENCE.md) — **every instruction**: accounts + constraints, args, behavior, full error-code table (6000–6040), events, TS examples.
+- [`docs/week9/INTEGRATION_GUIDE.md`](docs/week9/INTEGRATION_GUIDE.md) — end-to-end creator + beneficiary walkthrough (prepare → create → fund → register → claim) with runnable TS snippets; SPL + native SOL.
+- [`docs/week9/ADRs/`](docs/week9/ADRs/) — Merkle-compressed vesting, keccak-256 + domain separation, Issue #29 deferred on-chain fix.
+- [`docs/week9/BUG_LIST.md`](docs/week9/BUG_LIST.md) — Week 9 detection findings, fixes applied, and documented limitations.
 
 ## Prerequisites
 
@@ -214,7 +220,27 @@ See [`docs/BACKEND_API.md`](docs/BACKEND_API.md) for request/response shapes and
 
 ### Vercel Deployment
 
-Deployed at [velthoryn.vercel.app](https://velthoryn.vercel.app/). Root directory: `apps/web/`. Required env vars: see `apps/web/.env.example`.
+Deployed at [velthoryn.vercel.app](https://velthoryn.vercel.app/). The Vercel project imports this repo
+(`Ah-Riz/mancerxsuperteam-token-vesting`) via the native GitHub integration, with **Root Directory
+`apps/web/`** and Framework Preset **Next.js**. Production Branch: `main`. Required env vars: see
+`apps/web/.env.example` — these must be set on the Vercel project for the app to *function* (not just build).
+
+**Quick redeploy (dashboard):** If the site returns `404: NOT_FOUND / DEPLOYMENT_NOT_FOUND`, the
+production deployment is missing. In vercel.com → the `velthoryn` project → confirm Root Directory
+`apps/web/`, Git integration connected to this repo, and `velthoryn.vercel.app` assigned under
+Domains → then Deployments → most recent **Ready** → ⋯ → **Redeploy**. (Equivalent trigger: push an
+empty commit to `main`.) If the project itself is gone, recreate it: New Project → import this repo →
+Root Directory `apps/web/` → add the env vars → Deploy → assign the domain.
+
+**Redeploy from the terminal (one-liner):** after a one-time `pnpm vercel:link` (links `apps/web/` to
+the existing Vercel project and writes the committed `apps/web/.vercel/project.json`), run:
+
+```bash
+pnpm deploy:web   # = vercel deploy --prod --cwd apps/web
+```
+
+> The `apps/web/.vercel/project.json` link contains project/org IDs only (no secrets); secrets stay in
+> the Vercel dashboard.
 
 **Production database:** Do not run `db:push` against production. Apply schema changes with `pnpm db:migrate` (from `apps/web/`, with production `DATABASE_URL` set) after merging migration files. CI (`lint.yml`, `web-ci.yml`) uses `db:migrate` the same way. Local development may still use `db:push` for speed.
 

@@ -24,7 +24,7 @@
 
 - RLS on all Supabase tables
 - **All leaves** verified on `POST /api/campaigns` and `POST .../root-versions` ([`lib/merkle/verify.ts`](../apps/web/src/lib/merkle/verify.ts))
-- Drizzle `bigint` columns use `{ mode: "string" }` (no `Number()` truncation)
+- Drizzle `bigint` columns use `{ mode: "bigint" }` (BigInt objects serialized via `jsonResponse`/`jsonReplacer` — no `Number()` truncation)
 - `DATABASE_SSL_REJECT_UNAUTHORIZED=true` for strict production TLS (default `false` for CI/Supabase)
 - `web-ci.yml` + `lint.yml` + `ci.yml`: Postgres 15, merkle parity, E2E pipeline, Vitest, IDL drift check
 - `scripts/test-localnet.sh`: `CARGO_TARGET_DIR=target`, validator reset, `solana program deploy` to `G6iaig…`
@@ -119,7 +119,7 @@ Source: [`programs/vesting/src/errors.rs`](../programs/vesting/src/errors.rs), [
 | Item | Status |
 |------|--------|
 | Verify all leaves on POST + root-versions | **Done** |
-| u64 `{ mode: "string" }` in Drizzle | **Done** |
+| u64 `{ mode: "bigint" }` in Drizzle | **Done** |
 | Env-gated strict SSL | **Done** |
 | `FullyVested` + `StreamExpired` + T60–T62 | **Done** |
 | Milestone creator flag (`set_milestone_released`) | **Done** |

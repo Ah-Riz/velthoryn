@@ -71,6 +71,14 @@ pub fn handler(ctx: Context<Withdraw>, args: WithdrawArgs) -> Result<()> {
     let tree = &ctx.accounts.vesting_tree;
     let tree_key = tree.key();
 
+    // Defense in depth (matches claim.rs): an instant-refunded campaign must not
+    // be withdrawable via the single-stream path. Currently also caught downstream
+    // by InsufficientVault, but guard explicitly so the failure mode is unambiguous.
+    require!(
+        !tree.instant_refunded,
+        VestingError::InstantRefundedCampaign
+    );
+
     require!(
         !tree.paused || tree.cancelled_at.is_some(),
         VestingError::CampaignPaused

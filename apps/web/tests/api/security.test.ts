@@ -35,6 +35,43 @@ describe("security controls", () => {
     expect(res.status).toBe(201);
   });
 
+  it("rejects POST /api/campaigns without wallet auth (BE-SEC-01)", async () => {
+    const leaf = makeLeaf();
+    const merkleRoot = computeSingleLeafRoot(leaf);
+    // No authorization header. Previously auth was optional and this succeeded
+    // (creating a campaign row for an arbitrary creator); withRoute({ auth: true })
+    // must now reject via requireAuth -> 401.
+    const req = new NextRequest(makeUrl("/api/campaigns"), {
+      method: "POST",
+      body: JSON.stringify(
+        makeCampaignBody({
+          treeAddress: Keypair.generate().publicKey.toBase58(),
+          merkleRoot,
+          leaves: [leaf],
+        }),
+      ),
+      headers: { "content-type": "application/json" },
+    });
+    const res = await postCampaigns(req);
+    expect(res.status).toBe(401);
+  });
+
+  it("rejects POST /api/campaigns when signer != creator (BE-SEC-01)", async () => {
+    const leaf = makeLeaf();
+    const merkleRoot = computeSingleLeafRoot(leaf);
+    // Valid auth header (TEST_CREATOR_KEYPAIR) but body.creator is a different
+    // wallet -> ForbiddenError -> 403.
+    const body = makeCampaignBody({
+      treeAddress: Keypair.generate().publicKey.toBase58(),
+      merkleRoot,
+      leaves: [leaf],
+      creator: Keypair.generate().publicKey.toBase58(),
+    });
+    const req = await makeAuthenticatedPostRequest("/api/campaigns", body);
+    const res = await postCampaigns(req);
+    expect(res.status).toBe(403);
+  });
+
   it("accepts valid wallet signature", async () => {
     const keypair = Keypair.generate();
     const nonce = generateNonce();
