@@ -302,4 +302,174 @@ mod tests {
             }
         }
     }
+
+    // =========================================================================
+    // Duplicate-leaf / overspend accounting regression suite
+    // (Week 9 detection — retained: proves multi-leaf per beneficiary can only
+    //  under-count, never overspend. See Issue #29.)
+    //
+    // Simulate the claim handler's per-(tree,beneficiary) ClaimRecord accounting
+    // when the SAME beneficiary appears in MULTIPLE cliff/linear leaves, and
+    // prove: total_claimed across the tree NEVER exceeds total_supply,
+    // i.e. no overspend / double-spend path exists. (Issue #29 under-count is
+    // acknowledged separately.)
+    // =========================================================================
+    use crate::state::ClaimRecord;
+
+    /// Mirror of claim.rs accounting (release_type 0/1, NOT milestone):
+    ///   claimable_i = vested(leaf_i, t).saturating_sub(cr.claimed_amount)
+    ///   cr.claimed_amount += claimable_i
+    ///   tree.total_claimed += claimable_i ; check <= total_supply
+    fn simulate_claim(
+        cr: &mut ClaimRecord,
+        leaf: &VestingLeaf,
+        now: i64,
+        total_claimed: &mut u64,
+        total_supply: u64,
+    ) -> Result<(), &'static str> {
+        let claimable = vested(leaf, now).saturating_sub(cr.claimed_amount);
+        if claimable == 0 {
+            return Ok(()); // NothingToClaim
+        }
+        let new_total = total_claimed
+            .checked_add(claimable)
+            .ok_or("Overflow")?;
+        if new_total > total_supply {
+            return Err("OverClaim"); // the guard that blocks overspend
+        }
+        cr.claimed_amount = cr
+            .claimed_amount
+            .checked_add(claimable)
+            .ok_or("Overflow")?;
+        *total_claimed = new_total;
+        Ok(())
+    }
+
+    #[test]
+    fn audit_claim3_two_cliff_leaves_same_beneficiary_no_overspend() {
+        // Two cliff leaves for the same beneficiary: A=500, B=700. supply=1200.
+        // CRITICAL: claimed_amount is shared (per-leaf under-count), so the
+        // beneficiary gets LESS than 1200, never more.
+        let leaf_a = leaf(500, 100, 200, 0);
+        let leaf_b = leaf(700, 100, 200, 0);
+        let mut cr = ClaimRecord {
+            beneficiary: Pubkey::new_unique(),
+            tree: Pubkey::new_unique(),
+            claimed_amount: 0,
+            total_entitled: 0,
+            milestone_bitmap: [0u8; 32],
+            last_claim_at: 0,
+            bump: 0,
+        };
+        let mut total_claimed: u64 = 0;
+        let total_supply = 1_200;
+
+        // Claim A: claimable = 500 - 0 = 500
+        simulate_claim(&mut cr, &leaf_a, 150, &mut total_claimed, total_supply).unwrap();
+        assert_eq!(cr.claimed_amount, 500);
+        assert_eq!(total_claimed, 500);
+
+        // Claim B: claimable = 700.sat_sub(500) = 200 (under-count by 500)
+        simulate_claim(&mut cr, &leaf_b, 150, &mut total_claimed, total_supply).unwrap();
+        assert_eq!(cr.claimed_amount, 700);
+        assert_eq!(total_claimed, 700); // < total_supply, no overspend
+
+        // Re-claims release nothing.
+        simulate_claim(&mut cr, &leaf_a, 150, &mut total_claimed, total_supply).unwrap();
+        simulate_claim(&mut cr, &leaf_b, 150, &mut total_claimed, total_supply).unwrap();
+        assert_eq!(total_claimed, 700);
+        assert!(total_claimed <= total_supply);
+    }
+
+    #[test]
+    fn audit_claim3_two_linear_leaves_same_beneficiary_no_overspend() {
+        // Two identical linear leaves, same beneficiary. Shared claimed_amount
+        // means the second claim yields 0 once the first is in flight.
+        let leaf_a = leaf(1_000, 0, 100, 1);
+        let leaf_b = leaf(1_000, 0, 100, 1);
+        let mut cr = ClaimRecord {
+            beneficiary: Pubkey::new_unique(),
+            tree: Pubkey::new_unique(),
+            claimed_amount: 0,
+            total_entitled: 0,
+            milestone_bitmap: [0u8; 32],
+            last_claim_at: 0,
+            bump: 0,
+        };
+        let mut total_claimed: u64 = 0;
+        let total_supply = 2_000;
+
+        simulate_claim(&mut cr, &leaf_a, 50, &mut total_claimed, total_supply).unwrap();
+        assert_eq!(cr.claimed_amount, 500);
+        assert_eq!(total_claimed, 500);
+        // B at t=50: claimable = 500.sat_sub(500) = 0 -> nothing (under-count!)
+        simulate_claim(&mut cr, &leaf_b, 50, &mut total_claimed, total_supply).unwrap();
+        assert_eq!(cr.claimed_amount, 500);
+        assert_eq!(total_claimed, 500);
+
+        simulate_claim(&mut cr, &leaf_a, 100, &mut total_claimed, total_supply).unwrap();
+        assert_eq!(cr.claimed_amount, 1_000);
+        simulate_claim(&mut cr, &leaf_b, 100, &mut total_claimed, total_supply).unwrap();
+        assert_eq!(cr.claimed_amount, 1_000);
+
+        // Beneficiary got 1000 of 2000 entitled. Under-count, but no overspend.
+        assert!(total_claimed <= total_supply);
+    }
+
+    #[test]
+    fn audit_claim3_overclaim_guard_fires_when_supply_underfunded() {
+        // Adversarial: total_supply=100 but two cliff leaves of 100 each.
+        let leaf_a = leaf(100, 100, 200, 0);
+        let leaf_b = leaf(100, 100, 200, 0);
+        let mut cr = ClaimRecord {
+            beneficiary: Pubkey::new_unique(),
+            tree: Pubkey::new_unique(),
+            claimed_amount: 0,
+            total_entitled: 0,
+            milestone_bitmap: [0u8; 32],
+            last_claim_at: 0,
+            bump: 0,
+        };
+        let mut total_claimed: u64 = 0;
+        let total_supply = 100;
+
+        simulate_claim(&mut cr, &leaf_a, 150, &mut total_claimed, total_supply).unwrap();
+        assert_eq!(total_claimed, 100);
+        // A second beneficiary claiming leaf B (separate CR) would push
+        // total_claimed to 200 > 100 -> OverClaim rejects.
+        let mut cr2 = ClaimRecord {
+            beneficiary: Pubkey::new_unique(),
+            tree: Pubkey::new_unique(),
+            claimed_amount: 0,
+            total_entitled: 0,
+            milestone_bitmap: [0u8; 32],
+            last_claim_at: 0,
+            bump: 0,
+        };
+        let err = simulate_claim(&mut cr2, &leaf_b, 150, &mut total_claimed, total_supply)
+            .unwrap_err();
+        assert_eq!(err, "OverClaim");
+        assert_eq!(total_claimed, 100); // unchanged
+    }
+
+    #[test]
+    fn audit_claim3_saturating_sub_prevents_underflow() {
+        // If claimed_amount > vested (prior larger leaf), saturating_sub -> 0.
+        // Beneficiary gets nothing extra: under-count, never overspend.
+        let leaf_small = leaf(100, 100, 200, 1);
+        let mut cr = ClaimRecord {
+            beneficiary: Pubkey::new_unique(),
+            tree: Pubkey::new_unique(),
+            claimed_amount: 500, // already claimed 500 from a different leaf
+            total_entitled: 0,
+            milestone_bitmap: [0u8; 32],
+            last_claim_at: 0,
+            bump: 0,
+        };
+        let mut total_claimed: u64 = 500;
+        let total_supply = 1_000;
+        simulate_claim(&mut cr, &leaf_small, 200, &mut total_claimed, total_supply).unwrap();
+        assert_eq!(cr.claimed_amount, 500);
+        assert_eq!(total_claimed, 500);
+    }
 }

@@ -3,6 +3,7 @@ import { jsonResponse } from "@/lib/api/json-response";
 import { AuthError, InternalError } from "@/lib/api/errors";
 import { indexAllEvents } from "@/lib/indexer/event-indexer";
 import { withRoute } from "@/lib/api/route-wrapper";
+import { timingSafeCompare } from "@/lib/auth";
 
 async function getCronSyncHandler(request: NextRequest) {
   const cronSecret = process.env.CRON_SECRET;
@@ -13,8 +14,10 @@ async function getCronSyncHandler(request: NextRequest) {
   const authHeader = request.headers.get("authorization");
   const token = authHeader?.startsWith("Bearer ") ? authHeader.slice(7) : null;
 
-  // Vercel cron passes the secret via Authorization header
-  if (token !== cronSecret) {
+  // Vercel cron passes the secret via Authorization header.
+  // Constant-time compare (mirrors verifyAdminKey in @/lib/auth) — per
+  // docs/API_TRUST_BOUNDARIES.md both admin + cron use timing-safe comparison.
+  if (!token || !timingSafeCompare(token, cronSecret)) {
     throw new AuthError("Invalid cron secret");
   }
 

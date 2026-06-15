@@ -797,13 +797,18 @@ describe("native sol vesting (bankrun)", () => {
       .signers([creator])
       .rpc();
 
-    // PDA should have released the full total_supply
+    // PDA should have released the full funded amount to the creator.
     const pdaBalAfter = Number(await context.banksClient.getBalance(treePda));
     const pdaDelta = pdaBalBefore - pdaBalAfter;
-    expect(pdaDelta).to.be.at.least(TOTAL_SUPPLY - 100);
+    expect(pdaDelta).to.equal(TOTAL_SUPPLY);
 
-    // PDA should be drained to zero
-    expect(pdaBalAfter).to.equal(0);
+    // SC-FIND-02 fix: withdraw_unvested preserves the rent-exempt minimum so the
+    // VestingTree PDA is NOT garbage-collected (stays queryable by indexers/BE).
+    // The creator receives exactly the funded amount; only rent-exempt lamports
+    // remain on the PDA.
+    expect(pdaBalAfter).to.equal(pdaBalBefore - TOTAL_SUPPLY);
+    const acctAfter = await context.banksClient.getAccount(treePda);
+    expect(acctAfter, "VestingTree PDA must not be garbage-collected").to.not.be.null;
   });
 
   // =========================================================================
