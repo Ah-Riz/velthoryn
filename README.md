@@ -220,7 +220,27 @@ See [`docs/BACKEND_API.md`](docs/BACKEND_API.md) for request/response shapes and
 
 ### Vercel Deployment
 
-Deployed at [velthoryn.vercel.app](https://velthoryn.vercel.app/). Root directory: `apps/web/`. Required env vars: see `apps/web/.env.example`.
+Deployed at [velthoryn.vercel.app](https://velthoryn.vercel.app/). The Vercel project imports this repo
+(`Ah-Riz/mancerxsuperteam-token-vesting`) via the native GitHub integration, with **Root Directory
+`apps/web/`** and Framework Preset **Next.js**. Production Branch: `main`. Required env vars: see
+`apps/web/.env.example` — these must be set on the Vercel project for the app to *function* (not just build).
+
+**Quick redeploy (dashboard):** If the site returns `404: NOT_FOUND / DEPLOYMENT_NOT_FOUND`, the
+production deployment is missing. In vercel.com → the `velthoryn` project → confirm Root Directory
+`apps/web/`, Git integration connected to this repo, and `velthoryn.vercel.app` assigned under
+Domains → then Deployments → most recent **Ready** → ⋯ → **Redeploy**. (Equivalent trigger: push an
+empty commit to `main`.) If the project itself is gone, recreate it: New Project → import this repo →
+Root Directory `apps/web/` → add the env vars → Deploy → assign the domain.
+
+**Redeploy from the terminal (one-liner):** after a one-time `pnpm vercel:link` (links `apps/web/` to
+the existing Vercel project and writes the committed `apps/web/.vercel/project.json`), run:
+
+```bash
+pnpm deploy:web   # = vercel deploy --prod --cwd apps/web
+```
+
+> The `apps/web/.vercel/project.json` link contains project/org IDs only (no secrets); secrets stay in
+> the Vercel dashboard.
 
 **Production database:** Do not run `db:push` against production. Apply schema changes with `pnpm db:migrate` (from `apps/web/`, with production `DATABASE_URL` set) after merging migration files. CI (`lint.yml`, `web-ci.yml`) uses `db:migrate` the same way. Local development may still use `db:push` for speed.
 

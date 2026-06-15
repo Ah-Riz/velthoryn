@@ -68,4 +68,8 @@ apps/web/test-results/
 weekly-report-mancer/week8/TASKS.md
 weekly-report-mancer/week8/STATUS_REPORT_LANA.md
 
+# Vercel CLI project link (project/org IDs only — safe to commit; secrets live in the dashboard,
+# and the .env.* rules above already ignore any local .vercel/.env* files)
+!**/.vercel/project.json
+
 
