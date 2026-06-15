@@ -100,7 +100,7 @@ _No open high-priority BE items from the original audit._
 
 | # | Task | Source | What's needed |
 |---|------|--------|---------------|
-| 19 | Formal CU budget audit | Week8 Next | **Done** — Mollusk benchmarks re-run 2026-06-11; `CU_BUDGET.md` updated (9 active + 1 ignored). |
+| 19 | Formal CU budget audit | Week8 Next | **Done** — Mollusk benchmarks re-run 2026-06-15; `CU_BUDGET.md` updated (10 active + 1 ignored). |
 
 ---
 

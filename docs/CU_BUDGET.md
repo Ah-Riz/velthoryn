@@ -1,6 +1,6 @@
 # Compute Unit Budget — Velthoryn Vesting Program
 
-> Last updated: 2026-06-11 | Program: `G6iaigUdi2btFwUc2N65twfxwA8Ew5uKKhKJ5RJa8wvu`
+> Last updated: 2026-06-15 | Program: `G6iaigUdi2btFwUc2N65twfxwA8Ew5uKKhKJ5RJa8wvu`
 > Measured with: Mollusk 0.13.1 + Solana CLI 3.1.12 (Agave)
 
 ## Summary

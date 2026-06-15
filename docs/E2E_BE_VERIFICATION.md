@@ -324,5 +324,5 @@ Verified that on-chain event buffers are correctly parsed into DB records:
 
 - **540+ Vitest tests pass:** `cd apps/web && npx vitest run`
 - **31 Rust unit + proptest tests pass:** `cargo test --lib`
-- **72 active Mollusk integration tests pass:** CI `ci.yml` workflow
+- **73 active Mollusk integration tests pass:** CI `ci.yml` workflow
 - **30 devnet E2E tests pass:** gated on `DEVNET_KEYPAIR` env var, skipped in CI
