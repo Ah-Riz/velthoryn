@@ -1,6 +1,6 @@
 import { expect, test, type Page } from "@playwright/test";
 import { collectRelevantPageErrors } from "./pageErrors";
-import { enableE2eWallet, gotoWithRetry, selectSolToken, openCsvMode, csv, parseCsv, recipientWallet, secondWallet } from "./helpers";
+import { enableE2eWallet, gotoWithRetry, selectSolToken, fillCliffSchedule, fillLinearSchedule, openCsvMode, csv, parseCsv, recipientWallet, secondWallet } from "./helpers";
 
 const schedules = {
   start: 1779899400,
@@ -13,6 +13,11 @@ async function openCsvCreatePage(page: Page, path: string, csvButton?: RegExp) {
   await enableE2eWallet(page);
   await gotoWithRetry(page, path);
   await selectSolToken(page);
+  if (path.includes("/cliff")) {
+    await fillCliffSchedule(page);
+  } else if (path.includes("/linear")) {
+    await fillLinearSchedule(page);
+  }
   await openCsvMode(page, csvButton);
   return pageErrors;
 }
