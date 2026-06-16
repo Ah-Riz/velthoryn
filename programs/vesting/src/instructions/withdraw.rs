@@ -1,4 +1,5 @@
 use anchor_lang::prelude::*;
+use anchor_lang::Discriminator;
 use anchor_spl::associated_token::AssociatedToken;
 use anchor_spl::token::{Mint, Token, TokenAccount, Transfer};
 
@@ -113,8 +114,18 @@ pub fn handler(ctx: Context<Withdraw>, args: WithdrawArgs) -> Result<()> {
     // Grow any legacy (pre-Issue-#29) ClaimRecord to the current size before load.
     migrate_legacy_claim_record(&ctx.accounts.claim_record, &ctx.accounts.beneficiary)?;
 
-    // First-touch init of ClaimRecord
-    let mut cr = ctx.accounts.claim_record.load_mut()?;
+    let claim_loader = &ctx.accounts.claim_record;
+    let needs_init = {
+        let acc_info = claim_loader.to_account_info();
+        let data = acc_info.try_borrow_data()?;
+        let disc = ClaimRecord::DISCRIMINATOR;
+        data.len() >= disc.len() && data[..disc.len()].iter().all(|&b| b == 0)
+    };
+    let mut cr = if needs_init {
+        claim_loader.load_init()?
+    } else {
+        claim_loader.load_mut()?
+    };
     if cr.beneficiary == Pubkey::default() {
         cr.tree = tree_key;
         cr.beneficiary = ctx.accounts.beneficiary.key();
