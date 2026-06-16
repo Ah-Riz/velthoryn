@@ -40,18 +40,27 @@ function computeClaimRecordPda(treeAddress: string, beneficiaryAddress: string):
 }
 
 /**
- * Serialize a ClaimRecord struct in Anchor Borsh layout and return base64.
+ * Serialize a v1 ClaimRecord (zero_copy / bytemuck layout) and return base64.
  *
- * Layout (129 bytes total):
+ * Layout (232 bytes total):
  *   8  bytes - discriminator [57, 229, 0, 9, 65, 62, 96, 7]
  *  32  bytes - beneficiary (pubkey)
  *  32  bytes - tree (pubkey)
  *   8  bytes - claimed_amount (u64 LE)
  *   8  bytes - total_entitled (u64 LE)
- *  32  bytes - milestone_bitmap ([u8; 32])
+ *  32  bytes - milestone_bitmap
  *   8  bytes - last_claim_at (i64 LE)
  *   1  byte  - bump (u8)
+ *   1  byte  - version (u8) — 1 = per-leaf ledger active
+ *   2  bytes - _pad_leaf_idx
+ *  32  bytes - leaf_claimed_idx ([u32; 8], EMPTY = 0xffffffff)
+ *   4  bytes - _pad_leaf_amt
+ *  64  bytes - leaf_claimed_amt ([u64; 8])
  */
+const CLAIM_RECORD_DISC = Buffer.from([57, 229, 0, 9, 65, 62, 96, 7]);
+const CLAIM_RECORD_SIZE = 232;
+const EMPTY_LEAF_SLOT = 0xffffffff;
+
 function buildClaimRecordBase64(
   treeAddress: string,
   beneficiaryAddress: string,
@@ -59,38 +68,44 @@ function buildClaimRecordBase64(
   totalEntitled: bigint,
   bump: number,
 ): string {
-  const buf = Buffer.alloc(129);
+  const buf = Buffer.alloc(CLAIM_RECORD_SIZE);
   let offset = 0;
 
-  // Discriminator
-  const disc = [57, 229, 0, 9, 65, 62, 96, 7];
-  disc.forEach((b) => buf.writeUInt8(b, offset++));
+  CLAIM_RECORD_DISC.copy(buf, offset);
+  offset += 8;
 
-  // beneficiary (32 bytes)
   new PublicKey(beneficiaryAddress).toBuffer().copy(buf, offset);
   offset += 32;
 
-  // tree (32 bytes)
   new PublicKey(treeAddress).toBuffer().copy(buf, offset);
   offset += 32;
 
-  // claimed_amount (u64 LE)
   buf.writeBigUInt64LE(claimedAmount, offset);
   offset += 8;
 
-  // total_entitled (u64 LE)
   buf.writeBigUInt64LE(totalEntitled, offset);
   offset += 8;
 
-  // milestone_bitmap (32 bytes of zeros — already zero)
-  offset += 32;
+  offset += 32; // milestone_bitmap (zeros)
 
-  // last_claim_at (i64 LE)
   buf.writeBigInt64LE(0n, offset);
   offset += 8;
 
-  // bump (u8)
   buf.writeUInt8(bump, offset);
+  offset += 1;
+
+  buf.writeUInt8(1, offset); // version = 1
+  offset += 1;
+
+  offset += 2; // _pad_leaf_idx
+
+  for (let i = 0; i < 8; i++) {
+    buf.writeUInt32LE(EMPTY_LEAF_SLOT, offset);
+    offset += 4;
+  }
+
+  offset += 4; // _pad_leaf_amt
+  // leaf_claimed_amt: 8 × u64 zero
 
   return buf.toString("base64");
 }
@@ -128,22 +143,22 @@ async function mockClaimRecordRpc(
         lamports: 2_039_280,
         owner: PROGRAM_ID.toBase58(),
         rentEpoch: 0,
-        space: 129,
+        space: CLAIM_RECORD_SIZE,
       },
     },
   };
 
   // Intercept all Solana RPC POSTs; return mock for getAccountInfo of our PDA
-  await page.route(/api\.devnet\.solana\.com|helius-rpc\.com/, async (route) => {
+  await page.route("**", async (route) => {
     const request = route.request();
     if (request.method() !== "POST") {
       await route.continue();
       return;
     }
 
-    let body: { method?: string; params?: [string, ...unknown[]] };
+    let body: { method?: string; params?: [string, ...unknown[]]; id?: number | string };
     try {
-      body = JSON.parse(request.postData() ?? "{}");
+      body = request.postDataJSON();
     } catch {
       await route.continue();
       return;
@@ -157,7 +172,7 @@ async function mockClaimRecordRpc(
       await route.fulfill({
         status: 200,
         contentType: "application/json",
-        body: JSON.stringify({ ...mockAccountResponse, id: (body as any).id }),
+        body: JSON.stringify({ ...mockAccountResponse, id: body.id ?? 1 }),
       });
       return;
     }

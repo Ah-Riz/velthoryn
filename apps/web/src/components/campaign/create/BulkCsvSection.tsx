@@ -52,9 +52,9 @@ export function BulkCsvSection({
       <div className={`${CARD} space-y-4 p-5`}>
         <SectionHeader title={vestingType === "milestone" ? "Milestone Campaign CSV" : "Recipients CSV"} caption={
           vestingType === "cliff"
-            ? "Columns: beneficiary, amount, releaseType (Cliff), startTime, cliffTime, endTime (= cliffTime), milestoneIdx (0)"
+            ? "Columns: beneficiary, amount, releaseType (Cliff). The schedule (start/cliff) is set above and applies to every recipient."
             : vestingType === "linear"
-            ? "Columns: beneficiary, amount, releaseType (Linear), startTime, cliffTime (optional), endTime, milestoneIdx (0)"
+            ? "Columns: beneficiary, amount, releaseType (Linear). The schedule (start/cliff/end) is set above and applies to every recipient."
             : "Each row defines one beneficiary milestone leaf. Columns: beneficiary, amount, releaseType (Milestone), startTime, cliffTime (unlock), endTime (= cliffTime), milestoneIdx (0-255)"
         } />
 

@@ -93,7 +93,12 @@ pub struct VestingTreeData {
     pub bump: u8,
 }
 
-#[derive(BorshSerialize, BorshDeserialize, Clone, Debug, PartialEq)]
+/// Mirror of the on-chain `ClaimRecord`, serialised in `repr(C)` field order to
+/// match the program's `#[account(zero_copy)]` layout EXACTLY (NOT Borsh). See
+/// `serialize_claim_record`. `_pad_*` fields occupy the same byte offsets as the
+/// implicit repr(C) padding the program emits, so legacy 121-byte accounts map
+/// onto the first fields unchanged for the Issue #29 lazy migration.
+#[derive(Clone, Debug)]
 pub struct ClaimRecordData {
     pub beneficiary: Pubkey,
     pub tree: Pubkey,
@@ -102,6 +107,11 @@ pub struct ClaimRecordData {
     pub milestone_bitmap: [u8; 32],
     pub last_claim_at: i64,
     pub bump: u8,
+    pub version: u8,
+    pub _pad_leaf_idx: [u8; 2],
+    pub leaf_claimed_idx: [u32; 8],
+    pub _pad_leaf_amt: [u8; 4],
+    pub leaf_claimed_amt: [u64; 8],
 }
 
 #[derive(BorshSerialize, BorshDeserialize, Clone, Debug)]
@@ -170,17 +180,77 @@ pub fn deserialize_vesting_tree(data: &[u8]) -> VestingTreeData {
     VestingTreeData::deserialize(&mut &data[8..]).expect("Failed to deserialize VestingTree")
 }
 
-/// Serialize a `ClaimRecordData` into account bytes: 8-byte Anchor discriminator + borsh fields.
+/// Serialize a `ClaimRecordData` into account bytes: 8-byte Anchor discriminator +
+/// the struct laid out in `repr(C)` field order (matching the program's
+/// `#[account(zero_copy)]` layout byte-for-byte). NOT Borsh.
 pub fn serialize_claim_record(cr_data: &ClaimRecordData) -> Vec<u8> {
     let mut data = account_discriminator("ClaimRecord").to_vec();
-    data.append(&mut borsh::to_vec(cr_data).expect("Failed to serialize ClaimRecordData"));
+    data.extend_from_slice(cr_data.beneficiary.as_ref());
+    data.extend_from_slice(cr_data.tree.as_ref());
+    data.extend_from_slice(&cr_data.claimed_amount.to_le_bytes());
+    data.extend_from_slice(&cr_data.total_entitled.to_le_bytes());
+    data.extend_from_slice(&cr_data.milestone_bitmap);
+    data.extend_from_slice(&cr_data.last_claim_at.to_le_bytes());
+    data.push(cr_data.bump);
+    data.push(cr_data.version);
+    data.extend_from_slice(&cr_data._pad_leaf_idx);
+    for v in cr_data.leaf_claimed_idx {
+        data.extend_from_slice(&v.to_le_bytes());
+    }
+    data.extend_from_slice(&cr_data._pad_leaf_amt);
+    for v in cr_data.leaf_claimed_amt {
+        data.extend_from_slice(&v.to_le_bytes());
+    }
     data
 }
 
-/// Deserialize a ClaimRecord from raw account data (skips 8-byte Anchor discriminator).
+/// Deserialize a ClaimRecord from raw account data (skips 8-byte Anchor discriminator),
+/// reading fields back in `repr(C)` order. Tolerates legacy (shorter) accounts by
+/// defaulting the per-leaf ledger to empty when the trailing bytes are absent.
 pub fn deserialize_claim_record(data: &[u8]) -> ClaimRecordData {
     assert!(data.len() > 8, "Account data too short for Anchor discriminator");
-    ClaimRecordData::deserialize(&mut &data[8..]).expect("Failed to deserialize ClaimRecord")
+    let d = &data[8..];
+    let take_u64 = |o: usize| u64::from_le_bytes(d[o..o + 8].try_into().unwrap());
+    let take_i64 = |o: usize| i64::from_le_bytes(d[o..o + 8].try_into().unwrap());
+
+    let mut leaf_claimed_idx = [u32::MAX; 8];
+    let mut leaf_claimed_amt = [0u64; 8];
+
+    let beneficiary = Pubkey::try_from(&d[0..32]).unwrap();
+    let tree = Pubkey::try_from(&d[32..64]).unwrap();
+    let claimed_amount = take_u64(64);
+    let total_entitled = take_u64(72);
+    let milestone_bitmap: [u8; 32] = d[80..112].try_into().unwrap();
+    let last_claim_at = take_i64(112);
+    let bump = d[120];
+    let version = if d.len() > 121 { d[121] } else { 0 };
+
+    // Per-leaf ledger starts at data offset 124 (121 + version + 2 pad), if present.
+    if d.len() >= 124 + 32 + 4 + 64 {
+        for i in 0..8 {
+            let o = 124 + i * 4;
+            leaf_claimed_idx[i] = u32::from_le_bytes(d[o..o + 4].try_into().unwrap());
+        }
+        for i in 0..8 {
+            let o = 124 + 32 + 4 + i * 8;
+            leaf_claimed_amt[i] = take_u64(o);
+        }
+    }
+
+    ClaimRecordData {
+        beneficiary,
+        tree,
+        claimed_amount,
+        total_entitled,
+        milestone_bitmap,
+        last_claim_at,
+        bump,
+        version,
+        _pad_leaf_idx: [0u8; 2],
+        leaf_claimed_idx,
+        _pad_leaf_amt: [0u8; 4],
+        leaf_claimed_amt,
+    }
 }
 
 /// Build instruction data bytes: discriminator + borsh(args).
@@ -475,6 +545,7 @@ pub struct ClaimRecordConfig {
     total_entitled: u64,
     milestone_bitmap: [u8; 32],
     last_claim_at: i64,
+    version: u8,
 }
 
 impl ClaimRecordConfig {
@@ -486,11 +557,13 @@ impl ClaimRecordConfig {
             total_entitled: 0,
             milestone_bitmap: [0u8; 32],
             last_claim_at: 0,
+            version: 1,
         }
     }
 
     pub fn claimed_amount(mut self, amount: u64) -> Self { self.claimed_amount = amount; self }
     pub fn total_entitled(mut self, amount: u64) -> Self { self.total_entitled = amount; self }
+    pub fn version(mut self, version: u8) -> Self { self.version = version; self }
 
     /// Create a zeroed/fresh claim record for a given tree (beneficiary=Pubkey::default).
     pub fn zero(tree: &Pubkey) -> Self {
@@ -501,6 +574,7 @@ impl ClaimRecordConfig {
             total_entitled: 0,
             milestone_bitmap: [0u8; 32],
             last_claim_at: 0,
+            version: 1,
         }
     }
 
@@ -517,12 +591,18 @@ impl ClaimRecordConfig {
             milestone_bitmap: self.milestone_bitmap,
             last_claim_at: self.last_claim_at,
             bump: cr_bump,
+            version: self.version,
+            _pad_leaf_idx: [0u8; 2],
+            leaf_claimed_idx: [u32::MAX; 8],
+            _pad_leaf_amt: [0u8; 4],
+            leaf_claimed_amt: [0u64; 8],
         };
 
         let account_bytes = serialize_claim_record(&cr_data);
 
         let cr_account = Account {
-            lamports: 2_000_000, // rent-exempt (129B data → 1.79M minimum at default rent rate)
+            // rent-exempt for the larger (~232 byte) zero_copy ClaimRecord.
+            lamports: 3_000_000,
             data: account_bytes,
             owner: program_id(),
             executable: false,

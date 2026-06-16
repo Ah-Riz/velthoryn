@@ -1,4 +1,5 @@
 use anchor_lang::prelude::*;
+use anchor_lang::Discriminator;
 use anchor_spl::token::{Token, TokenAccount, Transfer};
 use anchor_lang::system_program::System;
 
@@ -6,7 +7,9 @@ use crate::errors::VestingError;
 use crate::events::StreamCancelled;
 use crate::instructions::withdraw::WithdrawArgs;
 use crate::math::{merkle::leaf_hash, schedule};
-use crate::state::{milestone_flag_is_set, ClaimRecord, VestingLeaf, VestingTree};
+use crate::state::{
+    migrate_legacy_claim_record, milestone_flag_is_set, ClaimRecord, VestingLeaf, VestingTree,
+};
 
 /// Tutorial-style cancel: creator-only, single-recipient stream. Unlocked tokens go to the
 /// beneficiary and the remaining vault balance goes to the creator in one transaction.
@@ -37,13 +40,13 @@ pub struct CancelStream<'info> {
     #[account(
         init_if_needed,
         payer = creator,
-        space = 8 + ClaimRecord::INIT_SPACE,
+        space = 8 + std::mem::size_of::<ClaimRecord>(),
         seeds = [b"claim",
                  vesting_tree.key().as_ref(),
                  beneficiary.key().as_ref()],
         bump,
     )]
-    pub claim_record: Account<'info, ClaimRecord>,
+    pub claim_record: AccountLoader<'info, ClaimRecord>,
 
     pub system_program: Program<'info, System>,
 
@@ -145,7 +148,21 @@ pub fn handler(ctx: Context<CancelStream>, args: WithdrawArgs) -> Result<()> {
             VestingError::InvalidProof
         );
 
-        let cr = &mut ctx.accounts.claim_record;
+        // Grow any legacy (pre-Issue-#29) ClaimRecord to the current size before load.
+        migrate_legacy_claim_record(&ctx.accounts.claim_record, &ctx.accounts.creator)?;
+
+        let claim_loader = &ctx.accounts.claim_record;
+        let needs_init = {
+            let acc_info = claim_loader.to_account_info();
+            let data = acc_info.try_borrow_data()?;
+            let disc = ClaimRecord::DISCRIMINATOR;
+            data.len() >= disc.len() && data[..disc.len()].iter().all(|&b| b == 0)
+        };
+        let mut cr = if needs_init {
+            claim_loader.load_init()?
+        } else {
+            claim_loader.load_mut()?
+        };
         if cr.beneficiary == Pubkey::default() {
             cr.tree = tree_key;
             cr.beneficiary = ctx.accounts.beneficiary.key();
@@ -154,6 +171,9 @@ pub fn handler(ctx: Context<CancelStream>, args: WithdrawArgs) -> Result<()> {
             cr.milestone_bitmap = [0u8; 32];
             cr.last_claim_at = 0;
             cr.bump = ctx.bumps.claim_record;
+            cr.init_per_leaf_ledger();
+        } else if cr.needs_migration() {
+            cr.init_per_leaf_ledger();
         }
 
         if leaf.release_type == 2 {
@@ -205,6 +225,15 @@ pub fn handler(ctx: Context<CancelStream>, args: WithdrawArgs) -> Result<()> {
         tree.paused = false;
 
         if to_beneficiary > 0 {
+            if leaf.release_type == 2 {
+                let byte_idx = leaf.milestone_idx as usize / 8;
+                let bit_idx = leaf.milestone_idx as usize % 8;
+                cr.milestone_bitmap[byte_idx] |= 1 << bit_idx;
+            } else {
+                // Keep the per-leaf ledger consistent so a later `claim` on this
+                // single-leaf record computes the correct delta (Issue #29).
+                cr.record_leaf_claim(leaf.leaf_index, to_beneficiary)?;
+            }
             cr.claimed_amount = cr
                 .claimed_amount
                 .checked_add(to_beneficiary)
@@ -219,12 +248,6 @@ pub fn handler(ctx: Context<CancelStream>, args: WithdrawArgs) -> Result<()> {
                 tree.total_claimed <= tree.total_supply,
                 VestingError::OverClaim
             );
-
-            if leaf.release_type == 2 {
-                let byte_idx = leaf.milestone_idx as usize / 8;
-                let bit_idx = leaf.milestone_idx as usize % 8;
-                cr.milestone_bitmap[byte_idx] |= 1 << bit_idx;
-            }
         }
     } // mutable borrow on tree dropped here
 

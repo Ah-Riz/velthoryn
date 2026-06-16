@@ -20,6 +20,8 @@ import {
   mockProofApi,
   injectStreamSchedule,
   selectSolToken,
+  fillCliffSchedule,
+  fillLinearSchedule,
   creatorWallet,
   recipientWallet,
 } from "./helpers";
@@ -37,10 +39,9 @@ test.describe("Create cliff stream journey", () => {
     await gotoWithRetry(page, "/campaign/create/cliff");
 
     await selectSolToken(page);
+    await fillCliffSchedule(page);
     await page.getByPlaceholder(/solana wallet/i).first().fill(recipientWallet);
     await page.getByPlaceholder(/e\.g\. 1000/i).first().fill("0.001");
-    const cliffDate = new Date(Date.now() + 86400_000 * 30).toISOString().slice(0, 16);
-    await page.locator("input[type='datetime-local']").first().fill(cliffDate);
 
     const submitBtn = page.getByRole("button", { name: /create cliff stream/i });
     await expect(submitBtn).toBeEnabled({ timeout: 10_000 });
@@ -57,14 +58,9 @@ test.describe("Create linear stream journey", () => {
     await gotoWithRetry(page, "/campaign/create/linear");
 
     await selectSolToken(page);
+    await fillLinearSchedule(page);
     await page.getByPlaceholder(/solana wallet/i).first().fill(recipientWallet);
     await page.getByPlaceholder(/e\.g\. 1000/i).first().fill("0.001");
-
-    const startDate = new Date(Date.now() + 86400_000).toISOString().slice(0, 16);
-    const endDate = new Date(Date.now() + 86400_000 * 31).toISOString().slice(0, 16);
-    const inputs = page.locator("input[type='datetime-local']");
-    await inputs.nth(0).fill(startDate);
-    await inputs.nth(1).fill(endDate);
 
     const submitBtn = page.getByRole("button", { name: /create linear stream/i });
     await expect(submitBtn).toBeEnabled({ timeout: 10_000 });

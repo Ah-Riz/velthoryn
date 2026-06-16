@@ -80,8 +80,11 @@ const prepared = prepareCampaign(recipients);
 // prepared.proofs[i]     → number[][]   (sibling hashes, leaf→root order)
 ```
 
-> **Issue #29 rule:** at most **one** cliff/linear leaf per beneficiary. The BE enforces
-> this at ingest (see ADR-003). Multiple milestone leaves per beneficiary are allowed.
+> **Issue #29 — fixed on-chain (2026-06-16; ADR-003 superseded).** The program now supports
+> **multiple cliff/linear leaves per beneficiary** (paid each in full via a per-leaf ledger). The
+> BE `prepare`/`import` routes still reject this shape until a follow-up PR removes those guards, so
+> **via the API today: at most one cliff/linear leaf per beneficiary**; direct on-chain
+> construction has no such limit. Multiple milestone leaves per beneficiary are allowed.
 
 ---
 
@@ -96,13 +99,16 @@ const vaultAuthority = vaultAuthorityPda(vestingTree);
 const vault = getAssociatedTokenAddressSync(mint, vaultAuthority, true);
 
 await program.methods
-  .createCampaign(
-    CAMPAIGN_ID, Array.from(prepared.root), prepared.leafCount,
-    prepared.totalSupply, prepared.minCliffTime,
-    true,                                              // cancellable
-    creator.publicKey,                                 // cancel_authority
-    creator.publicKey,                                 // pause_authority
-  )
+  .createCampaign({
+    campaignId: CAMPAIGN_ID,                           // BN (u64)
+    merkleRoot: Array.from(prepared.root),             // number[32]
+    leafCount: prepared.leafCount,                     // u32
+    totalSupply: prepared.totalSupply,                 // BN (u64)
+    minCliffTime: prepared.minCliffTime,               // BN (i64)
+    cancellable: true,
+    cancelAuthority: creator.publicKey,                // Option<Pubkey>
+    pauseAuthority: creator.publicKey,                 // Option<Pubkey>
+  })
   .accounts({
     creator: creator.publicKey, mint, vestingTree, vaultAuthority, vault,
     tokenProgram: TOKEN_PROGRAM_ID, associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID,
@@ -136,9 +142,16 @@ variants. The tree PDA holds the lamports directly:
 
 ```ts
 await program.methods
-  .createCampaignNative(CAMPAIGN_ID, Array.from(prepared.root), prepared.leafCount,
-                        prepared.totalSupply, prepared.minCliffTime, true,
-                        creator.publicKey, creator.publicKey)
+  .createCampaignNative({
+    campaignId: CAMPAIGN_ID,                           // BN (u64)
+    merkleRoot: Array.from(prepared.root),             // number[32]
+    leafCount: prepared.leafCount,                     // u32
+    totalSupply: prepared.totalSupply,                 // BN (u64)
+    minCliffTime: prepared.minCliffTime,               // BN (i64)
+    cancellable: true,
+    cancelAuthority: creator.publicKey,                // Option<Pubkey>
+    pauseAuthority: creator.publicKey,                 // Option<Pubkey>
+  })
   .accounts({ creator: creator.publicKey, vestingTree, systemProgram: SystemProgram.programId,
               rent: SYSVAR_RENT_PUBKEY })
   .rpc();
