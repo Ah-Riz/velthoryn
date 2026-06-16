@@ -5,7 +5,7 @@
 **~705+ tests total** — green on local CI reproduction (June 2026).
 
 - On-chain (Anchor): **127+ passing** across 15 files (`pnpm test:localnet`)
-- Web (Vitest): **563 passing** (`vitest.unit.config.ts`; Postgres required for API tests)
+- Web (Vitest): **569 passing** (`vitest.unit.config.ts`; Postgres required for API tests)
 - Trident fuzz: smoke test in CI (`trident-tests/fuzz_vesting`)
 - Rust unit tests: **31** (math/merkle + math/schedule proptests + inline)
 - Mollusk instruction tests: **73 active** across 8 test files (18 ignored — Mollusk limitations)

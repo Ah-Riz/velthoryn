@@ -834,8 +834,10 @@ function isGracePeriodOver(cancelledAt: bigint): boolean {
 
 ### Flow 1: Bulk Send (Campaign Creator)
 
+> **Schedule is campaign-level for cliff/linear:** one Start/Cliff/End (linear) or Start/Cliff (cliff) is set once per campaign and stamped onto every leaf, so all recipients unlock at the same instant regardless of amount. Each recipient / CSV row carries only **wallet + amount** (milestone leaves keep their per-row unlock time). This is a create-flow + CSV-template change only — the on-chain math was already correct.
+
 ```
-1. Collect recipient data (wallets, amounts, schedules)
+1. Collect recipient data — wallet + amount per recipient, plus one shared schedule (cliff/linear)
 2. Build Merkle tree:
    const leaves = recipients.map(...)
    const tree = buildTree(leaves)

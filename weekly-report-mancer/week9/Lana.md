@@ -4,7 +4,7 @@
 
 **Week 9 was the documentation week.** The scholarship `task.md` KPI: *a developer who has never seen the code can integrate with the program using only the docs.* I shipped those documentation deliverables **and** ran a parallel detect → triage → fix → docs hardening pass across SC / BE / Merkle.
 
-**This week (chronological):** opened with the SC hardening — `91fefa1` fixed SC-FIND-02 (native-SOL `withdraw_unvested` now preserves `rent_min` so the VestingTree PDA isn't GC'd, High→Low) and SC-FIND-03 (`withdraw` gains the `!instant_refunded` guard, Medium). `81e93f9` then closed the three BE findings — BE-SEC-01 (POST `/api/campaigns` now unconditionally requires wallet auth + `signer===creator`, **High**), BE-SEC-05 (rate limiter wrapped in try/catch with in-memory fallback, Medium), BE-SEC-06 (cron secret compared with `timingSafeCompare`, Low) — with `46472af` aligning the bankrun test to the rent-preservation fix. `fe22cc5` added the test backstop (+901 LOC test-only): Rust proptests for merkle forgery + schedule overspend, the `withdraw_unvested.rs` Mollusk audit file, TS fast-check merkle-parity, and BE route security tests. Then the documentation deliverables landed in `cc0e3f4` — `INSTRUCTION_REFERENCE.md`, `INTEGRATION_GUIDE.md`, three ADRs, and `BUG_LIST.md` — followed by `29a9a3b` (repeatable Vercel deploy tooling) and `067603e` (CU bench refresh for 2026-06-15). I closed the week reconciling stale test counts across the docs (working-tree updates, 2026-06-15) so README/TESTING/E2E/PENDING_WORK reflect the verified Mollusk (73 active / 18 ignored), bench (10/1), and proptest (18 invariants) numbers.
+**This week (chronological):** opened with the SC hardening — `91fefa1` fixed SC-FIND-02 (native-SOL `withdraw_unvested` now preserves `rent_min` so the VestingTree PDA isn't GC'd, High→Low) and SC-FIND-03 (`withdraw` gains the `!instant_refunded` guard, Medium). `81e93f9` then closed the three BE findings — BE-SEC-01 (POST `/api/campaigns` now unconditionally requires wallet auth + `signer===creator`, **High**), BE-SEC-05 (rate limiter wrapped in try/catch with in-memory fallback, Medium), BE-SEC-06 (cron secret compared with `timingSafeCompare`, Low) — with `46472af` aligning the bankrun test to the rent-preservation fix. `fe22cc5` added the test backstop (+901 LOC test-only): Rust proptests for merkle forgery + schedule overspend, the `withdraw_unvested.rs` Mollusk audit file, TS fast-check merkle-parity, and BE route security tests. Then the documentation deliverables landed in `cc0e3f4` — `INSTRUCTION_REFERENCE.md`, `INTEGRATION_GUIDE.md`, three ADRs, and `BUG_LIST.md` — followed by `29a9a3b` (repeatable Vercel deploy tooling) and `067603e` (CU bench refresh for 2026-06-15). I closed the week reconciling stale test counts across the docs (working-tree updates, 2026-06-15) so README/TESTING/E2E/PENDING_WORK reflect the verified Mollusk (73 active / 18 ignored), bench (10/1), and proptest (18 invariants) numbers. The week then closed out (2026-06-16) by **reversing the Issue #29 deferral**: `fd6163d` ships the on-chain fix — `ClaimRecord` becomes `#[account(zero_copy)]` with a bounded per-leaf ledger (`leaf_claimed_idx`/`leaf_claimed_amt`, `PER_LEAF_CAP=8`) so a multi-leaf beneficiary is paid each leaf in full (ADR-003 superseded). `09e49a8` makes the cliff/linear schedule **campaign-level** — one shared Start/Cliff/End stamped per leaf so unequal-amount recipients (0.5 vs 1 SOL) unlock together (FE create-flow + CSV only; on-chain math unchanged; +4 regression tests). `92b3868` synced the IDL + E2E tests to the campaign-level schedule, and `16c401c` switched `claim`/`withdraw`/`cancel_stream` to `load_init` for the zero-copy `ClaimRecord` (init_if_needed leaves the discriminator zeroed until exit) and aligned the close-claim-record E2E mock to the 232-byte v1 layout.
 
 ---
 
@@ -22,23 +22,25 @@
 | **Tests** | Rust proptests: 18 property invariants (schedule 10 + merkle 8) + 24 unit | `fe22cc5` — `programs/vesting/src/math/{schedule,merkle}.rs`; `cargo test --lib` |
 | **Tests** | `withdraw_unvested.rs` Mollusk audit (3 active: drain-to-rent, grace-fail, reinit) | `fe22cc5` — `programs/vesting/tests/withdraw_unvested.rs` |
 | **Tests** | TS fast-check merkle-parity (7/7: Rust↔Client↔Web byte-identical) | `fe22cc5` — `clients/ts/src/__tests__/merkle-properties.test.ts` |
-| **Docs** | Instruction reference — all 13 instructions, error codes 6000–6040, events, TS examples | `cc0e3f4` — `docs/week9/INSTRUCTION_REFERENCE.md` |
+| **Docs** | Instruction reference — all 18 instructions, error codes 6000–6041, 12 events, per-instruction TS examples | `cc0e3f4` — `docs/week9/INSTRUCTION_REFERENCE.md` |
 | **Docs** | Integration guide — prepare → create → fund → register → claim walkthrough | `cc0e3f4` — `docs/week9/INTEGRATION_GUIDE.md` |
-| **Docs** | 3 ADRs — merkle-compressed vesting, keccak-256 domain separation, Issue #29 deferred | `cc0e3f4` — `docs/week9/ADRs/ADR-{001,002,003}*.md` |
+| **Docs** | 3 ADRs — merkle-compressed vesting, keccak-256 domain separation, Issue #29 on-chain fix (ADR-003 since **superseded — shipped** `fd6163d`) | `cc0e3f4` — `docs/week9/ADRs/ADR-{001,002,003}*.md` |
 | **Docs** | Bug list — full finding log across SC/MERKLE/BE/DB with fix/rationale | `cc0e3f4` — `docs/week9/BUG_LIST.md` |
 | **Bench** | CU budget re-measured on Solana CLI 3.1.12 (Agave); 10 active + 1 ignored | `067603e` — `programs/vesting/benches/compute_units.md`; `docs/CU_BUDGET.md` |
 | **Ops** | Repeatable Vercel deploy (`pnpm deploy:web`, `vercel:link`) | `29a9a3b` — `apps/web/.vercel/project.json`, root `package.json` |
 | **Merkle** | Merkle surface independently audited — **sound** (5 findings, no exploit path) | `docs/week9/BUG_LIST.md` §MERKLE; golden-hash cross-check + 6 forgery PoCs all rejected |
 | **Docs-sync** | Test-count claims reconciled across README/TESTING/E2E/PENDING_WORK | working tree (2026-06-15, pending commit) — Mollusk 72→73 / 7→8 files, bench 9→10, proptest corrected |
+| **SC** | **Issue #29 fixed on-chain** — `ClaimRecord` is `#[account(zero_copy)]` with a bounded per-leaf ledger (`leaf_claimed_idx`/`leaf_claimed_amt`, `PER_LEAF_CAP=8`); a multi-leaf beneficiary is paid each leaf in full | `fd6163d` — `programs/vesting/src/state/claim_record.rs`; two-leaf regression test chaining two claims (both pay 1200/1200) |
+| **FE/BE-coupled** | Cliff/linear schedule is **campaign-level** — one shared Start/Cliff/End stamped per leaf; unequal-amount recipients unlock together (FE create-flow + CSV only; on-chain math unchanged) | `09e49a8` — `apps/web/src/app/(app)/campaign/create/{linear,cliff}/page.tsx`, `apps/web/src/lib/campaign/bulk.ts` |
+| **CI** | `claim`/`withdraw`/`cancel_stream` use `load_init` for zero-copy `ClaimRecord`; IDL + close-claim-record E2E mock synced to 232-byte v1 layout | `16c401c`, `92b3868` — `programs/vesting/src/instructions/{claim,withdraw,cancel_stream}.rs`; `apps/web/src/lib/anchor/idl.json`, `apps/web/tests/e2e/*` |
 
 ### Incomplete / deferred
 
 | Item | Owner | Notes |
 |------|-------|-------|
-| Issue #29 on-chain fix (multi-leaf cumulative `claimed_amount` undercount) | Lana | Deferred — breaking SC change. BE mitigation active (prepare/import reject multi cliff/linear per beneficiary). Rationale in `ADR-003`. |
+| Remove obsolete BE `cliffLinearSeen` guards (prepare/import) — post-deploy follow-up | Lana | Issue #29 is **fixed on-chain** (`fd6163d`); the BE prepare/import guards that reject multi cliff/linear per beneficiary are now redundant but remain **active** until a follow-up post-deploy PR removes them (`apps/web/src/app/api/campaigns/{prepare,import}/route.ts`). ADR-003 (superseded) documents the rationale. |
 | Mollusk coverage of 4 handlers (`claim`, `cancel_stream`, `instant_refund`, `withdraw_unvested`) | Lana | Blocked on Mollusk 0.14 (`init_if_needed` / `Optional<T>` resolution). 19 `#[ignore]`d tests unblock then. `withdraw_unvested` native path is covered via the new audit file. |
 | BE route-level tests (`apps/web/tests/api/**`, incl. BE-SEC-01 401/403 + rate-limit cluster) | Lana | Staged, but need a running Postgres to execute; not yet runnable in CI. |
-| FE validation for Issue #29 | Geral | Handoff; unchanged this week. |
 | Prod deployment (`velthoryn.vercel.app`) | Ops | Returns `DEPLOYMENT_NOT_FOUND` — redeploy required (README §Vercel has the runbook; `29a9a3b` adds the one-liner). |
 | Sentry DSN in Vercel production | Ops | Monitoring configured but DSN not set in prod env. |
 | External audit ($15–40k) | Budget | Approval needed before engagement. |
@@ -51,11 +53,12 @@ This section maps each `task.md` acceptance criterion to the concrete artifact t
 
 | `task.md` criterion | Delivered | How it satisfies the KPI |
 |---------------------|-----------|--------------------------|
-| Instruction reference (params, behavior, error codes, examples) | `docs/week9/INSTRUCTION_REFERENCE.md` | All 13 instructions + view fn; full error table (6000–6040, 41 variants); 13 events; per-instruction TS examples. |
+| Instruction reference (params, behavior, error codes, examples) | `docs/week9/INSTRUCTION_REFERENCE.md` | All 18 instructions + view fn; full error table (6000–6041, 42 variants); 12 events; per-instruction TS examples (added this pass to cover every instruction). |
 | Integration guide (working code snippets) | `docs/week9/INTEGRATION_GUIDE.md` | End-to-end creator + beneficiary walkthrough (prepare → create → fund → register → claim → cancel), runnable TS, SPL + native SOL. |
-| ≥3 architecture decision records | `docs/week9/ADRs/ADR-001|002|003` | (1) Merkle-compressed vesting, (2) keccak-256 + domain separation, (3) Issue #29 deferred on-chain fix. |
+| ≥3 architecture decision records | `docs/week9/ADRs/ADR-001|002|003` | (1) Merkle-compressed vesting, (2) keccak-256 + domain separation, (3) Issue #29 on-chain fix (ADR-003, **superseded — shipped** `fd6163d`). |
 | README accuracy | `README.md`, `docs/CU_BUDGET.md`, `docs/TESTING.md` | Week-9 status section + this session's count reconciliation (Mollusk 73/18, bench 10/1, proptest 18). |
 | KPI: unfamiliar dev can integrate from docs alone | above + `BUG_LIST.md` | A reader can derive PDAs, build a Merkle tree, submit a claim, and handle errors without reading source. |
+| Marketing teammate review of the integration guide | **pending — teammate TBD** | `task.md` criterion; not yet done. The integration guide is ready for review; this is a human/process step outside the repo. |
 
 ---
 
@@ -76,12 +79,12 @@ No blockers in BE-DB-SC-Merkle that I can resolve with code alone. The open item
 
 | Metric | End of Week 8 | Week 9 Delta |
 |--------|---------------|--------------|
-| SC `cargo test` | 110 passed / 19 ignored | **+15** → 125 passed / 0 failed / 19 ignored |
+| SC `cargo test` | 110 passed / 19 ignored | **+16** → 126 passed / 0 failed / 19 ignored (Issue #29 two-leaf regression) |
 | Mollusk CU bench (active) | 9 + 1 ignored | **+1** → 10 active + 1 ignored |
 | Rust proptest invariants | (none) | **+18** (schedule 10 + merkle 8) |
 | TS fast-check properties | (none) | **+7** (merkle parity, new) |
 | Mollusk test files | 7 | **+1** → 8 (`withdraw_unvested.rs`) |
-| BE Vitest | 565/565 | unchanged (565/565, no regression) |
+| Web Vitest (unit, `vitest.unit.config.ts`) | 565/565 | **+4** → 569/569 (campaign-level schedule regression tests) |
 | TS merkle parity | 13/13 | unchanged (13/13) |
 | Docs shipped (week9/) | 0 | **+5** (INSTRUCTION_REFERENCE, INTEGRATION_GUIDE, BUG_LIST, 3 ADRs) |
 | SC/BE security fixes applied | — | **5** (BE-SEC-01/05/06, SC-FIND-02/03) |
@@ -92,7 +95,7 @@ No blockers in BE-DB-SC-Merkle that I can resolve with code alone. The open item
 ## What's Next (Week 10+)
 
 ### SC — Solana Program
-- [ ] **Issue #29 on-chain fix** — per-leaf claimed tracking to replace cumulative undercount (breaking change; coordinate BE + FE migration). See `ADR-003`.
+- [x] **Issue #29 on-chain fix shipped** — `fd6163d`: per-leaf claimed tracking via zero-copy `ClaimRecord` bounded ledger (`PER_LEAF_CAP=8`). ADR-003 superseded.
 - [ ] **Mollusk 0.14 unblock** — lift the 19 ignored tests + add coverage for `claim`/`cancel_stream`/`instant_refund`/`withdraw_unvested` SPL paths.
 - [ ] **Token-2022** mint support (Phase 5).
 - [ ] **Squads v4 multisig** for `cancel_authority` (Phase 5).
@@ -104,9 +107,10 @@ No blockers in BE-DB-SC-Merkle that I can resolve with code alone. The open item
 - [ ] **BE-SEC-02/04** — XFF trust + Redis-prod assertion; revisit if moving off Vercel.
 - [ ] **BE-SEC-07/08** — nonce binding + CSP tightening (needs FE regression testing first).
 - [x] **BE-SEC-01/05/06 fixed** — `81e93f9`.
+- [ ] **Remove obsolete BE `cliffLinearSeen` guards** (prepare/import) — follow-up post-deploy PR now that Issue #29 is fixed on-chain (`fd6163d`).
 
 ### FE — Frontend
-- [ ] **Issue #29 FE validation** — handoff to Geral (reject multi cliff/linear per beneficiary at the form).
+- [x] **Issue #29 FE validation** — **no longer needed**: the on-chain fix (`fd6163d`) pays each leaf in full, so the FE/BE rejection of multi cliff/linear per beneficiary is obsolete (BE-guard removal tracked above).
 
 ### CI
 - [ ] **Add `test:sc` script** with `BPF_OUT_DIR` so Mollusk tests run without manual env (SC-ENV-01).

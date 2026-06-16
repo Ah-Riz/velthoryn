@@ -99,13 +99,16 @@ const vaultAuthority = vaultAuthorityPda(vestingTree);
 const vault = getAssociatedTokenAddressSync(mint, vaultAuthority, true);
 
 await program.methods
-  .createCampaign(
-    CAMPAIGN_ID, Array.from(prepared.root), prepared.leafCount,
-    prepared.totalSupply, prepared.minCliffTime,
-    true,                                              // cancellable
-    creator.publicKey,                                 // cancel_authority
-    creator.publicKey,                                 // pause_authority
-  )
+  .createCampaign({
+    campaignId: CAMPAIGN_ID,                           // BN (u64)
+    merkleRoot: Array.from(prepared.root),             // number[32]
+    leafCount: prepared.leafCount,                     // u32
+    totalSupply: prepared.totalSupply,                 // BN (u64)
+    minCliffTime: prepared.minCliffTime,               // BN (i64)
+    cancellable: true,
+    cancelAuthority: creator.publicKey,                // Option<Pubkey>
+    pauseAuthority: creator.publicKey,                 // Option<Pubkey>
+  })
   .accounts({
     creator: creator.publicKey, mint, vestingTree, vaultAuthority, vault,
     tokenProgram: TOKEN_PROGRAM_ID, associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID,
@@ -139,9 +142,16 @@ variants. The tree PDA holds the lamports directly:
 
 ```ts
 await program.methods
-  .createCampaignNative(CAMPAIGN_ID, Array.from(prepared.root), prepared.leafCount,
-                        prepared.totalSupply, prepared.minCliffTime, true,
-                        creator.publicKey, creator.publicKey)
+  .createCampaignNative({
+    campaignId: CAMPAIGN_ID,                           // BN (u64)
+    merkleRoot: Array.from(prepared.root),             // number[32]
+    leafCount: prepared.leafCount,                     // u32
+    totalSupply: prepared.totalSupply,                 // BN (u64)
+    minCliffTime: prepared.minCliffTime,               // BN (i64)
+    cancellable: true,
+    cancelAuthority: creator.publicKey,                // Option<Pubkey>
+    pauseAuthority: creator.publicKey,                 // Option<Pubkey>
+  })
   .accounts({ creator: creator.publicKey, vestingTree, systemProgram: SystemProgram.programId,
               rent: SYSVAR_RENT_PUBKEY })
   .rpc();

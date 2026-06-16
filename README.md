@@ -32,7 +32,7 @@ velthoryn/
 
 ## Current status
 
-**Fully implemented and deployed to devnet.** All **18** instruction handlers (14 SPL + 3 native SOL + `instant_refund_campaign`), schedule math (`vested`, `get_vested_amount`), and Merkle proof verification (`verify_merkle_proof`) are live with real logic. State structs, error codes (**41** variants), and events (**10** types, including `InstantRefunded`) are fully defined. `leaf_hash()` is byte-verified against the TS encoder. Native SOL vesting supports campaigns in raw SOL without wrapping to wSOL — see [`docs/NATIVE_SOL_VESTING.md`](docs/NATIVE_SOL_VESTING.md).
+**Fully implemented and deployed to devnet.** All **18** instruction handlers (14 SPL + 3 native SOL + `instant_refund_campaign`), schedule math (`vested`, `get_vested_amount`), and Merkle proof verification (`verify_merkle_proof`) are live with real logic. State structs, error codes (**42** variants), and events (**12** types, including `InstantRefunded`) are fully defined. `leaf_hash()` is byte-verified against the TS encoder. Native SOL vesting supports campaigns in raw SOL without wrapping to wSOL — see [`docs/NATIVE_SOL_VESTING.md`](docs/NATIVE_SOL_VESTING.md).
 
 **Instant refund (B1):** Creator-only immediate refund for **unstarted multi-leaf** campaigns (`now < min_cliff_time`, no milestones released). Single-leaf campaigns still use `cancel_stream`; started campaigns use `cancel_campaign` (7-day grace). BE exposes `instantRefundEligible` and `POST .../instant-refund` tx builder — see [`docs/BACKEND_API.md`](docs/BACKEND_API.md).
 
@@ -46,7 +46,9 @@ velthoryn/
 
 **Week 9 detection + hardening:** a systematic detect → triage → fix → docs pass across SC / MERKLE / BE / DB. **5 code fixes applied + verified** (`BE-SEC-01` campaign-POST wallet auth, `BE-SEC-06` cron timing-safe compare, `BE-SEC-05` rate-limit resilience, `SC-FIND-02` native-SOL rent preservation, `SC-FIND-03` withdraw guard); 7 findings documented with rationale; Merkle surface independently audited (**sound**). New integrator docs in [`docs/week9/`](docs/week9/) — see "deeper reads" below. Regression: SC **126/0/19** (was 125/0/19; +1 Issue #29 two-leaf regression test), BE **565/565** + typecheck BE-clean. Full finding list: [`docs/week9/BUG_LIST.md`](docs/week9/BUG_LIST.md).
 
-**Test results: 127+ SC tests PASS** (`pnpm test:localnet`); **563 web Vitest PASS** (API routes use Postgres in CI)
+**Campaign-level schedule (cliff/linear):** recipients with different amounts (e.g. 0.5 SOL vs 1 SOL) now unlock at the same instant. The schedule (Start/Cliff/End for linear, Start/Cliff for cliff) is **campaign-level** — one shared schedule stamped on every leaf — instead of per-recipient. The on-chain schedule math was already correct; the fix is FE-only: the create flow (Manual + CSV) and the linear/cliff CSV templates now carry wallet + amount per recipient and one schedule per campaign. Milestone leaves keep their per-row unlock times. **No on-chain, prepare-route, or client-SDK changes.** Regression tests in `apps/web/tests/lib/bulk-campaign.test.ts` cover the 0.5-vs-1-SOL identical-schedule guarantee and milestone isolation.
+
+**Test results: 127+ SC tests PASS** (`pnpm test:localnet`); **569 web Vitest PASS** (API routes use Postgres in CI)
 **BE–SC Merkle pipeline verified end-to-end**: 3-leaf campaigns (Cliff/Linear/Milestone) through prepare → POST (all leaves verified) → GET proof → verify. RLS on all Supabase tables. **Bootcamp acceptance: 8/8** — see [`docs/BE-SC-MERKLE-ACCEPTANCE-STATUS.md`](docs/BE-SC-MERKLE-ACCEPTANCE-STATUS.md).
 - Devnet + bankrun (`pnpm test:devnet`): **98 passing, 1 pending** — live breakdown in [`docs/DEVNET_TEST_RESULTS.md`](docs/DEVNET_TEST_RESULTS.md) (devnet RPC 75 + bankrun 24; T68 pending on RPC, covered by clock suite)
 - Native SOL tests: `tests/vesting-native-sol.spec.ts` via **solana-bankrun** (12 tests covering full SOL lifecycle)
