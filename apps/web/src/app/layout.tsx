@@ -44,7 +44,7 @@ export default function RootLayout({
 }) {
   const analyticsEnabled = process.env.NEXT_PUBLIC_ENABLE_VERCEL_ANALYTICS === "true";
   return (
-    <html lang="en" className={cn(spaceGrotesk.variable, jetbrainsMono.variable, "font-sans", geist.variable)}>
+    <html lang="en" className={cn(spaceGrotesk.variable, jetbrainsMono.variable, "font-sans", geist.variable)} suppressHydrationWarning>
       <body suppressHydrationWarning>
         <ThemeProvider>
           <QueryProvider>

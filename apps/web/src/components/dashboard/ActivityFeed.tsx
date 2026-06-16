@@ -10,6 +10,14 @@ import {
   truncateSig,
 } from "@/lib/vesting/timeline-helpers";
 import { explorerTxUrl } from "@/lib/sol/cluster";
+import { formatUsd } from "@/lib/vesting/display";
+import { POPULAR_TOKENS } from "@/lib/constants/popular-tokens";
+import { NATIVE_SOL_MINT_ADDRESS } from "@/lib/sol/auto-wrap";
+
+function getMintSymbol(mint: string): string {
+  if (mint === NATIVE_SOL_MINT_ADDRESS) return "SOL";
+  return POPULAR_TOKENS.find((t) => t.mint === mint)?.symbol ?? mint.slice(0, 4).toUpperCase();
+}
 
 const API_MAX = 100;
 const LOAD_INCREMENT = 20;
@@ -17,9 +25,15 @@ const LOAD_INCREMENT = 20;
 function ActivityFeedRow({
   event,
   mintDecimals,
+  mintByTree,
+  decimalsMap,
+  pricesMap,
 }: {
   event: ActivityEvent;
   mintDecimals?: number | null;
+  mintByTree?: Map<string, string>;
+  decimalsMap?: Map<string, number>;
+  pricesMap?: Map<string, number | null>;
 }) {
   const config = EVENT_CONFIG[event.type] ?? {
     icon: "•",
@@ -27,6 +41,24 @@ function ActivityFeedRow({
     label: event.type,
   };
 
+  // Per-event decimal + mint lookup: treeAddress → mint → decimals
+  const eventMint = mintByTree?.get(event.treeAddress) ?? null;
+  const resolvedDecimals = (() => {
+    if (eventMint && decimalsMap) return decimalsMap.get(eventMint) ?? null;
+    return mintDecimals ?? null;
+  })();
+
+  // USD value for claim-type events
+  const eventUsd = (() => {
+    if (event.type !== "claimed" && event.type !== "withdrawn") return null;
+    const rawAmount = event.data?.amount as string | undefined;
+    if (!rawAmount || !eventMint || resolvedDecimals == null) return null;
+    const price = pricesMap?.get(eventMint);
+    if (!price || price === 0) return null;
+    return (Number(rawAmount) / Math.pow(10, resolvedDecimals)) * price;
+  })();
+
+  const eventSymbol = eventMint ? getMintSymbol(eventMint) : null;
   const campaignLabel = event.campaignName ?? `${event.treeAddress.slice(0, 4)}...${event.treeAddress.slice(-4)}`;
   const explorerUrl = explorerTxUrl(event.signature);
 
@@ -40,8 +72,16 @@ function ActivityFeedRow({
       </div>
       <div className="min-w-0 flex-1">
         <p className="text-[13px] text-secondary-foreground">
-          {eventDescription(event, mintDecimals ?? null)}
+          {eventDescription(event, resolvedDecimals)}
+          {eventSymbol && (event.type === "claimed" || event.type === "withdrawn") && (
+            <span className="ml-1 font-semibold text-foreground">{eventSymbol}</span>
+          )}
         </p>
+        {eventUsd !== null && eventUsd > 0 && (
+          <div className="mt-0.5 font-mono text-[10px] text-muted-foreground/70">
+            ≈ {formatUsd(eventUsd)}
+          </div>
+        )}
         <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 font-mono text-[10px] text-muted-foreground">
           <Link
             href={`/campaign/${event.treeAddress}`}
@@ -87,11 +127,17 @@ export function ActivityFeed({
   address,
   limit = 20,
   mintDecimals,
+  mintByTree,
+  decimalsMap,
+  pricesMap,
   viewAllHref,
 }: {
   address: string;
   limit?: number;
   mintDecimals?: number | null;
+  mintByTree?: Map<string, string>;
+  decimalsMap?: Map<string, number>;
+  pricesMap?: Map<string, number | null>;
   viewAllHref?: string;
 }) {
   const [currentLimit, setCurrentLimit] = useState(limit);
@@ -145,6 +191,9 @@ export function ActivityFeed({
                 key={`${event.signature}-${event.type}`}
                 event={event}
                 mintDecimals={mintDecimals}
+                mintByTree={mintByTree}
+                decimalsMap={decimalsMap}
+                pricesMap={pricesMap}
               />
             ))}
           </div>

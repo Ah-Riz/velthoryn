@@ -33,6 +33,99 @@ export function mixedMintAggregateSub(mintCount: number, baseSub?: string): stri
   return baseSub ? `${baseSub} · ${note}` : note;
 }
 
+/**
+ * When campaigns span mints with different decimals, format each mint's amount
+ * separated by " · " (not "+" — these are different assets, not addable).
+ *
+ * Example: formatMintBreakdown(mintSums, 'entitled', decimalsMap)
+ *   → "17.875 · 2.5"
+ */
+export function formatMintBreakdown(
+  mintSums: Map<string, { entitled: bigint; vested: bigint; claimed: bigint; claimable: bigint }>,
+  field: "entitled" | "vested" | "claimed" | "claimable",
+  decimalsMap: Map<string, number>,
+): string {
+  const parts: string[] = [];
+  for (const [mint, sums] of mintSums) {
+    const decimals = decimalsMap.get(mint) ?? null;
+    parts.push(formatTokenAmount(sums[field], decimals));
+  }
+  return parts.join(" · ") || "—";
+}
+
+/** Sub-label for the multi-mint case when amounts ARE already formatted (not raw). */
+export function multiMintSub(mintCount: number, baseSub?: string): string | undefined {
+  const note = `${mintCount} token types`;
+  return baseSub ? `${baseSub} · ${note}` : note;
+}
+
+/**
+ * Same as formatSummedMintAmounts but for a plain mint→amount map (e.g. TVL).
+ */
+export function formatSummedAmounts(
+  mintAmounts: Map<string, bigint>,
+  decimalsMap: Map<string, number>,
+): string {
+  if (mintAmounts.size === 0) return "—";
+
+  let maxDecimals = 0;
+  for (const [mint] of mintAmounts) {
+    const dec = decimalsMap.get(mint);
+    if (dec === undefined) return "—";
+    if (dec > maxDecimals) maxDecimals = dec;
+  }
+
+  let total = 0n;
+  for (const [mint, amount] of mintAmounts) {
+    const dec = decimalsMap.get(mint)!;
+    total += amount * (10n ** BigInt(maxDecimals - dec));
+  }
+
+  return formatTokenAmount(total, maxDecimals);
+}
+
+/**
+ * Sums amounts across mints by normalizing each to the highest decimal before adding,
+ * so 1 SOL (9 dec) + 17 USDC (6 dec) displays as "18", not raw gibberish.
+ * Returns "—" if any mint's decimal is still loading.
+ */
+export function formatSummedMintAmounts(
+  mintSums: Map<string, { entitled: bigint; vested: bigint; claimed: bigint; claimable: bigint }>,
+  field: "entitled" | "vested" | "claimed" | "claimable",
+  decimalsMap: Map<string, number>,
+): string {
+  if (mintSums.size === 0) return "—";
+
+  let maxDecimals = 0;
+  for (const [mint] of mintSums) {
+    const dec = decimalsMap.get(mint);
+    if (dec === undefined) return "—";
+    if (dec > maxDecimals) maxDecimals = dec;
+  }
+
+  let total = 0n;
+  for (const [mint, sums] of mintSums) {
+    const dec = decimalsMap.get(mint)!;
+    total += sums[field] * (10n ** BigInt(maxDecimals - dec));
+  }
+
+  return formatTokenAmount(total, maxDecimals);
+}
+
+/**
+ * Format a USD dollar value with appropriate scale suffix.
+ * Examples: 1500 → "$1,500.00", 2_000_000 → "$2.00M"
+ */
+export function formatUsd(value: number): string {
+  if (value === 0) return "$0.00";
+  if (value < 0.01) return "< $0.01";
+  if (value >= 1_000_000_000) return `$${(value / 1_000_000_000).toFixed(2)}B`;
+  if (value >= 1_000_000) return `$${(value / 1_000_000).toFixed(2)}M`;
+  if (value >= 1_000)
+    return `$${value.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  return `$${value.toFixed(2)}`;
+}
+
 export function getVestingTypeLabel(releaseType: number): string {
   return TYPE_LABELS[releaseType] ?? "Unknown";
 }

@@ -13,6 +13,7 @@ import { NotFoundError } from "@/lib/api/errors";
 import { withRoute } from "@/lib/api/route-wrapper";
 import { GRACE_PERIOD_SECS } from "@/lib/api/tx-builder";
 import { computeInstantRefundEligible } from "@/lib/api/instant-refund";
+import { buildVestingCurve } from "@/lib/vesting/schedule";
 
 async function getCampaignByAddressHandler(
   _request: NextRequest,
@@ -152,6 +153,21 @@ async function getCampaignByAddressHandler(
     nowSecs,
   });
 
+  const cancelledAtBigint = campaign.cancelledAt === null ? null : BigInt(campaign.cancelledAt);
+  const vestingCurve = campaign.leafCount > 1
+    ? buildVestingCurve(
+        latestLeaves.map((l) => ({
+          amount: BigInt(l.amount),
+          releaseType: l.releaseType,
+          startTime: BigInt(l.startTime),
+          cliffTime: BigInt(l.cliffTime),
+          endTime: BigInt(l.endTime),
+        })),
+        totalSupply,
+        cancelledAtBigint,
+      )
+    : null;
+
   return jsonResponse({
     treeAddress: campaign.treeAddress,
     creator: campaign.creator,
@@ -192,6 +208,7 @@ async function getCampaignByAddressHandler(
           milestoneIdx: latestLeaves[0].milestoneIdx,
         }
       : null,
+    vestingCurve,
   });
 }
 

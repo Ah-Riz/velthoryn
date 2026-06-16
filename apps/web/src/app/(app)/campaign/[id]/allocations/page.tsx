@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { use, useCallback, useEffect, useState } from "react";
+import { use, useCallback, useEffect, useMemo, useState } from "react";
 import { useWallet } from "@solana/wallet-adapter-react";
 import { PublicKey } from "@solana/web3.js";
 import { BN } from "@coral-xyz/anchor";
@@ -113,6 +113,19 @@ export default function CampaignAllocationsPage({
   const detail = campaignDetailQuery.data;
   const { mintDecimals } = useMintInfo(detail?.mint ?? "");
   const decimals = mintDecimals ?? 9; // default SOL decimals
+
+  // beneficiary → raw claimed amount string, for AllocationEditor floor validation
+  const claimedAmountMap = useMemo(() => {
+    const map: Record<string, string> = {};
+    if (detail?.recipients) {
+      for (const r of detail.recipients) {
+        if (r.claimedAmount && r.claimedAmount !== "0") {
+          map[r.beneficiary] = r.claimedAmount;
+        }
+      }
+    }
+    return map;
+  }, [detail?.recipients]);
 
   // Fetch full leaf data (with schedule) for the editor
   const [fullLeaves, setFullLeaves] = useState<Array<{
@@ -356,6 +369,8 @@ export default function CampaignAllocationsPage({
               loading={submitting}
               onSubmit={handleSubmit}
               canRotate={canRotate}
+              claimedAmounts={claimedAmountMap}
+              mintDecimals={decimals}
             />
           )}
         </div>

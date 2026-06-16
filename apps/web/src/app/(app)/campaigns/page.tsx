@@ -7,6 +7,7 @@ import { PublicKey } from "@solana/web3.js";
 import { useCampaignList } from "@/hooks/useCampaignList";
 import { useBeneficiaryCampaigns } from "@/hooks/useBeneficiaryCampaigns";
 import { useLocalCampaigns } from "@/hooks/useLocalCampaigns";
+import { useMintPrices } from "@/hooks/useMintPrices";
 import { CampaignRow } from "@/components/campaign/list/CampaignRow";
 import { GracePeriodCountdown } from "@/components/campaign/detail/GracePeriodCountdown";
 import { EmptyState } from "@/components/campaign/list/EmptyState";
@@ -20,6 +21,7 @@ import {
 } from "@/lib/vesting/list";
 import { isStreamSettledLocal } from "@/lib/stream/persist";
 import { POPULAR_TOKENS } from "@/lib/constants/popular-tokens";
+import { NATIVE_SOL_MINT_ADDRESS } from "@/lib/sol/auto-wrap";
 
 type TabKey = "all" | "recipient" | "sender" | "action";
 
@@ -84,14 +86,15 @@ type StreamRow = {
   counterpartyLabel: string;
   counterpartyValue: string;
   claimableRaw?: bigint;
+  claimedRaw?: bigint;
   metadata: { name?: string; description?: string; logoUri?: string } | null;
 };
 
 const TABS: Array<{ key: TabKey; label: string }> = [
-  { key: "all", label: "All" },
-  { key: "recipient", label: "As Recipient" },
-  { key: "sender", label: "As Sender" },
   { key: "action", label: "Needs Action" },
+  { key: "all", label: "All" },
+  { key: "recipient", label: "Recipient" },
+  { key: "sender", label: "Sender" },
 ];
 
 function formatDate(ts: number) {
@@ -156,10 +159,42 @@ function getSenderStateText(campaign: SenderCampaign): string {
   return `${campaign.leafCount} ${campaign.leafCount === 1 ? "recipient" : "recipients"}`;
 }
 
+type MintInfo = { symbol: string; name: string; logoURI?: string };
+
+function getMintInfo(mint: string): MintInfo {
+  if (mint === NATIVE_SOL_MINT_ADDRESS) {
+    return {
+      symbol: "SOL",
+      name: "Solana · Native",
+      logoURI:
+        "https://raw.githubusercontent.com/solana-labs/token-list/main/assets/mainnet/So11111111111111111111111111111111111111112/logo.png",
+    };
+  }
+  const p = POPULAR_TOKENS.find((t) => t.mint === mint);
+  if (p) return { symbol: p.symbol, name: p.name, logoURI: p.logoURI };
+  return { symbol: mint.slice(0, 4).toUpperCase(), name: `${mint.slice(0, 8)}…` };
+}
+
+function generateTitle(
+  mintInfo: MintInfo,
+  typeLabel: string,
+  primaryRole: "sender" | "recipient",
+): string {
+  const { symbol } = mintInfo;
+  if (typeLabel === "Single Stream") return `${symbol} Stream`;
+  if (primaryRole === "recipient") return `${symbol} Distribution`;
+  return `${symbol} Campaign`;
+}
+
+function rawToNumber(raw: bigint, decimals: number): number {
+  if (decimals === 0) return Number(raw);
+  return Number(raw) / Math.pow(10, decimals);
+}
+
 export default function CampaignsPage() {
   const { publicKey } = useWallet();
   const { connection } = useConnection();
-  const [activeTab, setActiveTab] = useState<TabKey>("all");
+  const [activeTab, setActiveTab] = useState<TabKey>("action");
   const [search, setSearch] = useState("");
   const [mintDecimals, setMintDecimals] = useState<Record<string, number>>({});
   const [decimalsLoading, setDecimalsLoading] = useState(false);
@@ -302,6 +337,7 @@ export default function CampaignsPage() {
         status: getSenderStreamStatus(campaign),
         amountLabel: "Total Supply",
         amountRaw: toBigInt(campaign.totalSupply),
+        claimedRaw: toBigInt(campaign.totalClaimed),
         nextLabel: "Recipients",
         nextValue: getSenderStateText(campaign),
         typeLabel: campaign.leafCount === 1 ? "Single Stream" : "Campaign",
@@ -331,6 +367,9 @@ export default function CampaignsPage() {
       const claimableRaw = isMultiLeaf
         ? getMultiLeafClaimableAmount(campaigns, nowTs)
         : getRecipientClaimableAmount(first, nowTs);
+      const claimedRaw = isMultiLeaf
+        ? campaigns.reduce((sum, c) => sum + toBigInt(c.myClaimed), 0n)
+        : toBigInt(first.myClaimed);
 
       const releaseStateText = isMultiLeaf
         ? (status === "Claimed" ? "Fully claimed"
@@ -360,6 +399,7 @@ export default function CampaignsPage() {
         counterpartyLabel: "Sender",
         counterpartyValue: first.creator,
         claimableRaw,
+        claimedRaw,
         metadata: first.metadata,
       };
 
@@ -377,6 +417,13 @@ export default function CampaignsPage() {
 
     return [...map.values()].sort((a, b) => b.createdAt - a.createdAt);
   }, [recipientCampaigns, senderCampaigns, walletAddress]);
+
+  // Mint prices for USD values
+  const mintAddresses = useMemo(
+    () => [...new Set(rows.map((r) => r.mint).filter(Boolean))],
+    [rows],
+  );
+  const { pricesMap } = useMintPrices(mintAddresses);
 
   const actionCount = useMemo(() => {
     let n = 0;
@@ -452,11 +499,16 @@ export default function CampaignsPage() {
 
   return (
     <div className="mx-auto max-w-6xl space-y-6 pb-12">
+      {/* Page header */}
       <div className="rounded-xl sm:rounded-2xl border border-line bg-muted p-4 sm:p-6">
         <div className="flex flex-col gap-3 sm:gap-4 lg:flex-row lg:items-end lg:justify-between">
           <div>
-            <div className="mb-2 font-mono text-[11px] font-medium uppercase tracking-[0.18em] text-primary/70">Streams</div>
-            <h1 className="text-[22px] sm:text-[28px] font-semibold tracking-tight text-foreground">Vesting Streams</h1>
+            <div className="mb-2 font-mono text-[11px] font-medium uppercase tracking-[0.18em] text-primary/70">
+              Streams
+            </div>
+            <h1 className="text-[22px] sm:text-[28px] font-semibold tracking-tight text-foreground">
+              Vesting Streams
+            </h1>
             <p className="mt-1 font-mono text-[12px] text-muted-foreground">
               Track streams you received and streams you created.
             </p>
@@ -474,7 +526,7 @@ export default function CampaignsPage() {
             )}
             <Link
               href="/campaign/create"
-              className="rounded-xl bg-primary px-4 py-2.5 text-[13px] font-medium text-white transition hover:bg-primary"
+              className="rounded-xl bg-primary px-4 py-2.5 text-[13px] font-medium text-white transition hover:bg-primary/90"
             >
               New Stream
             </Link>
@@ -484,6 +536,11 @@ export default function CampaignsPage() {
 
       {!publicKey ? (
         <div className="rounded-2xl border border-dashed border-line bg-muted/60 px-8 py-16 text-center">
+          <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-2xl border border-primary/20 bg-primary/[0.07]">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" className="text-accent-light">
+              <rect x="2" y="7" width="20" height="14" rx="2" ry="2" /><path d="M16 7V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v2" />
+            </svg>
+          </div>
           <h2 className="text-[16px] font-semibold text-foreground">Connect your wallet</h2>
           <p className="mt-2 font-mono text-[12px] text-muted-foreground">
             Your sender and recipient streams will appear here.
@@ -491,6 +548,7 @@ export default function CampaignsPage() {
         </div>
       ) : (
         <>
+          {/* Filter bar */}
           <div className="rounded-xl sm:rounded-2xl border border-line bg-muted p-3 sm:p-4">
             <div className="flex flex-col gap-3 sm:gap-4 lg:flex-row lg:items-center lg:justify-between">
               {/* Mobile: native select */}
@@ -507,23 +565,32 @@ export default function CampaignsPage() {
                   ))}
                 </select>
               </div>
+
               {/* Desktop: tab buttons */}
               <div className="hidden sm:flex flex-wrap gap-1.5 sm:gap-2">
                 {TABS.map((tab) => {
                   const active = activeTab === tab.key;
+                  const isAction = tab.key === "action";
+                  const hasAction = isAction && actionCount > 0;
+                  const btnClass = hasAction && active
+                    ? "border border-amber-500/40 bg-amber-500/15 text-amber-400"
+                    : hasAction
+                      ? "border border-amber-500/25 bg-amber-500/[0.07] text-amber-500/80 hover:border-amber-500/40 hover:bg-amber-500/10 hover:text-amber-400"
+                      : active
+                        ? "border border-primary/40 bg-primary/15 text-accent-light"
+                        : "border border-line bg-transparent text-muted-foreground hover:border-line-hover hover:text-secondary-foreground";
                   return (
                     <button
                       key={tab.key}
                       type="button"
                       onClick={() => setActiveTab(tab.key)}
-                      className={`rounded-full px-3 py-1.5 sm:px-4 sm:py-2 font-mono text-[11px] transition ${
-                        active
-                          ? "border border-primary/40 bg-primary/15 text-accent-light"
-                          : "border border-line bg-transparent text-muted-foreground hover:border-line-hover hover:text-secondary-foreground"
-                      }`}
+                      className={`rounded-full px-3 py-1.5 sm:px-4 sm:py-2 font-mono text-[11px] transition ${btnClass}`}
                     >
-                      {tab.label} ({tabCounts[tab.key]})
-                      {tab.key === "action" && !active && actionCount > 0 && (
+                      {tab.label}
+                      <span className={`ml-1.5 ${active ? "opacity-70" : "opacity-60"}`}>
+                        ({tabCounts[tab.key]})
+                      </span>
+                      {isAction && !active && actionCount > 0 && (
                         <span className="ml-1.5 inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-amber-500/20 px-1 text-[10px] font-medium text-amber-700 dark:text-amber-400">
                           {actionCount}
                         </span>
@@ -538,17 +605,19 @@ export default function CampaignsPage() {
                   type="text"
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
-                  placeholder="Search by campaign, address, or token"
+                  placeholder="Search by token, address, or type"
                   className="w-full rounded-xl border border-line bg-background px-4 py-2.5 font-mono text-[12px] text-secondary-foreground outline-none placeholder:text-muted-foreground transition focus:border-primary/40"
                 />
               </div>
             </div>
           </div>
 
+          {/* Local fallback banner */}
           {showingLocalFallback ? (
             <div className="flex items-center gap-3 rounded-2xl border border-amber-500/20 bg-amber-500/[0.06] px-5 py-3.5">
               <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="shrink-0 text-amber-700 dark:text-amber-400">
-                <path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" /><line x1="12" y1="9" x2="12" y2="13" /><line x1="12" y1="17" x2="12.01" y2="17" />
+                <path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" />
+                <line x1="12" y1="9" x2="12" y2="13" /><line x1="12" y1="17" x2="12.01" y2="17" />
               </svg>
               <p className="flex-1 text-[12px] text-amber-200">
                 Indexed API unavailable — showing local cache. Some streams may be missing.
@@ -562,23 +631,31 @@ export default function CampaignsPage() {
             </div>
           ) : null}
 
+          {/* Content */}
           {isLoading ? (
             <div className="space-y-3">
-              {[...Array(5)].map((_, i) => (
+              {[...Array(4)].map((_, i) => (
                 <div
                   key={i}
-                  className="flex animate-pulse items-center gap-4 rounded-2xl border border-line bg-foreground/10 px-5 py-4"
+                  className="animate-pulse rounded-2xl border border-line bg-muted p-5"
                 >
-                  <div className="h-9 w-9 shrink-0 rounded-xl bg-foreground/10" />
-                  <div className="flex-1 space-y-2">
-                    <div className="h-3.5 w-1/3 rounded-full bg-foreground/10" />
-                    <div className="h-2.5 w-1/2 rounded-full bg-foreground/[0.06]" />
+                  <div className="flex items-center gap-3">
+                    <div className="h-9 w-9 shrink-0 rounded-full bg-foreground/10" />
+                    <div className="flex-1 space-y-2">
+                      <div className="h-4 w-1/3 rounded-full bg-foreground/10" />
+                      <div className="h-3 w-1/4 rounded-full bg-foreground/[0.06]" />
+                    </div>
+                    <div className="h-5 w-16 rounded-full bg-secondary" />
                   </div>
-                  <div className="hidden space-y-2 sm:block">
-                    <div className="h-3 w-20 rounded-full bg-secondary" />
-                    <div className="h-2.5 w-16 rounded-full bg-surface-hover" />
+                  <div className="mt-4 h-1.5 w-full rounded-full bg-foreground/[0.06]" />
+                  <div className="mt-4 grid grid-cols-4 gap-4 border-t border-border pt-4">
+                    {[...Array(4)].map((_, j) => (
+                      <div key={j} className="space-y-1.5">
+                        <div className="h-2.5 w-12 rounded-full bg-foreground/[0.06]" />
+                        <div className="h-3.5 w-16 rounded-full bg-foreground/10" />
+                      </div>
+                    ))}
                   </div>
-                  <div className="h-6 w-16 shrink-0 rounded-lg bg-secondary" />
                 </div>
               ))}
             </div>
@@ -599,14 +676,16 @@ export default function CampaignsPage() {
           ) : filteredRows.length === 0 ? (
             activeTab === "action" ? (
               <div className="rounded-2xl border border-line bg-muted px-8 py-16 text-center">
-                <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-2xl border border-violet/20 bg-violet/10">
-                  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#14f1d9" strokeWidth="2">
+                <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-2xl border border-emerald-500/20 bg-emerald-500/[0.07]">
+                  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#22c55e" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                     <path d="M22 11.08V12a10 10 0 11-5.93-9.14" />
                     <polyline points="22 4 12 14.01 9 11.01" />
                   </svg>
                 </div>
                 <h2 className="text-[16px] font-semibold text-foreground">All caught up</h2>
-                <p className="mt-2 font-mono text-[12px] text-muted-foreground">No campaigns need attention right now.</p>
+                <p className="mt-2 font-mono text-[12px] text-muted-foreground">
+                  No campaigns need attention right now.
+                </p>
               </div>
             ) : search.trim() ? (
               <EmptyState
@@ -629,25 +708,48 @@ export default function CampaignsPage() {
               <EmptyState
                 title="No streams yet"
                 body="Create a vesting stream or ask a project to add you as a recipient."
-                actionHref="/campaign/create"
-                actionLabel="Create stream"
+                showCreateButton
               />
             )
           ) : (
             <div className="space-y-3 sm:space-y-4">
               {filteredRows.map((row) => {
                 const decimals = mintDecimals[row.mint];
+                const mintInfo = getMintInfo(row.mint);
+                const price = pricesMap.get(row.mint) ?? null;
+
                 const amountDisplay = decimals !== undefined
                   ? formatWithDecimals(row.amountRaw, decimals)
                   : "...";
+
                 const claimableDisplay =
                   row.claimableRaw !== undefined && decimals !== undefined
                     ? formatWithDecimals(row.claimableRaw, decimals)
                     : null;
+
                 const secondaryAmountDisplay =
                   row.secondaryAmountRaw !== undefined && decimals !== undefined
                     ? formatWithDecimals(row.secondaryAmountRaw, decimals)
                     : null;
+
+                // USD values
+                const usdValue =
+                  price != null && decimals !== undefined
+                    ? rawToNumber(row.amountRaw, decimals) * price
+                    : null;
+                const claimableUsd =
+                  price != null && decimals !== undefined && row.claimableRaw !== undefined
+                    ? rawToNumber(row.claimableRaw, decimals) * price
+                    : null;
+
+                // Progress (claimed %)
+                const progressPct =
+                  row.amountRaw > 0n && row.claimedRaw !== undefined && decimals !== undefined
+                    ? Math.min(100, Math.round(Number(row.claimedRaw * 10000n / row.amountRaw) / 100))
+                    : 0;
+
+                const generatedTitle = row.metadata?.name ?? generateTitle(mintInfo, row.typeLabel, row.primaryRole);
+
                 const senderMatch =
                   activeTab === "action" && (row.role === "sender" || row.role === "both")
                     ? senderCampaigns.find((c) => c.treeAddress === row.treeAddress)
@@ -667,12 +769,18 @@ export default function CampaignsPage() {
                     role={row.role}
                     status={row.status}
                     typeLabel={row.typeLabel}
-                    title={row.metadata?.name || `Campaign #${row.campaignId}`}
+                    title={generatedTitle}
+                    mintSymbol={mintInfo.symbol}
+                    mintName={mintInfo.name}
+                    mintLogoURI={mintInfo.logoURI}
                     amountLabel={row.amountLabel}
                     amountDisplay={amountDisplay}
                     secondaryAmountLabel={row.secondaryAmountLabel}
                     secondaryAmountDisplay={secondaryAmountDisplay}
                     claimableDisplay={row.primaryRole === "recipient" ? claimableDisplay : null}
+                    claimableUsd={row.primaryRole === "recipient" ? claimableUsd : null}
+                    usdValue={usdValue}
+                    progressPct={progressPct}
                     counterpartyLabel={row.counterpartyLabel}
                     counterpartyValue={truncateAddress(row.counterpartyValue)}
                     mintValue={truncateAddress(row.mint)}

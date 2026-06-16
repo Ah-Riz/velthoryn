@@ -64,6 +64,12 @@ interface CampaignDetail {
     endTime: number;
     milestoneIdx: number;
   } | null;
+  vestingCurve: {
+    minStartTime: number;
+    maxEndTime: number;
+    totalSupply: string;
+    samples: Array<{ t: number; vested: string }>;
+  } | null;
 }
 
 export function useCampaignDetail(treeAddress: string | undefined) {

@@ -551,13 +551,13 @@ body:has(.landing-page)::-webkit-scrollbar {
 .lp-step .diag {
   margin-top: auto;
   padding-top: 24px;
-  height: 88px;
+  height: 140px;
   background: var(--lp-ink);
   border-radius: 10px;
   display: flex; align-items: center; justify-content: center;
   border: 1px solid var(--lp-line);
 }
-.lp-step .diag svg { width: 80%; height: 70%; }
+.lp-step .diag svg { width: 92%; height: 88%; }
 
 /* ── Stats banner ─────────────────────────────────────── */
 .lp-stats-banner {

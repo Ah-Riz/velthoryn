@@ -36,6 +36,17 @@ export default function ActivityPage() {
     return unique.size === 1 ? (vals[0] ?? null) : null;
   }, [mintAddresses, decimalsMap]);
 
+  const mintByTree = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const c of (senderQuery.data?.campaigns ?? []) as Array<{ treeAddress: string; mint: string }>) {
+      if (c.mint) map.set(c.treeAddress, c.mint);
+    }
+    for (const c of vestingCampaigns) {
+      if (c.mint) map.set(c.treeAddress, c.mint);
+    }
+    return map;
+  }, [senderQuery.data?.campaigns, vestingCampaigns]);
+
   return (
     <div className="mx-auto max-w-5xl space-y-6">
       <div>
@@ -76,6 +87,8 @@ export default function ActivityPage() {
           address={walletAddress}
           limit={50}
           mintDecimals={activityMintDecimals}
+          mintByTree={mintByTree}
+          decimalsMap={decimalsMap}
         />
       )}
     </div>

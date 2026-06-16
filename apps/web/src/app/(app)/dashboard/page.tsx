@@ -15,12 +15,21 @@ import { isStreamSettledLocal } from "@/lib/stream/persist";
 import {
   formatCountdown,
   formatTokenAmount,
+  formatSummedMintAmounts,
+  formatUsd,
   getGracePeriodState,
   getVestingTypeLabel,
-  mixedMintAggregateSub,
 } from "@/lib/vesting/display";
 import { useMintDecimals } from "@/hooks/useMintDecimals";
+import { useMintPrices } from "@/hooks/useMintPrices";
+import { POPULAR_TOKENS } from "@/lib/constants/popular-tokens";
+import { NATIVE_SOL_MINT_ADDRESS } from "@/lib/sol/auto-wrap";
 import { truncateAddress } from "@/lib/vesting/timeline-helpers";
+
+function getMintSymbol(mint: string): string {
+  if (mint === NATIVE_SOL_MINT_ADDRESS) return "SOL";
+  return POPULAR_TOKENS.find((t) => t.mint === mint)?.symbol ?? mint.slice(0, 4).toUpperCase();
+}
 
 function ActionCard({
   href,
@@ -103,13 +112,9 @@ export default function DashboardPage() {
   );
   const { decimalsMap, isLoading: decimalsLoading } = useMintDecimals(allMintAddresses);
 
-  const vestingAggregateDecimals = useMemo(() => {
-    if (vestingMintAddresses.length === 0) return null;
-    const vals = vestingMintAddresses.map((m) => decimalsMap.get(m));
-    if (vals.some((d) => d === undefined)) return null;
-    const unique = new Set(vals);
-    return unique.size === 1 ? (vals[0] ?? null) : null;
-  }, [vestingMintAddresses, decimalsMap]);
+  const claimableFormatted = vestingSummary
+    ? formatSummedMintAmounts(vestingSummary.mintSums, "claimable", decimalsMap)
+    : "—";
 
   const activityMintDecimals = useMemo(() => {
     if (allMintAddresses.length === 0) return null;
@@ -119,13 +124,32 @@ export default function DashboardPage() {
     return unique.size === 1 ? (vals[0] ?? null) : null;
   }, [allMintAddresses, decimalsMap]);
 
-  const tvlAggregateDecimals = useMemo(() => {
-    if (senderMintAddresses.length === 0) return null;
-    const vals = senderMintAddresses.map((m) => decimalsMap.get(m));
-    if (vals.some((d) => d === undefined)) return null;
-    const unique = new Set(vals);
-    return unique.size === 1 ? (vals[0] ?? null) : null;
-  }, [senderMintAddresses, decimalsMap]);
+  // treeAddress → mint — used for per-event decimal resolution in ActivityFeed
+  const mintByTree = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const c of senderCampaigns) {
+      if (c.mint) map.set(c.treeAddress, c.mint);
+    }
+    for (const c of vestingCampaigns) {
+      if (c.mint) map.set(c.treeAddress, c.mint);
+    }
+    return map;
+  }, [senderCampaigns, vestingCampaigns]);
+
+  const mintTvlSums = useMemo(() => {
+    const map = new Map<string, bigint>();
+    for (const c of senderCampaigns) {
+      if (!c.mint) continue;
+      // Exclude campaigns where tokens are no longer locked in the vault
+      if (c.instantRefunded) continue; // all tokens returned to creator
+      if (c.streamSettled) continue;   // tokens distributed; unvested returned
+      const supply = BigInt(c.totalSupply?.toString() ?? "0");
+      const claimed = BigInt(c.totalClaimed?.toString() ?? "0");
+      const locked = supply > claimed ? supply - claimed : 0n;
+      map.set(c.mint, (map.get(c.mint) ?? 0n) + locked);
+    }
+    return map;
+  }, [senderCampaigns]);
 
   function fmtAmount(raw: bigint, campaign: (typeof vestingCampaigns)[number]): string {
     return formatTokenAmount(raw, decimalsMap.get(campaign.mint) ?? null);
@@ -241,11 +265,84 @@ export default function DashboardPage() {
       .slice(0, 5);
   }, [vestingCampaigns]);
 
+  const tvlMintAddresses = useMemo(() => [...mintTvlSums.keys()], [mintTvlSums]);
+  const { pricesMap, isLoading: pricesLoading } = useMintPrices(allMintAddresses);
+
+  const { tvlValue, tvlSub } = useMemo(() => {
+    if (mintTvlSums.size === 0) return { tvlValue: "$0.00", tvlSub: "No active vesting streams" };
+
+    let totalUsd = 0;
+    let pricedCount = 0;
+    const unpricedParts: string[] = [];
+
+    for (const [mint, locked] of mintTvlSums) {
+      const dec = decimalsMap.get(mint);
+      const price = pricesMap.get(mint);
+      if (price == null || price === 0 || dec === undefined) {
+        if (dec !== undefined) {
+          const humanAmt = Number(locked) / Math.pow(10, dec);
+          unpricedParts.push(
+            `${humanAmt % 1 === 0 ? humanAmt.toLocaleString() : humanAmt.toFixed(4).replace(/\.?0+$/, "")} ${getMintSymbol(mint)}`,
+          );
+        }
+        continue;
+      }
+      totalUsd += (Number(locked) / Math.pow(10, dec)) * price;
+      pricedCount++;
+    }
+
+    if (pricedCount === 0) {
+      // No price data for any token — show token amounts instead
+      if (unpricedParts.length === 1) {
+        const [amount, symbol] = unpricedParts[0]!.split(" ");
+        return { tvlValue: amount!, tvlSub: `${symbol} locked` };
+      }
+      return { tvlValue: "—", tvlSub: unpricedParts.join(" · ") };
+    }
+
+    const sub =
+      unpricedParts.length > 0
+        ? `Est. USD · excl. ${unpricedParts.join(" + ")}`
+        : "Estimated USD";
+    return { tvlValue: formatUsd(totalUsd), tvlSub: sub };
+  }, [mintTvlSums, pricesMap, decimalsMap]);
+
+  const portfolioValueUsd = useMemo(() => {
+    if (!vestingSummary || vestingSummary.mintSums.size === 0) return null;
+    let total = 0;
+    let hasPriced = false;
+    for (const [mint, sums] of vestingSummary.mintSums) {
+      const dec = decimalsMap.get(mint);
+      const price = pricesMap.get(mint);
+      if (dec === undefined || price == null || price === 0) continue;
+      const div = Math.pow(10, dec);
+      total += (Number(sums.entitled) / div - Number(sums.claimed) / div) * price;
+      hasPriced = true;
+    }
+    return hasPriced ? total : null;
+  }, [vestingSummary, decimalsMap, pricesMap]);
+
+  const claimableValueUsd = useMemo(() => {
+    if (!vestingSummary || vestingSummary.mintSums.size === 0) return null;
+    let total = 0;
+    let hasPriced = false;
+    for (const [mint, sums] of vestingSummary.mintSums) {
+      const dec = decimalsMap.get(mint);
+      const price = pricesMap.get(mint);
+      if (dec === undefined || price == null || price === 0) continue;
+      total += (Number(sums.claimable) / Math.pow(10, dec)) * price;
+      hasPriced = true;
+    }
+    return hasPriced ? total : null;
+  }, [vestingSummary, decimalsMap, pricesMap]);
+
   // Count-based stats only need sender/recipient DB queries to resolve.
   // localCampaigns is a fallback (only used on DB error) — don't block counts on its slow RPC fetch.
   const countLoading = senderQuery.isLoading || recipientQuery.isLoading;
-  // TVL needs sender mint decimals; other count cards don't.
-  const tvlLoading = countLoading || (senderMintAddresses.length > 0 && decimalsLoading);
+  // TVL needs sender mint decimals + Jupiter prices.
+  const tvlLoading = countLoading || (senderMintAddresses.length > 0 && (decimalsLoading || pricesLoading));
+  // Portfolio hero needs vesting progress + decimals + prices.
+  const portfolioLoading = vestingLoading || (vestingMintAddresses.length > 0 && (decimalsLoading || pricesLoading));
 
   const claimableAmount = vestingSummary?.totalClaimable ?? 0n;
   const claimableStreams = vestingSummary?.claimableCampaigns ?? counts.claimableCount;
@@ -276,31 +373,65 @@ export default function DashboardPage() {
         </div>
       ) : (
         <>
-          {/* Claimable Banner */}
-          {claimableStreams > 0 && (
+          {/* Hero Portfolio Summary */}
+          <div className="grid gap-3 sm:grid-cols-[2fr_1fr]">
+            {/* Claimable Now — Primary Hero */}
             <Link
               href="/portfolio"
-              className="flex items-center gap-2.5 sm:gap-3 rounded-xl sm:rounded-2xl border border-violet/20 bg-violet/[0.04] p-3.5 sm:p-5 transition-all hover:border-violet/35 hover:bg-violet/[0.06]"
+              className="group relative flex flex-col justify-between overflow-hidden rounded-2xl border border-violet/25 bg-violet/[0.04] p-5 transition-all hover:border-violet/40 hover:bg-violet/[0.07] min-h-[120px]"
             >
-              <div className="flex h-8 w-8 sm:h-10 sm:w-10 shrink-0 items-center justify-center rounded-lg sm:rounded-xl border border-violet/20 bg-violet/10 text-violet">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="sm:h-5 sm:w-5">
-                  <path d="M22 11.08V12a10 10 0 11-5.93-9.14" />
-                  <polyline points="22 4 12 14.01 9 11.01" />
-                </svg>
+              <div className="pointer-events-none absolute inset-0 rounded-2xl" style={{ background: "radial-gradient(ellipse at top left, rgba(124,58,237,0.13), transparent 60%)" }} />
+              <div className="relative">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="font-mono text-[10px] font-medium uppercase tracking-[0.18em] text-violet/70">Claimable Now</span>
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="text-muted-foreground/60 transition-transform group-hover:translate-x-0.5 group-hover:text-muted-foreground">
+                    <polyline points="9 18 15 12 9 6" />
+                  </svg>
+                </div>
+                {portfolioLoading ? (
+                  <div className="mt-4 h-10 w-36 animate-pulse rounded-xl bg-foreground/10" />
+                ) : (
+                  <div className="mt-3 text-[38px] sm:text-[50px] font-semibold leading-none tracking-tight text-accent-light">
+                    {claimableValueUsd !== null ? formatUsd(claimableValueUsd) : claimableFormatted}
+                  </div>
+                )}
               </div>
-              <div className="flex-1 min-w-0">
-                <p className="text-[13px] sm:text-[14px] font-medium text-violet">
-                  {claimableStreams} stream{claimableStreams > 1 ? "s" : ""} ready to claim
-                </p>
-                <p className="font-mono text-[10px] sm:text-[11px] text-muted-foreground truncate">
-                  {formatTokenAmount(claimableAmount, vestingAggregateDecimals)} tokens available
-                </p>
+              <div className="relative mt-4 font-mono text-[11px] text-muted-foreground">
+                {claimableStreams > 0
+                  ? `${claimableStreams} stream${claimableStreams > 1 ? "s" : ""} ready to claim`
+                  : "Nothing available to claim right now"}
               </div>
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="shrink-0 text-muted-foreground">
-                <polyline points="9 18 15 12 9 6" />
-              </svg>
             </Link>
-          )}
+
+            {/* Right column: Portfolio Value + Active Streams */}
+            <div className="grid gap-3 grid-rows-2">
+              <div className="relative overflow-hidden rounded-2xl border border-line bg-muted px-4 py-4 transition-colors hover:border-line-hover">
+                <div className="font-mono text-[9px] sm:text-[10px] font-medium uppercase tracking-[0.16em] text-muted-foreground">Portfolio Value</div>
+                {portfolioLoading ? (
+                  <div className="mt-2 h-5 sm:h-6 w-20 animate-pulse rounded-lg bg-foreground/10" />
+                ) : (
+                  <div className="mt-1.5 text-[18px] sm:text-[22px] font-semibold leading-none tracking-tight text-foreground">
+                    {portfolioValueUsd !== null ? formatUsd(portfolioValueUsd) : "—"}
+                  </div>
+                )}
+                <div className="mt-1 font-mono text-[10px] text-muted-foreground truncate">Current unclaimed value</div>
+              </div>
+
+              <div className="relative overflow-hidden rounded-2xl border border-line bg-muted px-4 py-4 transition-colors hover:border-line-hover">
+                <div className="font-mono text-[9px] sm:text-[10px] font-medium uppercase tracking-[0.16em] text-muted-foreground">Active Streams</div>
+                {countLoading ? (
+                  <div className="mt-2 h-5 sm:h-6 w-10 animate-pulse rounded-lg bg-foreground/10" />
+                ) : (
+                  <div className="mt-1.5 text-[18px] sm:text-[22px] font-semibold leading-none tracking-tight text-foreground">
+                    {counts.active}
+                  </div>
+                )}
+                <div className="mt-1 font-mono text-[10px] text-muted-foreground truncate">
+                  {counts.active > 0 ? "Currently vesting" : "No active vesting schedules"}
+                </div>
+              </div>
+            </div>
+          </div>
 
           {/* Needs Attention */}
           {needsAttention.length > 0 && (
@@ -393,26 +524,29 @@ export default function DashboardPage() {
           {/* Summary Stats */}
           <div className="grid grid-cols-2 gap-2 sm:gap-4 lg:grid-cols-3">
             <StatCard label="Total Streams" value={String(counts.total)} sub="All campaigns" loading={countLoading} />
-            <StatCard label="Active" value={String(counts.active)} sub="Currently vesting" accent loading={countLoading} />
+            <StatCard
+              label="Active"
+              value={String(counts.active)}
+              sub={counts.active > 0 ? "Currently vesting" : "No active vesting schedules"}
+              accent
+              loading={countLoading}
+            />
             <StatCard
               label="TVL"
-              value={formatTokenAmount(counts.tvl, tvlAggregateDecimals)}
-              sub={mixedMintAggregateSub(tvlAggregateDecimals !== null ? 1 : senderMintAddresses.length, "Locked value")}
+              value={tvlValue}
+              sub={tvlSub}
               loading={tvlLoading}
             />
             <StatCard label="As Sender" value={String(counts.sender)} sub="Streams you created" loading={countLoading} />
             <StatCard label="As Recipient" value={String(counts.recipient)} sub="Streams you receive" loading={countLoading} />
             <StatCard
               label="Claimable Now"
-              value={formatTokenAmount(claimableAmount, vestingAggregateDecimals)}
-              sub={mixedMintAggregateSub(
-                vestingAggregateDecimals !== null ? 1 : vestingMintAddresses.length,
-                claimableStreams > 0
-                  ? `${claimableStreams} stream${claimableStreams > 1 ? "s" : ""} ready`
-                  : "Ready to withdraw",
-              )}
+              value={claimableValueUsd !== null ? formatUsd(claimableValueUsd) : claimableFormatted}
+              sub={claimableStreams > 0
+                ? `${claimableStreams} stream${claimableStreams > 1 ? "s" : ""} ready`
+                : "Nothing available to claim"}
               accent
-              loading={vestingLoading || (vestingMintAddresses.length > 0 && decimalsLoading)}
+              loading={portfolioLoading}
             />
           </div>
 
@@ -442,8 +576,14 @@ export default function DashboardPage() {
                     <polyline points="22 12 18 12 15 21 9 3 6 12 2 12" />
                   </svg>
                 </div>
-                <p className="mt-3 text-[13px] font-medium text-secondary-foreground">No vesting streams yet</p>
-                <p className="mt-1 font-mono text-[11px] text-muted-foreground">Streams you receive will appear here</p>
+                <p className="mt-3 text-[13px] font-medium text-secondary-foreground">No vesting campaigns yet</p>
+                <p className="mt-1 font-mono text-[11px] text-muted-foreground">Create your first vesting stream to get started</p>
+                <Link
+                  href="/campaign/create"
+                  className="mt-4 rounded-lg border border-primary/25 bg-primary/10 px-4 py-2 font-mono text-[11px] font-medium text-accent-light transition hover:border-primary/40 hover:bg-primary/15"
+                >
+                  Create New Stream
+                </Link>
               </div>
             ) : (
               <VestingProgressGrid
@@ -459,6 +599,9 @@ export default function DashboardPage() {
             address={walletAddress!}
             limit={10}
             mintDecimals={activityMintDecimals}
+            mintByTree={mintByTree}
+            decimalsMap={decimalsMap}
+            pricesMap={pricesMap}
             viewAllHref="/activity"
           />
         </>
@@ -504,29 +647,54 @@ function VestingProgressGrid({
                 !expanded && showExpand && idx >= MOBILE_VESTING_LIMIT ? "hidden sm:block" : ""
               }`}
             >
-              <div className="flex items-center justify-between gap-2">
-                <span className="truncate text-[13px] sm:text-[14px] font-medium text-foreground">{name}</span>
-                <span className="shrink-0 font-mono text-[10px] tracking-[0.1em] text-muted-foreground">
-                  {getVestingTypeLabel(campaign.leaf.releaseType)}
-                </span>
-              </div>
-              <div className="mt-2 sm:mt-3">
-                <div className="h-1 overflow-hidden rounded-full bg-line">
-                  <div
-                    className="h-full rounded-full transition-all duration-500 ease-out"
-                    style={{
-                      width: `${Math.min(100, campaign.progress.progressPercent)}%`,
-                      background: claimable > 0n
-                        ? "linear-gradient(90deg, #7c3aed, #14f1d9)"
-                        : "#7c3aed",
-                    }}
-                  />
-                </div>
-                <div className="mt-1.5 sm:mt-2 font-mono text-[10px] text-muted-foreground">
-                  {fmtAmount(vestedSoFar, campaign)} / {fmtAmount(totalEntitled, campaign)} vested
-                  {" · "}Next: {nextUnlockLabel}
-                </div>
-              </div>
+              {(() => {
+                const isCompleted = campaign.progress.progressPercent >= 100 && claimable === 0n;
+                const isClaimable = claimable > 0n;
+                return (
+                  <>
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="truncate text-[13px] sm:text-[14px] font-medium text-foreground">{name}</span>
+                      <div className="flex shrink-0 items-center gap-1.5">
+                        {isCompleted && (
+                          <span className="rounded-full border border-sky-500/25 bg-sky-500/10 px-1.5 py-0.5 font-mono text-[9px] font-semibold uppercase tracking-wider text-sky-400">
+                            Completed
+                          </span>
+                        )}
+                        {!isCompleted && isClaimable && (
+                          <span className="rounded-full border border-emerald-500/25 bg-emerald-500/10 px-1.5 py-0.5 font-mono text-[9px] font-semibold uppercase tracking-wider text-emerald-400">
+                            Claimable
+                          </span>
+                        )}
+                        <span className="font-mono text-[10px] tracking-[0.1em] text-muted-foreground">
+                          {getVestingTypeLabel(campaign.leaf.releaseType)}
+                        </span>
+                      </div>
+                    </div>
+                    <div className="mt-2 sm:mt-3">
+                      <div className="h-1 overflow-hidden rounded-full bg-line">
+                        <div
+                          className="h-full rounded-full transition-all duration-500 ease-out"
+                          style={{
+                            width: `${Math.min(100, campaign.progress.progressPercent)}%`,
+                            background: isCompleted
+                              ? "#38bdf8"
+                              : isClaimable
+                                ? "linear-gradient(90deg, #7c3aed, #14f1d9)"
+                                : "#7c3aed",
+                          }}
+                        />
+                      </div>
+                      <div className="mt-1.5 sm:mt-2 font-mono text-[10px] text-muted-foreground">
+                        {campaign.progress.progressPercent.toFixed(1)}% vested
+                        {" · "}
+                        {fmtAmount(totalEntitled - vestedSoFar, campaign)} remaining
+                        {" · "}
+                        {nextUnlockLabel}
+                      </div>
+                    </div>
+                  </>
+                );
+              })()}
             </Link>
           );
         })}
