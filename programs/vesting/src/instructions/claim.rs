@@ -7,7 +7,9 @@ use crate::errors::VestingError;
 use crate::events::Claimed;
 use crate::math::merkle::{leaf_hash, max_proof_len_for_leaf_count, verify_merkle_proof};
 use crate::math::schedule;
-use crate::state::{milestone_flag_is_set, ClaimRecord, VestingLeaf, VestingTree};
+use crate::state::{
+    migrate_legacy_claim_record, milestone_flag_is_set, ClaimRecord, VestingLeaf, VestingTree,
+};
 
 #[derive(Accounts)]
 #[instruction(leaf: VestingLeaf, _proof: Vec<[u8; 32]>)]
@@ -28,13 +30,13 @@ pub struct Claim<'info> {
     #[account(
         init_if_needed,
         payer = beneficiary,
-        space = 8 + ClaimRecord::INIT_SPACE,
+        space = 8 + std::mem::size_of::<ClaimRecord>(),
         seeds = [b"claim",
                  vesting_tree.key().as_ref(),
                  beneficiary.key().as_ref()],
         bump,
     )]
-    pub claim_record: Account<'info, ClaimRecord>,
+    pub claim_record: AccountLoader<'info, ClaimRecord>,
 
     /// CHECK: PDA — only used as signer for vault CPI.
     #[account(seeds = [b"vault_authority", vesting_tree.key().as_ref()], bump)]
@@ -63,7 +65,7 @@ pub fn handler(ctx: Context<Claim>, leaf: VestingLeaf, proof: Vec<[u8; 32]>) -> 
     let tree = &ctx.accounts.vesting_tree;
     let tree_key = tree.key();
 
-    // Validation order per SECURITY.md section 2.3
+    // Validation Order per SECURITY.md section 2.3
     // Defense in depth: cancelled campaigns may claim during grace even if paused was not cleared.
     require!(
         !tree.instant_refunded,
@@ -98,30 +100,41 @@ pub fn handler(ctx: Context<Claim>, leaf: VestingLeaf, proof: Vec<[u8; 32]>) -> 
         VestingError::InvalidProof
     );
 
-    // First-touch init of ClaimRecord (step 6 per SECURITY.md)
-    let cr = &mut ctx.accounts.claim_record;
+    let now = Clock::get()?.unix_timestamp;
+    let effective_now = match tree.cancelled_at {
+        Some(c) => now.min(c),
+        None => now,
+    };
+
+    // Grow any legacy (pre-Issue-#29) ClaimRecord to the current size before load.
+    migrate_legacy_claim_record(&ctx.accounts.claim_record, &ctx.accounts.beneficiary)?;
+
+    let mut cr = ctx.accounts.claim_record.load_mut()?;
     let is_first_touch = cr.beneficiary == Pubkey::default();
     if is_first_touch {
         cr.tree = tree_key;
         cr.beneficiary = ctx.accounts.beneficiary.key();
         cr.claimed_amount = 0;
-        cr.total_entitled = leaf.amount;
+        cr.total_entitled = 0;
         cr.milestone_bitmap = [0u8; 32];
         cr.last_claim_at = 0;
         cr.bump = ctx.bumps.claim_record;
+        cr.init_per_leaf_ledger();
+    } else if cr.needs_migration() {
+        // Legacy v0 account grown by migrate_legacy_claim_record: the realloc
+        // zero-filled the per-leaf ledger, so initialise it and attribute any
+        // pre-existing cumulative claim to the leaf being claimed now. Under the
+        // active backend guard every legacy account is single-leaf, so this is
+        // exact; otherwise it is best-effort (the tree-level OverClaim guard
+        // still prevents fund loss — see ADR-003 residual).
+        cr.init_per_leaf_ledger();
+        if leaf.release_type != 2 && cr.claimed_amount > 0 {
+            cr.leaf_claimed_idx[0] = leaf.leaf_index;
+            cr.leaf_claimed_amt[0] = cr.claimed_amount;
+        }
     }
 
-    // Accumulate total_entitled for milestone claims — each milestone claim
-    // is a distinct leaf (bitmap prevents duplicates), so the sum converges
-    // to the true total across all milestone leaves.
-    if leaf.release_type == 2 && !is_first_touch {
-        cr.total_entitled = cr
-            .total_entitled
-            .checked_add(leaf.amount)
-            .ok_or(VestingError::Overflow)?;
-    }
-
-    // Milestone guard (step 7 per SECURITY.md)
+    // Milestone guard (step 7 per SECURITY.md) — must precede total_entitled accrual.
     if leaf.release_type == 2 {
         let byte_idx = leaf.milestone_idx as usize / 8;
         let bit_idx = leaf.milestone_idx as usize % 8;
@@ -131,12 +144,18 @@ pub fn handler(ctx: Context<Claim>, leaf: VestingLeaf, proof: Vec<[u8; 32]>) -> 
         );
     }
 
-    let now = Clock::get()?.unix_timestamp;
-    let effective_now = match tree.cancelled_at {
-        Some(c) => now.min(c),
-        None => now,
-    };
+    // total_entitled: accumulate on first-touch-per-leaf for ALL release types
+    // (Issue #29 — previously only milestones accumulated, leaving cliff/linear
+    // siblings under-counted and breaking close_claim_record).
+    if !cr.leaf_already_counted(&leaf) {
+        cr.total_entitled = cr
+            .total_entitled
+            .checked_add(leaf.amount)
+            .ok_or(VestingError::Overflow)?;
+    }
 
+    // Per-leaf claimable delta. Milestone uses the bitmap; cliff/linear use the
+    // per-leaf ledger so sibling leaves no longer bleed into each other (Issue #29).
     let claimable = if leaf.release_type == 2 {
         require!(
             milestone_flag_is_set(&tree.milestone_released_flags, leaf.milestone_idx),
@@ -144,7 +163,8 @@ pub fn handler(ctx: Context<Claim>, leaf: VestingLeaf, proof: Vec<[u8; 32]>) -> 
         );
         leaf.amount
     } else {
-        schedule::vested(&leaf, effective_now).saturating_sub(cr.claimed_amount)
+        let prior = cr.leaf_prior_claimed(leaf.leaf_index);
+        schedule::vested(&leaf, effective_now).saturating_sub(prior)
     };
 
     if claimable == 0 && leaf.release_type != 2 && effective_now >= leaf.end_time {
@@ -174,17 +194,18 @@ pub fn handler(ctx: Context<Claim>, leaf: VestingLeaf, proof: Vec<[u8; 32]>) -> 
     require!(new_total <= tree.total_supply, VestingError::OverClaim);
 
     // State mutations BEFORE transfer (CEI pattern)
+    if leaf.release_type == 2 {
+        let byte_idx = leaf.milestone_idx as usize / 8;
+        let bit_idx = leaf.milestone_idx as usize % 8;
+        cr.milestone_bitmap[byte_idx] |= 1 << bit_idx;
+    } else {
+        cr.record_leaf_claim(leaf.leaf_index, claimable)?;
+    }
     cr.claimed_amount = cr
         .claimed_amount
         .checked_add(claimable)
         .ok_or(VestingError::Overflow)?;
     cr.last_claim_at = now;
-
-    if leaf.release_type == 2 {
-        let byte_idx = leaf.milestone_idx as usize / 8;
-        let bit_idx = leaf.milestone_idx as usize % 8;
-        cr.milestone_bitmap[byte_idx] |= 1 << bit_idx;
-    }
 
     ctx.accounts.vesting_tree.total_claimed = new_total;
 

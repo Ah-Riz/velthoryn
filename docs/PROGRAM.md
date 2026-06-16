@@ -16,7 +16,7 @@ programs/vesting/src/
 ├── state/
 │   ├── mod.rs              # re-exports (includes NATIVE_SOL_MINT)
 │   ├── vesting_tree.rs     # VestingTree #[account] — campaign PDA, is_native() helper
-│   ├── claim_record.rs     # ClaimRecord  #[account] — per-(tree, beneficiary) PDA
+│   ├── claim_record.rs     # ClaimRecord  #[account(zero_copy)] — per-(tree, beneficiary) PDA
 │   └── leaf.rs             # VestingLeaf — Borsh struct, NOT an account (lives in Merkle tree)
 ├── math/
 │   ├── mod.rs              # re-exports
@@ -96,19 +96,26 @@ PDA seeds: `["tree", creator, mint, campaign_id.to_le_bytes()]`.
 
 ### `ClaimRecord` (per-recipient PDA)
 
+`#[account(zero_copy)]` (Accessed via `AccountLoader`, not Borsh `Account`) since the Issue #29 per-leaf fix — fixed `repr(C)` layout, 8 + 224 = 232 bytes.
+
 | Field              | Type        | Notes |
 | ------------------ | ----------- | ----- |
 | `beneficiary`      | `Pubkey`    | Must equal `claim.signer`. |
 | `tree`             | `Pubkey`    | The `VestingTree` it belongs to. |
-| `claimed_amount`   | `u64`       | Cumulative claimed by this beneficiary. Survives root rotation. |
-| `total_entitled`   | `u64`       | Set once on first claim/withdraw. Total leaf amount. Used by `close_claim_record` to verify full vesting without trusting a caller-supplied value. |
+| `claimed_amount`   | `u64`       | Running SUM claimed by this beneficiary across all leaves (read by the `Claimed` event + `close_claim_record`). Survives root rotation. |
+| `total_entitled`   | `u64`       | Running SUM of every touched leaf's amount (all release types). Accumulated on first-touch-per-leaf. Used by `close_claim_record`. |
 | `milestone_bitmap` | `[u8; 32]`  | One bit per milestone index for milestone-type leaves. |
 | `last_claim_at`    | `i64`       | For analytics / UX. |
 | `bump`             | `u8`        | PDA bump cache. |
+| `version`          | `u8`        | Layout version. 0 = legacy (pre-Issue-#29); 1 = per-leaf ledger active. |
+| `leaf_claimed_idx` | `[u32; 8]`  | Per-leaf ledger keys (`u32::MAX` = empty slot). `PER_LEAF_CAP = 8`. Milestone leaves do NOT consume slots. |
+| `leaf_claimed_amt` | `[u64; 8]`  | Cumulative claimed per `leaf_index` — the source of truth for the per-leaf `claimable` delta (Issue #29 fix). |
+
+Claim math: `claimable = vested(leaf) − leaf_claimed_amt[leaf_index]` (cliff/linear); milestone uses the bitmap. `update_root` needs no change — the ledger fills lazily as leaves are claimed against any root.
 
 PDA seeds: `["claim", tree.key(), beneficiary]`.
 
-> **Migration warning:** `total_entitled` is a layout-breaking change. Existing on-chain ClaimRecords predating this field cannot be deserialized correctly and require a migration (e.g. `realloc` + fill, or close + re-claim). See `programs/vesting/src/state/claim_record.rs`.
+> **Migration:** a legacy v0 `ClaimRecord` (121 data bytes, no per-leaf fields) is grown lazily to 224 data bytes via `AccountInfo::resize` + rent top-up on its next touch (`migrate_legacy_claim_record`). `zero_copy` loads the short account by discriminator, so the handler can resize it. Pre-mainnet this is belt-and-suspenders (devnet accounts are disposable). See `programs/vesting/src/state/claim_record.rs` + `docs/week9/ADRs/ADR-003-...` (Supersession).
 
 ### `VestingLeaf` (off-chain, in the Merkle tree)
 

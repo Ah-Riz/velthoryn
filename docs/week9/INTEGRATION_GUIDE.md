@@ -80,8 +80,11 @@ const prepared = prepareCampaign(recipients);
 // prepared.proofs[i]     → number[][]   (sibling hashes, leaf→root order)
 ```
 
-> **Issue #29 rule:** at most **one** cliff/linear leaf per beneficiary. The BE enforces
-> this at ingest (see ADR-003). Multiple milestone leaves per beneficiary are allowed.
+> **Issue #29 — fixed on-chain (2026-06-16; ADR-003 superseded).** The program now supports
+> **multiple cliff/linear leaves per beneficiary** (paid each in full via a per-leaf ledger). The
+> BE `prepare`/`import` routes still reject this shape until a follow-up PR removes those guards, so
+> **via the API today: at most one cliff/linear leaf per beneficiary**; direct on-chain
+> construction has no such limit. Multiple milestone leaves per beneficiary are allowed.
 
 ---
 

@@ -43,7 +43,7 @@ const treePda = (creator: PublicKey, mint: PublicKey, campaignId: bigint) =>
 | Account | Seeds | Created by | Holds |
 |---------|-------|-----------|-------|
 | `VestingTree` | `[b"tree", creator, mint, campaign_id]` | `create_campaign` / `create_stream` | Campaign config + `merkle_root` + counters |
-| `ClaimRecord` | `[b"claim", vesting_tree, beneficiary]` | lazily by `claim` / `withdraw` / `cancel_stream` | per-beneficiary `claimed_amount`, `milestone_bitmap` |
+| `ClaimRecord` | `[b"claim", vesting_tree, beneficiary]` | lazily by `claim` / `withdraw` / `cancel_stream` | `#[account(zero_copy)]`; `claimed_amount` (sum), `total_entitled`, `milestone_bitmap`, per-leaf ledger (`leaf_claimed_idx`/`leaf_claimed_amt`, `PER_LEAF_CAP=8`) |
 | `vault_authority` | `[b"vault_authority", vesting_tree]` | derived (signer PDA for SPL CPI) | — |
 | `vault` (ATA) | associated to `vault_authority`, mint = campaign mint | `create_campaign` / `create_stream` | the SPL tokens |
 
@@ -149,10 +149,11 @@ await program.methods
   .rpc();
 ```
 
-> **Known limitation — Issue #29 (ADR-003):** a beneficiary must not appear in more than one
-> cliff/linear leaf of the same campaign. The BE rejects this at ingest (`prepare`/`import`);
-> the on-chain program under-counts (never over-pays) if it ever occurs. Multiple milestone
-> leaves per beneficiary are fine (guarded by the milestone bitmap).
+> **Issue #29 — FIXED on-chain (2026-06-16; ADR-003 superseded).** `ClaimRecord` now tracks
+> `claimable` per leaf (`vested(leaf) − leaf_claimed_amt[leaf_index]`), so a beneficiary may hold
+> multiple cliff/linear leaves and be paid each in full (never over-pays). The BE `prepare`/`import`
+> guards that rejected this shape remain until a follow-up PR removes them. Multiple milestone
+> leaves per beneficiary were always fine (guarded by the milestone bitmap).
 
 ### `withdraw(args)`
 Single-stream claim (`leaf_count == 1` only). The beneficiary supplies the schedule args

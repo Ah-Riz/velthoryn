@@ -123,7 +123,6 @@ mod tests {
             .build();
 
         let (cr_pda, cr_account) = ClaimRecordConfig::new(beneficiary, tree_pda)
-            .total_entitled(leaves[0].amount)
             .build();
 
         let ix = Instruction {
@@ -159,6 +158,115 @@ mod tests {
         // Verify beneficiary received lamports
         let ben_acc = result.get_account(&beneficiary).unwrap();
         assert_eq!(ben_acc.lamports, CREATOR_LAMPORTS + 1_000);
+    }
+
+    /// Issue #29 regression: a beneficiary holding two cliff leaves in one tree
+    /// must be paid BOTH in full. Pre-fix, the shared cumulative `claimed_amount`
+    /// starved the second leaf (700 entitled → 0 paid). Chains two `claim` ix.
+    #[test]
+    fn test_claim_two_cliff_leaves_same_beneficiary_both_pay() {
+        let mut mollusk = get_mollusk();
+        let pid = program_id();
+        mollusk.sysvars.clock.unix_timestamp = 2_000_000i64; // past both cliffs
+
+        let beneficiary = Pubkey::new_unique();
+        let leaves = vec![
+            VestingLeaf {
+                leaf_index: 0,
+                beneficiary,
+                amount: 500,
+                release_type: 0, // Cliff
+                start_time: 0,
+                cliff_time: 1_000,
+                end_time: 2_000,
+                milestone_idx: 0,
+            },
+            VestingLeaf {
+                leaf_index: 1,
+                beneficiary,
+                amount: 700,
+                release_type: 0, // Cliff
+                start_time: 0,
+                cliff_time: 1_000,
+                end_time: 2_000,
+                milestone_idx: 0,
+            },
+        ];
+        let (root, proofs) = build_merkle_tree(&leaves);
+
+        let creator = Pubkey::new_unique();
+        let (tree_pda, tree_account, _bump) = TreeConfig::new(creator, 1)
+            .merkle_root(root)
+            .leaf_count(2)
+            .total_supply(1_200)
+            .funded_lamports(1_200 + 5_000_000)
+            .build();
+
+        // Fresh ClaimRecord (Mollusk bypasses init_if_needed; pre-create initialised).
+        let (cr_pda, cr_account) = ClaimRecordConfig::new(beneficiary, tree_pda).build();
+
+        // --- Claim leaf 0 ---
+        let ix0 = Instruction {
+            program_id: pid,
+            accounts: claim_ix_accounts(beneficiary, tree_pda, cr_pda),
+            data: build_claim_ix_data(&leaves[0], &proofs[0].1),
+        };
+        let accounts0 = claim_mollusk_accounts(
+            beneficiary,
+            CREATOR_LAMPORTS,
+            tree_pda,
+            tree_account,
+            cr_pda,
+            cr_account,
+        );
+        let result0 = mollusk.process_instruction(&ix0, &accounts0);
+        assert!(
+            result0.program_result.is_ok(),
+            "claim 0 failed: {:?}",
+            result0.program_result
+        );
+
+        let cr0 = result0.get_account(&cr_pda).unwrap();
+        let cr0_data = deserialize_claim_record(&cr0.data);
+        assert_eq!(cr0_data.claimed_amount, 500);
+        assert_eq!(cr0_data.total_entitled, 500);
+
+        // --- Claim leaf 1 (the leaf that used to be starved to 0) ---
+        let tree_after0 = result0.get_account(&tree_pda).unwrap();
+        let ben_after0 = result0.get_account(&beneficiary).unwrap();
+        let ix1 = Instruction {
+            program_id: pid,
+            accounts: claim_ix_accounts(beneficiary, tree_pda, cr_pda),
+            data: build_claim_ix_data(&leaves[1], &proofs[1].1),
+        };
+        let accounts1 = claim_mollusk_accounts(
+            beneficiary,
+            ben_after0.lamports,
+            tree_pda,
+            tree_after0.clone(),
+            cr_pda,
+            cr0.clone(),
+        );
+        let result1 = mollusk.process_instruction(&ix1, &accounts1);
+        assert!(
+            result1.program_result.is_ok(),
+            "claim 1 failed: {:?}",
+            result1.program_result
+        );
+        println!("two-leaf second-claim CU={}", result1.compute_units_consumed);
+
+        let cr1 = result1.get_account(&cr_pda).unwrap();
+        let cr1_data = deserialize_claim_record(&cr1.data);
+        // Both leaves paid in full — the core Issue #29 fix.
+        assert_eq!(cr1_data.claimed_amount, 1_200);
+        assert_eq!(cr1_data.total_entitled, 1_200);
+        assert_eq!(cr1_data.leaf_claimed_amt[0], 500);
+        assert_eq!(cr1_data.leaf_claimed_amt[1], 700);
+
+        // Tree-level total reflects both claims (no overspend).
+        let tree_after1 = result1.get_account(&tree_pda).unwrap();
+        let tree_data = deserialize_vesting_tree(&tree_after1.data);
+        assert_eq!(tree_data.total_claimed, 1_200);
     }
 
     #[test]
@@ -214,7 +322,6 @@ mod tests {
             .build();
 
         let (cr_pda, cr_account) = ClaimRecordConfig::new(beneficiary, tree_pda)
-            .total_entitled(leaves[0].amount)
             .build();
 
         let ix = Instruction {
@@ -298,7 +405,6 @@ mod tests {
             .build();
 
         let (cr_pda, cr_account) = ClaimRecordConfig::new(beneficiary, tree_pda)
-            .total_entitled(leaves[0].amount)
             .build();
 
         let ix = Instruction {
@@ -379,7 +485,6 @@ mod tests {
 
         // CR PDA derived for impostor (the signer), not the leaf's beneficiary
         let (cr_pda, cr_account) = ClaimRecordConfig::new(impostor, tree_pda)
-            .total_entitled(leaves[0].amount)
             .build();
 
         let ix = Instruction {
@@ -451,7 +556,6 @@ mod tests {
             .build();
 
         let (cr_pda, cr_account) = ClaimRecordConfig::new(beneficiary, tree_pda)
-            .total_entitled(leaves[0].amount)
             .build();
 
         // Valid proof for real root (won't verify against bad_root)
@@ -524,7 +628,6 @@ mod tests {
             .build();
 
         let (cr_pda, cr_account) = ClaimRecordConfig::new(beneficiary, tree_pda)
-            .total_entitled(leaves[0].amount)
             .build();
 
         let ix = Instruction {
@@ -593,7 +696,6 @@ mod tests {
             .build();
 
         let (cr_pda, cr_account) = ClaimRecordConfig::new(beneficiary, tree_pda)
-            .total_entitled(leaves[0].amount)
             .build();
 
         let ix = Instruction {
@@ -662,7 +764,6 @@ mod tests {
             .build();
 
         let (cr_pda, cr_account) = ClaimRecordConfig::new(beneficiary, tree_pda)
-            .total_entitled(leaves[0].amount)
             .build();
 
         let ix = Instruction {
@@ -730,7 +831,6 @@ mod tests {
             .build();
 
         let (cr_pda, cr_account) = ClaimRecordConfig::new(beneficiary, tree_pda)
-            .total_entitled(leaves[0].amount)
             .build();
 
         // 33-element proof (MAX_MERKLE_PROOF_LEN + 1)
@@ -808,7 +908,6 @@ mod tests {
             .build();
 
         let (cr_pda, cr_account) = ClaimRecordConfig::new(beneficiary, tree_pda)
-            .total_entitled(leaves[0].amount)
             .build();
 
         let ix = Instruction {
@@ -878,7 +977,6 @@ mod tests {
             .build();
 
         let (cr_pda, cr_account) = ClaimRecordConfig::new(beneficiary, tree_pda)
-            .total_entitled(leaves[0].amount)
             .build();
 
         let ix = Instruction {
@@ -946,7 +1044,6 @@ mod tests {
             .build();
 
         let (cr_pda, cr_account) = ClaimRecordConfig::new(beneficiary, tree_pda)
-            .total_entitled(leaves[0].amount)
             .build();
 
         let ix = Instruction {
@@ -1019,7 +1116,6 @@ mod tests {
             .build();
 
         let (cr_pda, cr_account) = ClaimRecordConfig::new(beneficiary, tree_pda)
-            .total_entitled(leaves[0].amount)
             .build();
 
         let ix = Instruction {
@@ -1092,7 +1188,6 @@ mod tests {
             .build();
 
         let (cr_pda, cr_account) = ClaimRecordConfig::new(beneficiary, tree_pda)
-            .total_entitled(leaves[0].amount)
             .build();
 
         let ix = Instruction {
@@ -1176,7 +1271,6 @@ mod tests {
             .build();
 
         let (cr_pda, cr_account) = ClaimRecordConfig::new(beneficiary, tree_pda)
-            .total_entitled(leaves[0].amount)
             .build();
 
         let ix = Instruction {
@@ -1259,7 +1353,6 @@ mod tests {
             .build();
 
         let (cr_pda, cr_account) = ClaimRecordConfig::new(beneficiary, tree_pda)
-            .total_entitled(leaves[0].amount)
             .build();
 
         let ix = Instruction {

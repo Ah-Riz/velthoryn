@@ -1,6 +1,7 @@
 # Known Issue #29 — Multi-Leaf Cumulative `claimed_amount` Undercount
 
-**Status:** Design / decision pending  
+**Status:** ✅ FIXED on-chain (2026-06-16). Option A implemented — `ClaimRecord` is now `#[account(zero_copy)]` with a bounded per-leaf ledger (`leaf_claimed_idx: [u32; 8]` + `leaf_claimed_amt: [u64; 8]`), NOT the `Vec<u64>`+realloc proposed in §3 below. See `docs/week9/ADRs/ADR-003-...` (Supersession section) for the chosen design + rationale. The text below is retained as the original design analysis.
+
 **Area:** Smart contract (`claim.rs`, `withdraw.rs`, `ClaimRecord`)  
 **Related:** [`docs/WEEK8_KNOWN_ISSUES.md`](WEEK8_KNOWN_ISSUES.md) #29, issues #23 and #24 (related fixes, different root cause)  
 **Last updated:** June 2026

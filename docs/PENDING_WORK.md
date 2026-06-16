@@ -21,14 +21,15 @@ Detect → triage → fix → docs pass across SC / MERKLE / BE / DB. Full detai
 | SC-FIND-03 — withdraw guard | `!instant_refunded` guard added (mirrors `claim.rs`) |
 | DB-DOC-01 — bigint mode doc divergence | `BE-SC-MERKLE-ACCEPTANCE-STATUS.md:27,122` corrected `mode:"string"` → `mode:"bigint"` |
 
-**Documented (no code change — rationale in BUG_LIST §Phase 6):** SC-FIND-04/05/06, BE-SEC-02/03/04/08. **SC-#29** Option B reaffirmed (ADR-003). **Merkle surface** independently audited — sound; Rust↔TS parity proven byte-for-byte + `fast-check` property tests added.
+**Documented (no code change — rationale in BUG_LIST §Phase 6):** SC-FIND-04/05/06, BE-SEC-02/03/04/08. **SC-#29 — FIXED on-chain (2026-06-16):** `ClaimRecord` is now `zero_copy` with a per-leaf ledger; ADR-003 is superseded. SC-FIND-06 (stale `total_entitled` after rotation) is fixed by the same change. **Merkle surface** independently audited — sound; Rust↔TS parity proven byte-for-byte + `fast-check` property tests added.
 
 **New integrator docs:** `docs/week9/INSTRUCTION_REFERENCE.md`, `INTEGRATION_GUIDE.md`, `ADRs/` (ADR-001/002/003), refreshed root `README.md`.
 
 **Still open / deferred:**
 - BE route-level tests (`tests/api/**`, incl. BE-SEC-01 401/403 + rate-limit cluster) → need a Postgres-backed env to execute (tests are staged).
 - SC Mollusk coverage of 4 `init_if_needed`/`Optional<T>` handlers → blocked on Mollusk 0.14.
-- FE validation for Issue #29 → Geral (handoff, unchanged).
+- **Remove the now-obsolete Issue #29 BE guards** (`cliffLinearSeen` in `apps/web/src/app/api/campaigns/prepare/route.ts:70-84` + `import/route.ts:92-110`) — separate post-deploy PR, after the upgraded program is on mainnet. Keep the milestone duplicate guard.
+- FE multi-leaf-cliff/linear support in the bulk-send UI → Geral (handoff; the on-chain program now supports it).
 - `BE-SEC-02` (XFF trust) + `BE-SEC-04` (Redis prod assertion) → revisit if moving off Vercel.
 
 ---
@@ -70,7 +71,7 @@ _No open high-priority BE items from the original audit._
 
 | # | Task | Source | What's needed |
 |---|------|--------|---------------|
-| 8 | Known issue #29 — cumulative claimed_amount undercount | Week8 Known Issues | On-chain fix still deferred (breaking change). **BE mitigated:** prepare + import routes reject multi cliff/linear per beneficiary (June 2026). FE validation pending (Geral). |
+| 8 | Known issue #29 — cumulative claimed_amount undercount | Week8 Known Issues | ✅ **Fixed on-chain 2026-06-16** (per-leaf ledger; `ClaimRecord` now `zero_copy`; ADR-003 superseded). **Follow-up:** remove the now-obsolete `cliffLinearSeen` BE guards (prepare + import) in a separate post-deploy PR once the upgraded program is on mainnet. |
 
 ### Ops/Infra
 
@@ -184,4 +185,4 @@ Batch-verified and marked `[x]` in `.claude/specs/{production-security-ops,bulk-
 | **Ops** | 1 | 1 | 0 | 5 |
 | **Total** | **~4** | **~17** | **0** (batch done) | **8** |
 
-**86 total items audited.** Last refresh 2026-06-11. Remaining real work: SC #29 on-chain fix, FE E2E/clawback, Ops Sentry DSN + production redeploy. **8** externally blocked. Prod deployment at `velthoryn.vercel.app` is currently down — redeploy needed before smoke tests or Sentry verification can complete.
+**86 total items audited.** Last refresh 2026-06-16. Remaining real work: remove the obsolete Issue #29 BE guards (post-deploy PR), FE E2E/clawback, Ops Sentry DSN + production redeploy. **8** externally blocked. Prod deployment at `velthoryn.vercel.app` is currently down — redeploy needed before smoke tests or Sentry verification can complete.
