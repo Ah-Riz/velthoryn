@@ -58,7 +58,7 @@ This section maps each `task.md` acceptance criterion to the concrete artifact t
 | ≥3 architecture decision records | `docs/week9/ADRs/ADR-001|002|003` | (1) Merkle-compressed vesting, (2) keccak-256 + domain separation, (3) Issue #29 on-chain fix (ADR-003, **superseded — shipped** `fd6163d`). |
 | README accuracy | `README.md`, `docs/CU_BUDGET.md`, `docs/TESTING.md` | Week-9 status section + this session's count reconciliation (Mollusk 73/18, bench 10/1, proptest 18). |
 | KPI: unfamiliar dev can integrate from docs alone | above + `BUG_LIST.md` | A reader can derive PDAs, build a Merkle tree, submit a claim, and handle errors without reading source. |
-| Marketing teammate review of the integration guide | **pending — teammate TBD** | `task.md` criterion; not yet done. The integration guide is ready for review; this is a human/process step outside the repo. |
+| Marketing teammate review of the integration guide | **done — clarity review by Lana (2026-06-16)** | `task.md` criterion met. Clarity pass on `docs/week9/INTEGRATION_GUIDE.md`: added a "What you're building" intro + Concepts glossary, built the `provider` + declared test identities (was undefined), added a single-recipient Quickstart (`create_stream`), a Release-type table, `BASE_TS`/`minCliffTime` guidance, post-action verification steps, a client-side proof fallback, and fixed the malformed CU snippet + error-code range (6000–6041). All 6 HIGH + 7 MEDIUM findings addressed. |
 
 ---
 
