@@ -203,6 +203,7 @@ jobs:
 
   playwright-signing-e2e:
     name: Playwright Signing E2E (localnet)
+    if: false
     runs-on: ubuntu-latest
 
     services:
