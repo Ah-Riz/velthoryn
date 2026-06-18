@@ -3,6 +3,7 @@ import { collectRelevantPageErrors } from "./pageErrors";
 import {
   csv,
   enableE2eWallet,
+  expectCsvReadyToFund,
   gotoWithRetry,
   openCsvMode,
   parseCsv,
@@ -113,9 +114,10 @@ test("milestone CSV allows same wallet with different milestone indexes", async 
   );
 
   await expect(page.getByText(/this page only accepts/i)).toHaveCount(0);
-  await expect(page.getByText("Recipients", { exact: true })).toBeVisible();
-  await expect(page.getByText(/release type/i)).toBeVisible();
-  await expect(page.getByRole("button", { name: /create & fund campaign/i })).toBeEnabled();
+  await expect(page.getByText(/3 valid rows/i).first()).toBeVisible();
+  await expect(page.getByRole("row", { name: /3 recipients total/i })).toBeVisible();
+  await expect(page.getByText(/release type/i).last()).toBeVisible();
+  await expectCsvReadyToFund(page);
   expect(pageErrors).toEqual([]);
 });
 

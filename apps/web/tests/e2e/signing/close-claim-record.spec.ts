@@ -24,6 +24,7 @@
 import { test, expect, type Page } from "@playwright/test";
 import { Keypair, Connection, LAMPORTS_PER_SOL } from "@solana/web3.js";
 import bs58 from "bs58";
+import { alreadyUnlockedDatetimeLocal, expectCampaignLinkReady, expectClaimActionReady, selectNativeSol } from "./helpers";
 
 const LOCALNET_RPC = "http://127.0.0.1:8899";
 
@@ -110,13 +111,7 @@ test.describe.serial("Real signing E2E — CloseClaimRecordButton flow", () => {
     await injectSigningWallet(page);
     await page.goto("/campaign/create/cliff", { waitUntil: "load" });
 
-    // Wait for the form token picker to render
-    const tokenBtn = page.getByRole("button", { name: /select token/i });
-    await tokenBtn.waitFor({ state: "visible", timeout: 15_000 });
-
-    // --- Select SOL Native ---
-    await tokenBtn.click();
-    await page.getByRole("button", { name: /SOL.*Native/i }).first().click();
+    await selectNativeSol(page);
 
     // --- Amount ---
     await page.getByPlaceholder(/e\.g\. 1000/i).first().fill("0.01");
@@ -125,9 +120,7 @@ test.describe.serial("Real signing E2E — CloseClaimRecordButton flow", () => {
     const recipientPubkey = keypair.publicKey.toBase58();
     await page.getByPlaceholder(/Solana wallet address/i).first().fill(recipientPubkey);
 
-    // --- Cliff = now + 10 s (passes "must be future" validation) ---
-    const cliffLocal = new Date(Date.now() + 10_000).toISOString().slice(0, 16);
-    await page.locator("input[type='datetime-local']").first().fill(cliffLocal);
+    await page.locator("input[type='datetime-local']").first().fill(alreadyUnlockedDatetimeLocal());
 
     // --- Submit ---
     const submitBtn = page.getByRole("button", { name: /create cliff stream/i });
@@ -135,15 +128,7 @@ test.describe.serial("Real signing E2E — CloseClaimRecordButton flow", () => {
     await submitBtn.click();
 
     // --- Capture tree address from the post-create link ---
-    const openStreamLink = page.getByRole("link", { name: /open stream/i });
-    await expect(openStreamLink).toBeVisible({ timeout: 45_000 });
-
-    const href = await openStreamLink.getAttribute("href");
-    expect(href).toBeTruthy();
-
-    const match = href!.match(/\/campaign\/([^?]+)/);
-    expect(match).toBeTruthy();
-    createdTreeAddress = match![1];
+    createdTreeAddress = await expectCampaignLinkReady(page.getByRole("link", { name: /open stream/i }));
 
     expect(createdTreeAddress).toHaveLength(44);
   });
@@ -157,14 +142,9 @@ test.describe.serial("Real signing E2E — CloseClaimRecordButton flow", () => {
 
     await injectSigningWallet(page);
 
-    // Wait 15 s to guarantee the cliff (now + 10 s from create time) has passed
-    await page.waitForTimeout(15_000);
-
     await page.goto(`/campaign/${createdTreeAddress}`, { waitUntil: "load" });
 
-    const claimBtn = page.getByRole("button", { name: /^claim\s+\d/i });
-    await expect(claimBtn).toBeVisible({ timeout: 25_000 });
-    await expect(claimBtn).toBeEnabled({ timeout: 10_000 });
+    const claimBtn = await expectClaimActionReady(page);
     await claimBtn.click();
 
     // Wait for the success signal: toast or UI update mentioning claim/SOL
@@ -189,9 +169,7 @@ test.describe.serial("Real signing E2E — CloseClaimRecordButton flow", () => {
     // Re-navigate to pick up the post-claim UI state
     await page.goto(`/campaign/${createdTreeAddress}`, { waitUntil: "load" });
 
-    const closeBtn = page.getByRole("button", {
-      name: "Close Record & Reclaim Rent (~0.002 SOL)",
-    });
+    const closeBtn = page.getByRole("button", { name: /close record & reclaim rent/i });
     await expect(closeBtn).toBeVisible({ timeout: 15_000 });
     await expect(closeBtn).toBeEnabled();
   });
@@ -211,9 +189,7 @@ test.describe.serial("Real signing E2E — CloseClaimRecordButton flow", () => {
     await injectSigningWallet(page);
     await page.goto(`/campaign/${createdTreeAddress}`, { waitUntil: "load" });
 
-    const closeBtn = page.getByRole("button", {
-      name: "Close Record & Reclaim Rent (~0.002 SOL)",
-    });
+    const closeBtn = page.getByRole("button", { name: /close record & reclaim rent/i });
     await expect(closeBtn).toBeVisible({ timeout: 15_000 });
     await expect(closeBtn).toBeEnabled();
 
@@ -235,21 +211,21 @@ test.describe.serial("Real signing E2E — CloseClaimRecordButton flow", () => {
     // no longer be rendered (claimRecord PDA is closed, so claimedAmount is
     // reset / the PDA no longer exists and the component returns null).
     await expect(
-      page.getByRole("button", { name: "Close Record & Reclaim Rent (~0.002 SOL)" })
+      page.getByRole("button", { name: /close record & reclaim rent/i })
     ).not.toBeVisible({ timeout: 15_000 });
   });
 
   // -------------------------------------------------------------------------
-  // Test 6: rent was reclaimed — balance increased relative to post-claim low
+  // Test 6: closed record state persists after refresh
   // -------------------------------------------------------------------------
 
-  test("wallet balance reflects reclaimed rent", async () => {
-    // After closing the claim record PDA (~0.002 SOL returned), the balance
-    // should still be less than the initial 10 SOL (spent on stream + fees)
-    // but we just verify the test ran without error — an exact SOL delta check
-    // is fragile due to variable validator fees.
-    const balance = await getBalance();
-    expect(balance).toBeGreaterThan(0);
-    expect(balance).toBeLessThan(10 * LAMPORTS_PER_SOL);
+  test("closed claim record state persists after refresh", async ({ page }) => {
+    expect(createdTreeAddress).toBeTruthy();
+
+    await injectSigningWallet(page);
+    await page.goto(`/campaign/${createdTreeAddress}`, { waitUntil: "load" });
+
+    await expect(page.getByText(/total claimed/i).first()).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByRole("button", { name: /close record & reclaim rent/i })).not.toBeVisible();
   });
 });

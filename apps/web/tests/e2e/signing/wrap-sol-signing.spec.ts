@@ -85,6 +85,9 @@ test.describe.serial("Real signing E2E — wrap and unwrap SOL", () => {
     // Verify we are in wrap mode by default (Wrap tab active)
     const wrapTab = page.getByRole("button", { name: /^wrap$/i });
     await expect(wrapTab).toBeVisible({ timeout: 5_000 });
+    await expect(page.getByRole("button", { name: /max:\s*[1-9]/i })).toBeVisible({
+      timeout: 15_000,
+    });
 
     // Type amount in the number input
     const amountInput = page.locator("input[type='number']");
@@ -92,7 +95,6 @@ test.describe.serial("Real signing E2E — wrap and unwrap SOL", () => {
     await amountInput.fill("0.01");
 
     // Click the Wrap submit button
-    const submitBtn = page.getByRole("button", { name: /^wrap$/i }).last();
     // The submit button is a standalone <button> below the amount input, not the tab
     // Use a more specific locator: the full-width submit button
     const wrapSubmitBtn = page.locator("button").filter({ hasText: /^Wrap$/ }).last();
@@ -116,6 +118,9 @@ test.describe.serial("Real signing E2E — wrap and unwrap SOL", () => {
 
     // Verify mode label changed to "Convert wSOL → SOL"
     await expect(page.getByText(/convert wsol.*sol/i)).toBeVisible({ timeout: 5_000 });
+    await expect(page.getByRole("button", { name: /max:\s*[1-9]/i })).toBeVisible({
+      timeout: 15_000,
+    });
 
     // Click Max to use the full wSOL balance we just wrapped
     const maxBtn = page.getByRole("button", { name: /max:/i });

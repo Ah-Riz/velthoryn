@@ -1,6 +1,6 @@
 import { expect, test, type Page } from "@playwright/test";
 import { collectRelevantPageErrors } from "./pageErrors";
-import { enableE2eWallet, gotoWithRetry, selectSolToken, openCsvMode, csv, parseCsv, recipientWallet, secondWallet } from "./helpers";
+import { enableE2eWallet, expectCsvReadyToFund, gotoWithRetry, selectSolToken, openCsvMode, csv, parseCsv, recipientWallet, secondWallet } from "./helpers";
 
 const schedules = {
   start: 1779899400,
@@ -51,7 +51,7 @@ test.describe("CSV template and create ready state", () => {
     );
 
     await expect(page.getByText(/this page only accepts/i)).toHaveCount(0);
-    await expect(page.getByRole("button", { name: /create & fund campaign/i })).toBeEnabled();
+    await expectCsvReadyToFund(page);
     expect(pageErrors).toEqual([]);
   });
 
@@ -67,7 +67,7 @@ test.describe("CSV template and create ready state", () => {
     );
 
     await expect(page.getByText(/this page only accepts/i)).toHaveCount(0);
-    await expect(page.getByRole("button", { name: /create & fund campaign/i })).toBeEnabled();
+    await expectCsvReadyToFund(page);
     expect(pageErrors).toEqual([]);
   });
 
@@ -82,7 +82,9 @@ test.describe("CSV template and create ready state", () => {
   test("CSV mode shows file upload area", async ({ page }) => {
     const pageErrors = await openCsvCreatePage(page, "/campaign/create/cliff");
 
-    await expect(page.getByText(/drop your csv file|click to browse/i)).toBeVisible();
+    const uploadZone = page.locator("label").filter({ hasText: /drop your csv file here/i });
+    await expect(uploadZone).toBeVisible();
+    await expect(uploadZone).toContainText(/click to browse/i);
     expect(pageErrors).toEqual([]);
   });
 });

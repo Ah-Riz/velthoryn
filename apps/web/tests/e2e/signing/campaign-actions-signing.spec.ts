@@ -21,6 +21,7 @@
 import { test, expect, type Page } from "@playwright/test";
 import { Keypair, Connection, LAMPORTS_PER_SOL } from "@solana/web3.js";
 import bs58 from "bs58";
+import { datetimeLocalFromNow, expectCampaignLinkReady, selectNativeSol } from "./helpers";
 
 const LOCALNET_RPC = "http://127.0.0.1:8899";
 
@@ -74,19 +75,10 @@ async function createCancellableSolCampaign(
   await injectSigningWallet(page, keypair);
   await page.goto("/campaign/create/cliff", { waitUntil: "load" });
 
-  // Wait for the form to be ready
-  const tokenBtn = page.getByRole("button", { name: /select token/i });
-  await tokenBtn.waitFor({ state: "visible", timeout: 20_000 });
+  await selectNativeSol(page);
 
-  // Select native SOL
-  await tokenBtn.click();
-  await page.getByRole("button", { name: /SOL.*Native/i }).first().click();
-
-  // Enable cancellable toggle — labelled "Allow cancellation?"
-  const cancellableToggle = page.getByText(/allow cancellation/i);
-  await cancellableToggle.waitFor({ state: "visible", timeout: 10_000 });
-  // Click the parent toggle card to activate it
-  await cancellableToggle.click();
+  const cancellableToggle = page.getByRole("checkbox", { name: /allow cancellation/i });
+  await cancellableToggle.check();
 
   // Add a second recipient so the form creates a multi-recipient campaign
   // (bulk-funded path → gives us a treeAddress to navigate to)
@@ -99,8 +91,7 @@ async function createCancellableSolCampaign(
   const amountInputs = page.getByPlaceholder(/e\.g\. 1000/i);
   const cliffInputs = page.locator("input[type='datetime-local']");
 
-  const cliff = new Date(Date.now() + cliffOffsetSeconds * 1000);
-  const cliffValue = cliff.toISOString().slice(0, 16);
+  const cliffValue = datetimeLocalFromNow(cliffOffsetSeconds);
 
   // Recipient 1
   const rec1 = Keypair.generate().publicKey.toBase58();
@@ -120,16 +111,7 @@ async function createCancellableSolCampaign(
   await submitBtn.click();
 
   // Wait for the "View campaign" link to appear (indicates bulk-funded state)
-  const viewCampaignLink = page.getByRole("link", { name: /view campaign/i });
-  await viewCampaignLink.waitFor({ state: "visible", timeout: 90_000 });
-
-  // Extract treeAddress from the href attribute
-  const href = await viewCampaignLink.getAttribute("href");
-  if (!href) throw new Error("View campaign link has no href");
-  const treeAddress = href.split("/campaign/")[1]?.split("?")[0];
-  if (!treeAddress) throw new Error(`Could not parse treeAddress from href: ${href}`);
-
-  return treeAddress;
+  return expectCampaignLinkReady(page.getByRole("link", { name: /view campaign/i }));
 }
 
 // ---------------------------------------------------------------------------

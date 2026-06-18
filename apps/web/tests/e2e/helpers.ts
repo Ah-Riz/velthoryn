@@ -70,19 +70,36 @@ export async function enableMockOnChainTransactions(page: Page) {
 }
 
 export async function gotoWithRetry(page: Page, path: string, maxRetries = 3) {
-  let lastError: Error | undefined;
-  for (let i = 0; i < maxRetries; i++) {
+  let lastStatus = 0;
+  await expect
+    .poll(
+      async () => {
+        try {
+          const response = await page.request.get(path, { timeout: 10_000 });
+          lastStatus = response.status();
+          return response.ok();
+        } catch {
+          lastStatus = 0;
+          return false;
+        }
+      },
+      {
+        timeout: Math.max(30_000, maxRetries * 10_000),
+        intervals: [500, 1_000, 2_000],
+        message: `Waiting for ${path} to be reachable`,
+      },
+    )
+    .toBe(true);
+
+  for (let i = 0; i < maxRetries; i += 1) {
     try {
       const response = await page.goto(path, { timeout: 30_000, waitUntil: "load" });
       if (response?.ok()) return response;
     } catch (e) {
-      lastError = e instanceof Error ? e : new Error(String(e));
-      if (i < maxRetries - 1) {
-        await page.waitForTimeout(1000 * (i + 1));
-      }
+      if (i === maxRetries - 1) throw e;
     }
   }
-  throw lastError ?? new Error(`Failed to navigate to ${path}`);
+  throw new Error(`Failed to navigate to ${path}; last readiness status: ${lastStatus}`);
 }
 
 export async function selectSolToken(page: Page) {
@@ -101,6 +118,12 @@ export async function openCsvMode(page: Page, label = /use csv|csv campaign/i) {
 export async function parseCsv(page: Page, csv: string) {
   await page.locator("textarea").fill(csv);
   await page.getByRole("button", { name: /validate csv/i }).click();
+}
+
+export async function expectCsvReadyToFund(page: Page) {
+  await expect(page.getByText(/valid row/i).first()).toBeVisible();
+  await expect(page.getByText(/no errors found/i)).toBeVisible();
+  await expect(page.getByRole("button", { name: /create & fund campaign/i })).toBeEnabled();
 }
 
 export function csv(rows: string[]) {
