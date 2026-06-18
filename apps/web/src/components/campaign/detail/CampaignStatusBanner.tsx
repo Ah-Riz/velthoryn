@@ -33,10 +33,10 @@ export function CampaignStatusBanner({
   if (isInstantRefunded) {
     return (
       <div className="rounded-xl border border-emerald-500/20 bg-emerald-500/[0.05] p-4">
-        <p className="text-[13px] font-medium text-emerald-400">
+        <p className="text-[13px] font-medium text-emerald-700 dark:text-emerald-400">
           Campaign refunded before vesting started
         </p>
-        <p className="mt-1.5 text-[12px] leading-6 text-emerald-300/70">
+        <p className="mt-1.5 text-[12px] leading-6 text-emerald-700/70 dark:text-emerald-300/70">
           All tokens were returned to your wallet.
         </p>
       </div>
@@ -50,8 +50,8 @@ export function CampaignStatusBanner({
     if (showAsWithdrawn) {
       return (
         <div className="rounded-xl border border-emerald-500/20 bg-emerald-500/[0.05] p-4">
-          <p className="text-[13px] font-medium text-emerald-400">Campaign settled</p>
-          <p className="mt-1.5 text-[12px] leading-6 text-emerald-300/70">
+          <p className="text-[13px] font-medium text-emerald-700 dark:text-emerald-400">Campaign settled</p>
+          <p className="mt-1.5 text-[12px] leading-6 text-emerald-700/70 dark:text-emerald-300/70">
             Unvested tokens have been withdrawn to your wallet.
           </p>
         </div>
@@ -68,10 +68,10 @@ export function CampaignStatusBanner({
       });
       return (
         <div className="rounded-xl border border-amber-500/20 bg-amber-500/[0.05] p-4">
-          <p className="text-[13px] font-medium text-amber-400">
+          <p className="text-[13px] font-medium text-amber-700 dark:text-amber-400">
             Campaign cancelled on {cancelDate}
           </p>
-          <p className="mt-1.5 text-[12px] leading-6 text-amber-300/70">
+          <p className="mt-1.5 text-[12px] leading-6 text-amber-700/70 dark:text-amber-300/70">
             Grace period expires in{" "}
             <GracePeriodCountdown
               cancelledAt={cancelledAtBigint}
@@ -85,8 +85,8 @@ export function CampaignStatusBanner({
 
     return (
       <div className="rounded-xl border border-red-500/20 bg-red-500/[0.05] p-4">
-        <p className="text-[13px] font-medium text-red-400">Grace period has expired</p>
-        <p className="mt-1.5 text-[12px] leading-6 text-red-300/70">
+        <p className="text-[13px] font-medium text-red-700 dark:text-red-400">Grace period has expired</p>
+        <p className="mt-1.5 text-[12px] leading-6 text-red-700/70 dark:text-red-300/70">
           {unvestedAmount !== undefined
             ? `You can now withdraw ${formatTokenAmount(unvestedAmount, mintDecimals)} unvested tokens.`
             : "You can now withdraw your unvested tokens."}
@@ -105,7 +105,7 @@ export function CampaignStatusBanner({
   if (!isFunded) {
     return (
       <div className="rounded-xl border border-amber-500/20 bg-amber-500/[0.05] p-4">
-        <p className="text-[13px] font-medium text-amber-400">Campaign created but not yet funded</p>
+        <p className="text-[13px] font-medium text-amber-700 dark:text-amber-400">Campaign created but not yet funded</p>
         {onResumeFunding && (
           <button
             type="button"

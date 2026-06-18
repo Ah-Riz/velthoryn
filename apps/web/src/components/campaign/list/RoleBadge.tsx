@@ -8,10 +8,10 @@ export function RoleBadge({
   const label = role === "both" ? "Sender + Recipient" : role === "recipient" ? "Recipient" : "Sender";
   const classes =
     role === "both"
-      ? "border-[#7c3aed]/25 bg-[#7c3aed]/10 text-[#a78bfa]"
+      ? "border-primary/25 bg-primary/10 text-accent-light"
       : role === "sender"
-        ? "border-[#2e3648] bg-[#161a25] text-[#b4b9c5]"
-        : "border-[#222838] bg-[#13161f] text-[#64748b]";
+        ? "border-line-hover bg-surface-hover text-secondary-foreground"
+        : "border-line bg-muted text-muted-foreground";
 
   return (
     <span className={`inline-flex items-center rounded-full border px-2.5 py-1 font-mono text-[10px] tracking-[0.06em] ${classes}`}>

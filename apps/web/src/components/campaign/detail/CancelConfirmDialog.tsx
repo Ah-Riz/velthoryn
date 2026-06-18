@@ -108,9 +108,9 @@ export function CancelConfirmDialog({
 
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="max-w-md border-white/[0.08] bg-[#0d1017]" showCloseButton={false}>
+      <DialogContent className="max-w-md border-foreground/[0.08] bg-background" showCloseButton={false}>
         <DialogHeader>
-          <DialogTitle className={effectiveMode === "refund" ? "text-amber-400" : "text-red-400"}>
+          <DialogTitle className={effectiveMode === "refund" ? "text-amber-700 dark:text-amber-400" : "text-red-700 dark:text-red-400"}>
             {effectiveMode === "refund"
               ? "Instant refund this campaign?"
               : "Cancel this vesting stream?"}
@@ -120,14 +120,14 @@ export function CancelConfirmDialog({
         <div className="space-y-4">
           {/* Mode toggle: refund vs grace */}
           {showRefundToggle && (
-            <div className="flex gap-1 rounded-lg border border-white/[0.08] bg-white/[0.02] p-1">
+            <div className="flex gap-1 rounded-lg border border-foreground/[0.08] bg-foreground/[0.02] p-1">
               <button
                 type="button"
                 onClick={() => setMode("refund")}
                 className={`flex-1 rounded-md px-3 py-1.5 text-[12px] font-medium transition ${
                   effectiveMode === "refund"
-                    ? "bg-amber-500/20 text-amber-300"
-                    : "text-[#8b92a5] hover:text-white"
+                    ? "bg-amber-500/20 text-amber-700 dark:text-amber-300"
+                    : "text-muted-foreground hover:text-foreground"
                 }`}
               >
                 Instant Refund
@@ -137,8 +137,8 @@ export function CancelConfirmDialog({
                 onClick={() => setMode("grace")}
                 className={`flex-1 rounded-md px-3 py-1.5 text-[12px] font-medium transition ${
                   effectiveMode === "grace"
-                    ? "bg-white/[0.08] text-white"
-                    : "text-[#8b92a5] hover:text-white"
+                    ? "bg-foreground/[0.08] text-foreground"
+                    : "text-muted-foreground hover:text-foreground"
                 }`}
               >
                 Grace Period
@@ -148,13 +148,13 @@ export function CancelConfirmDialog({
 
           {/* Mode toggle: instant settle vs grace */}
           {showSingleToggle && !showRefundToggle && (
-            <div className="flex gap-1 rounded-lg border border-white/[0.08] bg-white/[0.02] p-1">
+            <div className="flex gap-1 rounded-lg border border-foreground/[0.08] bg-foreground/[0.02] p-1">
               <button
                 type="button"
                 onClick={() => setMode("instant")}
                 disabled={instantDisabled}
                 className={`flex-1 rounded-md px-3 py-1.5 text-[12px] font-medium transition ${
-                  effectiveMode === "instant" ? "bg-white/[0.08] text-white" : "text-[#8b92a5] hover:text-white"
+                  effectiveMode === "instant" ? "bg-foreground/[0.08] text-foreground" : "text-muted-foreground hover:text-foreground"
                 } ${instantDisabled ? "cursor-not-allowed opacity-40" : ""}`}
               >
                 Instant Settle
@@ -163,7 +163,7 @@ export function CancelConfirmDialog({
                 type="button"
                 onClick={() => setMode("grace")}
                 className={`flex-1 rounded-md px-3 py-1.5 text-[12px] font-medium transition ${
-                  effectiveMode === "grace" ? "bg-white/[0.08] text-white" : "text-[#8b92a5] hover:text-white"
+                  effectiveMode === "grace" ? "bg-foreground/[0.08] text-foreground" : "text-muted-foreground hover:text-foreground"
                 }`}
               >
                 Grace Period
@@ -172,7 +172,7 @@ export function CancelConfirmDialog({
           )}
 
           {showSingleToggle && !showRefundToggle && instantDisabled && (
-            <p className="text-[11px] text-amber-400">
+            <p className="text-[11px] text-amber-700 dark:text-amber-400">
               Instant Settle unavailable — schedule parameters not loaded. Load from URL or enter manually first.
             </p>
           )}
@@ -180,28 +180,28 @@ export function CancelConfirmDialog({
           {/* Refund content */}
           {effectiveMode === "refund" && (
             <>
-              <p className="text-[13px] text-[#8b92a5]">
+              <p className="text-[13px] text-muted-foreground">
                 This campaign has not started yet. All funds will be returned to you
                 instantly in a single transaction. No grace period needed.
               </p>
               <div className="space-y-3 text-[13px]">
                 <div className="flex justify-between">
-                  <span className="text-[#8b92a5]">Campaign total supply</span>
-                  <span className="font-medium text-white">{fmt(totalSupply)} tokens</span>
+                  <span className="text-muted-foreground">Campaign total supply</span>
+                  <span className="font-medium text-foreground">{fmt(totalSupply)} tokens</span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-[#8b92a5]">Returned to you</span>
-                  <span className="font-medium text-emerald-400">{fmt(totalSupply)} tokens</span>
+                  <span className="text-muted-foreground">Returned to you</span>
+                  <span className="font-medium text-emerald-700 dark:text-emerald-400">{fmt(totalSupply)} tokens</span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-[#8b92a5]">To recipients</span>
-                  <span className="font-medium text-[#555d73]">0 tokens</span>
+                  <span className="text-muted-foreground">To recipients</span>
+                  <span className="font-medium text-muted-foreground">0 tokens</span>
                 </div>
               </div>
-              <div className="rounded-xl border border-emerald-500/20 bg-emerald-500/5 px-4 py-3 text-[12px] leading-6 text-emerald-300">
+              <div className="rounded-xl border border-emerald-500/20 bg-emerald-500/5 px-4 py-3 text-[12px] leading-6 text-emerald-700 dark:text-emerald-300">
                 No vesting has started — all funds are returned immediately with no grace period.
               </div>
-              <p className="text-[11px] text-[#555d73]">
+              <p className="text-[11px] text-muted-foreground">
                 This is irreversible. The campaign will be marked as refunded and cannot be reactivated.
               </p>
             </>
@@ -210,25 +210,25 @@ export function CancelConfirmDialog({
           {/* Grace period content */}
           {effectiveMode === "grace" && (
             <>
-              <p className="text-[13px] text-[#8b92a5]">
+              <p className="text-[13px] text-muted-foreground">
                 This action is irreversible. Vesting will freeze at the current moment.
                 Recipients can still claim tokens vested up to now.
               </p>
               <div className="space-y-3 text-[13px]">
                 <div className="flex justify-between">
-                  <span className="text-[#8b92a5]">Already claimed</span>
-                  <span className="font-medium text-white">{fmt(totalClaimed)} tokens</span>
+                  <span className="text-muted-foreground">Already claimed</span>
+                  <span className="font-medium text-foreground">{fmt(totalClaimed)} tokens</span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-[#8b92a5]">Unclaimed vested (claimable by recipient)</span>
-                  <span className="font-medium text-emerald-400">~{fmt(unclaimedVested)} tokens</span>
+                  <span className="text-muted-foreground">Unclaimed vested (claimable by recipient)</span>
+                  <span className="font-medium text-emerald-700 dark:text-emerald-400">~{fmt(unclaimedVested)} tokens</span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-[#8b92a5]">Unvested (recoverable after 7-day grace)</span>
-                  <span className="font-medium text-amber-400">~{fmt(returnedToCreator)} tokens</span>
+                  <span className="text-muted-foreground">Unvested (recoverable after 7-day grace)</span>
+                  <span className="font-medium text-amber-700 dark:text-amber-400">~{fmt(returnedToCreator)} tokens</span>
                 </div>
               </div>
-              <p className="text-[11px] text-[#555d73]">
+              <p className="text-[11px] text-muted-foreground">
                 Unvested tokens are NOT returned immediately. Use &quot;Withdraw Unvested&quot; after the 7-day grace period.
               </p>
             </>
@@ -237,23 +237,23 @@ export function CancelConfirmDialog({
           {/* Instant settle content */}
           {effectiveMode === "instant" && showSingleToggle && (
             <>
-              <p className="text-[13px] text-[#8b92a5]">
+              <p className="text-[13px] text-muted-foreground">
                 Settle immediately in one transaction. Vested tokens go to the beneficiary,
                 remaining tokens return to you. No grace period.
               </p>
               <div className="space-y-3 text-[13px]">
                 <div className="flex justify-between">
-                  <span className="text-[#8b92a5]">To beneficiary (vested)</span>
-                  <span className="font-medium text-emerald-400">~{fmt(unclaimedVested + totalClaimed)}</span>
+                  <span className="text-muted-foreground">To beneficiary (vested)</span>
+                  <span className="font-medium text-emerald-700 dark:text-emerald-400">~{fmt(unclaimedVested + totalClaimed)}</span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-[#8b92a5]">Returned to you (unvested)</span>
-                  <span className="font-medium text-amber-400">~{fmt(returnedToCreator)}</span>
+                  <span className="text-muted-foreground">Returned to you (unvested)</span>
+                  <span className="font-medium text-amber-700 dark:text-amber-400">~{fmt(returnedToCreator)}</span>
                 </div>
               </div>
               {beneficiaryUnknown && onManualBeneficiaryChange && (
                 <div className="space-y-2">
-                  <p className="text-[11px] text-amber-400">
+                  <p className="text-[11px] text-amber-700 dark:text-amber-400">
                     Beneficiary not found in indexed data. Enter the wallet address:
                   </p>
                   <Input
@@ -265,7 +265,7 @@ export function CancelConfirmDialog({
                   />
                 </div>
               )}
-              <p className="text-[11px] text-[#555d73]">
+              <p className="text-[11px] text-muted-foreground">
                 This is irreversible. Tokens are distributed atomically in a single transaction.
               </p>
             </>

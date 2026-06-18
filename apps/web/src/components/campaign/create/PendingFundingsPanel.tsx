@@ -62,7 +62,7 @@ export function PendingFundingsPanel({
             </button>
             <a
               href={`/campaign/${pending.treeAddress}`}
-              className="rounded-lg border border-white/[0.12] px-3 py-2 text-[12px] font-medium text-white"
+              className="rounded-lg border border-foreground/[0.12] px-3 py-2 text-[12px] font-medium text-foreground"
             >
               View campaign
             </a>

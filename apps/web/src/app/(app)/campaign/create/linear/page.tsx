@@ -9,9 +9,9 @@ import { useCreateCampaign } from "@/hooks/useCreateCampaign";
 import { useCreateStream, type CreateStreamResult } from "@/hooks/useCreateStream";
 import { useWalletTokens } from "@/hooks/useWalletTokens";
 import { useToast } from "@/components/shell/Toast";
-import { CARD, INPUT, INPUT_ERR, LABEL, SectionHeader, Field, ToggleCard, TxResultCard, ErrorCard } from "@/components/campaign/create/shared";
+import { CARD, INPUT, INPUT_ERR, LABEL, SectionHeader, Field, ToggleCard, TxResultCard, ErrorCard, formatTokenAmount, formatUnixToDate, formatDurationSeconds } from "@/components/campaign/create/shared";
 import { BulkCsvSection } from "@/components/campaign/create/BulkCsvSection";
-import { FormSummary } from "@/components/campaign/create/FormSummary";
+import { FormSummary, type BulkReviewData } from "@/components/campaign/create/FormSummary";
 import { PageHeader } from "@/components/campaign/create/PageHeader";
 import { TokenPickerButton } from "@/components/campaign/create/TokenPickerButton";
 import { PendingFundingsPanel } from "@/components/campaign/create/PendingFundingsPanel";
@@ -28,6 +28,9 @@ type StreamEntry = {
   id: string;
   recipient: string;
   amount: string;
+  startTime: string;
+  cliffTime: string;
+  endTime: string;
 };
 
 type TxState =
@@ -47,7 +50,7 @@ type TxState =
   | { type: "bulk-funded"; sig: string; treeAddress: string; prepared: PreparedBulkCampaign };
 
 function newStream(): StreamEntry {
-  return { id: crypto.randomUUID(), recipient: "", amount: "" };
+  return { id: crypto.randomUUID(), recipient: "", amount: "", startTime: "", cliffTime: "", endTime: "" };
 }
 
 function waitForLoadingPaint() {
@@ -102,15 +105,13 @@ export default function LinearCreatePage() {
   const tokenBalance = walletToken?.uiAmount ?? null;
   const totalAmount = streams.reduce((sum, s) => sum + (Number(s.amount) || 0), 0);
 
-  const validateField = useCallback(
-    (key: string, value: string, type: "recipient" | "amount") => {
-      let err: string | null = null;
-      if (type === "recipient") err = validatePublicKey(value);
-      else if (type === "amount") err = validateAmountWithDecimals(value, effectiveMintDecimals);
-      setFormErrors((prev) => ({ ...prev, [key]: err }));
-    },
-    [effectiveMintDecimals],
-  );
+  const validateField = (key: string, value: string, type: "recipient" | "amount" | "start" | "end") => {
+    let err: string | null = null;
+    if (type === "recipient") err = validatePublicKey(value);
+    else if (type === "amount") err = validateAmountWithDecimals(value, effectiveMintDecimals);
+    else if (type === "end") err = value ? null : "End date is required.";
+    setFormErrors((prev) => ({ ...prev, [key]: err }));
+  };
 
   const refreshPendingFundings = useCallback(() => {
     if (!publicKey) {
@@ -130,9 +131,16 @@ export default function LinearCreatePage() {
   }, [refreshPendingFundings]);
 
   function handleTokenSelect(mint: string, decimals: number, autoWrap?: boolean) {
+    const mintChanged = mint !== mintAddress;
     setMintAddress(mint);
     setMintDecimals(decimals);
     setUseAutoWrap(autoWrap ?? false);
+    if (mintChanged && mode === "bulk") {
+      setCsvText("");
+      setCsvResult(null);
+      setTxState({ type: "idle" });
+      return;
+    }
     if (mode === "bulk" && csvText.trim()) {
       runBulkParse(csvText, decimals);
     }
@@ -432,12 +440,40 @@ export default function LinearCreatePage() {
       ? txState.prepared
       : null;
 
+  const bulkReview: BulkReviewData | null =
+    prepared && effectiveMintDecimals !== null
+      ? (() => {
+          const starts = prepared.leaves.map((l) => Number(l.startTime));
+          const ends = prepared.leaves.map((l) => Number(l.endTime));
+          const earliest = Math.min(...starts);
+          const latest = Math.max(...ends);
+          const { cliff, linear, milestone } = prepared.releaseMix;
+          const releaseType =
+            cliff && !linear && !milestone
+              ? "Cliff"
+              : !cliff && linear && !milestone
+              ? "Linear"
+              : !cliff && !linear && milestone
+              ? "Milestone"
+              : "Mixed";
+          return {
+            recipients: prepared.leafCount,
+            tokenSymbol,
+            totalSupply: `${formatTokenAmount(prepared.totalSupply, effectiveMintDecimals)}${tokenSymbol ? ` ${tokenSymbol}` : ""}`,
+            releaseType,
+            earliestStart: formatUnixToDate(earliest),
+            latestEnd: formatUnixToDate(latest),
+            duration: formatDurationSeconds(latest - earliest),
+          };
+        })()
+      : null;
+
   if (!publicKey) {
     return (
       <div className="mx-auto max-w-3xl space-y-6">
         <PageHeader title="Linear Vesting" description="Tokens unlock gradually over time, from start to end date." />
         <div className={`${CARD} p-5`}>
-          <p className="text-[13px] text-[#8b92a5]">Connect your wallet to create a linear vesting stream.</p>
+          <p className="text-[13px] text-muted-foreground">Connect your wallet to create a linear vesting stream.</p>
         </div>
       </div>
     );
@@ -468,14 +504,14 @@ export default function LinearCreatePage() {
               <button
                 type="button"
                 onClick={() => { setMode("single"); setTxState({ type: "idle" }); }}
-                className={`flex-1 rounded-lg px-3 py-2.5 text-[12px] font-medium transition ${mode === "single" ? "bg-white/[0.1] text-white" : "text-[#8b92a5] hover:text-white"}`}
+                className={`flex-1 rounded-lg px-3 py-2.5 text-[12px] font-medium transition ${mode === "single" ? "bg-foreground/[0.1] text-foreground" : "text-muted-foreground hover:text-foreground"}`}
               >
                 Manual
               </button>
               <button
                 type="button"
                 onClick={() => { setMode("bulk"); setTxState({ type: "idle" }); }}
-                className={`flex-1 rounded-lg px-3 py-2.5 text-[12px] font-medium transition ${mode === "bulk" ? "bg-white/[0.1] text-white" : "text-[#8b92a5] hover:text-white"}`}
+                className={`flex-1 rounded-lg px-3 py-2.5 text-[12px] font-medium transition ${mode === "bulk" ? "bg-foreground/[0.1] text-foreground" : "text-muted-foreground hover:text-foreground"}`}
               >
                 Use CSV
               </button>
@@ -541,13 +577,13 @@ export default function LinearCreatePage() {
               {streams.map((stream, i) => (
                 <div key={stream.id} className={`${CARD} space-y-4 p-5`}>
                   <div className="flex items-center justify-between">
-                    <p className="text-[13px] font-medium text-white">{streams.length > 1 ? `Recipient #${i + 1}` : `Stream #${i + 1}`}</p>
+                    <p className="text-[13px] font-medium text-foreground">{streams.length > 1 ? `Recipient #${i + 1}` : `Stream #${i + 1}`}</p>
                     <div className="flex gap-1.5">
-                      <button type="button" onClick={() => duplicateStream(i)} className="rounded-md border border-white/[0.08] px-2 py-1 text-[10px] text-[#8b92a5] hover:text-white">
+                      <button type="button" onClick={() => duplicateStream(i)} className="rounded-md border border-foreground/[0.08] px-2 py-1 text-[10px] text-muted-foreground hover:text-foreground">
                         Add Recipient
                       </button>
                       {streams.length > 1 && (
-                        <button type="button" onClick={() => removeStream(i)} className="rounded-md border border-red-500/20 px-2 py-1 text-[10px] text-red-400 hover:text-red-300">
+                        <button type="button" onClick={() => removeStream(i)} className="rounded-md border border-red-500/20 px-2 py-1 text-[10px] text-red-700 dark:text-red-400 hover:text-red-600 dark:text-red-300">
                           Remove
                         </button>
                       )}
@@ -568,11 +604,11 @@ export default function LinearCreatePage() {
                           className={`${INPUT} pr-24 ${formErrors[`amount_${i}`] ? INPUT_ERR : ""}`}
                         />
                         <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-1.5">
-                          <span className="text-[10px] text-[#555d73]">{tokenSymbol}</span>
+                          <span className="text-[10px] text-muted-foreground">{tokenSymbol}</span>
                           <button
                             type="button"
                             onClick={() => { if (walletToken) updateStream(stream.id, "amount", walletToken.uiAmount); }}
-                            className="rounded-md bg-white/[0.06] px-2 py-0.5 text-[10px] font-medium text-[#8b92a5] hover:text-white"
+                            className="rounded-md bg-foreground/[0.06] px-2 py-0.5 text-[10px] font-medium text-muted-foreground hover:text-foreground"
                           >
                             Max
                           </button>
@@ -598,6 +634,60 @@ export default function LinearCreatePage() {
                     error={formErrors[`recipient_${i}`]}
                   />
 
+                  {/* Start Time */}
+                  <Field
+                    label="Start Time (optional)"
+                    input={
+                      <input
+                        type="datetime-local"
+                        value={stream.startTime}
+                        onChange={(e) => updateStream(stream.id, "startTime", e.target.value)}
+                        className={INPUT}
+                      />
+                    }
+                    hint="Defaults to now if empty"
+                  />
+
+                  {/* End Time */}
+                  <Field
+                    label="End Time (Full Unlock)"
+                    input={
+                      <div className="flex gap-2">
+                        <input
+                          type="datetime-local"
+                          value={stream.endTime}
+                          onChange={(e) => updateStream(stream.id, "endTime", e.target.value)}
+                          onBlur={(e) => validateField(`end_${i}`, e.target.value, "end")}
+                          className={`${INPUT} flex-1 ${formErrors[`end_${i}`] ? INPUT_ERR : ""}`}
+                        />
+                        {streams.length > 1 && stream.endTime && (
+                          <button
+                            type="button"
+                            onClick={() => setStreams((prev) => prev.map((s) => ({ ...s, startTime: stream.startTime || s.startTime, cliffTime: stream.cliffTime || s.cliffTime, endTime: stream.endTime })))}
+                            className="shrink-0 rounded-md border border-foreground/[0.08] px-2 py-1 text-[10px] text-muted-foreground hover:text-foreground"
+                            title="Apply schedule to all streams"
+                          >
+                            Apply all
+                          </button>
+                        )}
+                      </div>
+                    }
+                    error={formErrors[`end_${i}`]}
+                  />
+
+                  {/* Cliff Time */}
+                  <Field
+                    label="Cliff Time (optional)"
+                    input={
+                      <input
+                        type="datetime-local"
+                        value={stream.cliffTime}
+                        onChange={(e) => updateStream(stream.id, "cliffTime", e.target.value)}
+                        className={INPUT}
+                      />
+                    }
+                    hint="No tokens vest before this date. Defaults to start time if empty."
+                  />
                 </div>
               ))}
 
@@ -605,7 +695,7 @@ export default function LinearCreatePage() {
               <button
                 type="button"
                 onClick={() => setStreams((prev) => [...prev, newStream()])}
-                className="w-full rounded-xl border border-dashed border-white/[0.12] py-3 text-[13px] font-medium text-[#8b92a5] transition hover:border-white/[0.2] hover:text-white"
+                className="w-full rounded-xl border border-dashed border-foreground/[0.12] py-3 text-[13px] font-medium text-muted-foreground transition hover:border-foreground/[0.2] hover:text-foreground"
               >
                 + Add Recipient
               </button>
@@ -630,13 +720,14 @@ export default function LinearCreatePage() {
               csvResult={csvResult}
               prepared={prepared}
               vestingType="linear"
+              tokenSymbol={tokenSymbol}
             />
           )}
 
           {/* Results */}
           {txState.type === "success" && (
             <div className="space-y-3">
-              <p className="text-[13px] font-medium text-emerald-400">{txState.results.length} linear stream(s) created!</p>
+              <p className="text-[13px] font-medium text-emerald-700 dark:text-emerald-400">{txState.results.length} linear stream(s) created!</p>
               {txState.results.map((r, i) => (
                 <TxResultCard key={r.sig} title={`Stream #${i + 1}`} sig={r.sig} href={r.shareUrl} linkLabel="Open stream" />
               ))}
@@ -644,9 +735,9 @@ export default function LinearCreatePage() {
           )}
           {txState.type === "bulk-created-unfunded" && (
             <div className={`${CARD} p-5`}>
-              <p className="text-[13px] font-medium text-amber-300">Campaign created, funding pending</p>
-              <p className="mt-2 text-[12px] leading-6 text-[#d8c58f]">{txState.msg}</p>
-              <p className="mt-3 break-all font-mono text-[11px] text-[#8b92a5]">Create signature: {txState.createSig}</p>
+              <p className="text-[13px] font-medium text-amber-700 dark:text-amber-300">Campaign created, funding pending</p>
+              <p className="mt-2 text-[12px] leading-6 text-warning">{txState.msg}</p>
+              <p className="mt-3 break-all font-mono text-[11px] text-muted-foreground">Create signature: {txState.createSig}</p>
               <div className="mt-4 flex flex-wrap gap-2">
                 <button
                   type="button"
@@ -662,7 +753,7 @@ export default function LinearCreatePage() {
                 </button>
                 <a
                   href={`/campaign/${txState.treeAddress}`}
-                  className="rounded-lg border border-white/[0.12] px-3 py-2 text-[12px] font-medium text-white"
+                  className="rounded-lg border border-foreground/[0.12] px-3 py-2 text-[12px] font-medium text-foreground"
                 >
                   View campaign
                 </a>
@@ -698,6 +789,7 @@ export default function LinearCreatePage() {
               ? handleSubmit
               : handleBulkCreate
           }
+          bulkReview={mode === "bulk" ? bulkReview : null}
         />
       </div>
     </div>

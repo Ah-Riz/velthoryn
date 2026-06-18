@@ -15,6 +15,7 @@ interface CampaignSummary {
   cancelledAt: number | null;
   instantRefunded: boolean;
   streamSettled: boolean;
+  hasCancelEvent: boolean;
   createdAt: number;
   metadata: { name?: string; description?: string; logoUri?: string } | null;
 }

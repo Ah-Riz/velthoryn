@@ -93,7 +93,7 @@ export function CloseClaimRecordButton({
     <button
       onClick={handleClose}
       disabled={loading}
-      className="w-full rounded-xl border border-white/[0.06] py-2.5 text-[12px] font-medium text-[#8b92a5] transition hover:border-white/[0.12] hover:text-white disabled:opacity-50"
+      className="w-full rounded-xl border border-foreground/[0.06] py-2.5 text-[12px] font-medium text-muted-foreground transition hover:border-foreground/[0.12] hover:text-foreground disabled:opacity-50"
     >
       {loading ? "Closing..." : "Close Record & Reclaim Rent (~0.002 SOL)"}
     </button>

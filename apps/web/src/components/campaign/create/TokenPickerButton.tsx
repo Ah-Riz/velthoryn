@@ -28,14 +28,14 @@ export function TokenPickerButton({
         type="button"
         onClick={() => setOpen(true)}
         className={`flex w-full items-center gap-3 rounded-xl border px-4 py-3 text-left transition ${
-          error ? "border-red-500/40" : "border-white/[0.08] hover:border-white/20"
-        } bg-[#11161f]`}
+          error ? "border-red-500/40" : "border-foreground/[0.08] hover:border-foreground/20"
+        } bg-muted`}
       >
         {selected ? (
           <>
             {/* eslint-disable-next-line @next/next/no-img-element */}
             {selected.logoURI && <img src={selected.logoURI} alt={selected.symbol} className="h-6 w-6 rounded-full" />}
-            <span className="flex-1 text-[13px] font-medium text-white">
+            <span className="flex-1 text-[13px] font-medium text-foreground">
               {selected.symbol}
               {selected.isNativeSol ? " (Native)" : ""}
               {selected.isWrappedSol ? " (Wrapped)" : ""}
@@ -43,19 +43,19 @@ export function TokenPickerButton({
           </>
         ) : mintAddress ? (
           <>
-            <div className="flex h-6 w-6 items-center justify-center rounded-full bg-white/[0.06] text-[9px] font-bold text-[#8b92a5]">
+            <div className="flex h-6 w-6 items-center justify-center rounded-full bg-foreground/[0.06] text-[9px] font-bold text-muted-foreground">
               {mintAddress.slice(0, 2)}
             </div>
-            <span className="flex-1 font-mono text-[12px] text-white">{shortenAddress(mintAddress)}</span>
+            <span className="flex-1 font-mono text-[12px] text-foreground">{shortenAddress(mintAddress)}</span>
           </>
         ) : (
-          <span className="flex-1 text-[13px] text-[#6f7c95]">Select Token</span>
+          <span className="flex-1 text-[13px] text-muted-foreground">Select Token</span>
         )}
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="text-[#6f7c95]">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="text-muted-foreground">
           <path d="m6 9 6 6 6-6" />
         </svg>
       </button>
-      {error && <p className="mt-1 text-[12px] text-red-400">{error}</p>}
+      {error && <p className="mt-1 text-[12px] text-red-700 dark:text-red-400">{error}</p>}
       <TokenPickerModal open={open} onClose={() => setOpen(false)} onSelect={onSelect} selectedMint={mintAddress} />
     </>
   );

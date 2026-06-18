@@ -43,7 +43,7 @@ test.describe("VestingChart", () => {
 
     // "Vesting Curve" label is always present when the chart renders
     // Use exact: true to avoid strict mode violation with "Vesting curve" elsewhere on the page
-    await expect(page.getByText("Vesting Curve", { exact: true })).toBeVisible({ timeout: 20_000 });
+    await expect(page.getByText("Vesting Curve", { exact: true }).first()).toBeVisible({ timeout: 20_000 });
     // The SVG chart element should be in the DOM
     await expect(page.locator('svg.cursor-crosshair').first()).toBeVisible({ timeout: 10_000 });
     expect(pageErrors).toEqual([]);
@@ -68,7 +68,7 @@ test.describe("VestingChart", () => {
     await mockCampaignApi(page, ADDR, { leafCount: 1, cancelledAt: null });
     await gotoWithRetry(page, `/campaign/${ADDR}`);
 
-    await expect(page.getByText("Vesting Curve", { exact: true })).toBeVisible({ timeout: 20_000 });
+    await expect(page.getByText("Vesting Curve", { exact: true }).first()).toBeVisible({ timeout: 20_000 });
 
     // Time-range buttons appear when availableRanges.length > 2
     await expect(page.getByRole("button", { name: "Daily" })).toBeVisible({ timeout: 10_000 });
@@ -97,7 +97,7 @@ test.describe("VestingChart", () => {
     await mockCampaignApi(page, ADDR, { leafCount: 1, cancelledAt: null });
     await gotoWithRetry(page, `/campaign/${ADDR}`);
 
-    await expect(page.getByText("Vesting Curve", { exact: true })).toBeVisible({ timeout: 20_000 });
+    await expect(page.getByText("Vesting Curve", { exact: true }).first()).toBeVisible({ timeout: 20_000 });
 
     const weeklyBtn = page.getByRole("button", { name: "Weekly" });
     await expect(weeklyBtn).toBeVisible({ timeout: 10_000 });
@@ -136,7 +136,7 @@ test.describe("CampaignTimeline", () => {
     await gotoWithRetry(page, `/campaign/${ADDR}`);
 
     // Empty state message when events array is empty
-    await expect(page.getByText("No events recorded yet.")).toBeVisible({ timeout: 20_000 });
+    await expect(page.getByText("No events recorded yet")).toBeVisible({ timeout: 20_000 });
     expect(pageErrors).toEqual([]);
   });
 

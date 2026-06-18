@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { use, useCallback, useEffect, useState } from "react";
+import { use, useCallback, useEffect, useMemo, useState } from "react";
 import { useWallet } from "@solana/wallet-adapter-react";
 import { PublicKey } from "@solana/web3.js";
 import { BN } from "@coral-xyz/anchor";
@@ -12,6 +12,7 @@ import { useUpdateRoot } from "@/hooks/useUpdateRoot";
 import { useMintInfo } from "@/hooks/useMintInfo";
 import { useToast } from "@/components/shell/Toast";
 import { canRotateRoot } from "@/lib/campaign/authority";
+import { toRawAmount } from "@/lib/campaign/bulk";
 
 type OnChainTreeState = {
   merkleRoot: number[];
@@ -45,6 +46,21 @@ async function withTimeout<T>(
 function truncateHash(value: string): string {
   if (value.length <= 18) return value;
   return `${value.slice(0, 10)}...${value.slice(-8)}`;
+}
+
+function rawToDisplayDecimal(raw: string, decimals: number): string {
+  try {
+    const n = BigInt(raw);
+    if (n === 0n) return "0";
+    if (decimals === 0) return n.toString();
+    const div = 10n ** BigInt(decimals);
+    const whole = n / div;
+    const frac = n % div;
+    const fracStr = frac.toString().padStart(decimals, "0").replace(/0+$/, "");
+    return fracStr ? `${whole}.${fracStr}` : whole.toString();
+  } catch {
+    return raw;
+  }
 }
 
 export default function CampaignAllocationsPage({
@@ -114,6 +130,19 @@ export default function CampaignAllocationsPage({
   const { mintDecimals } = useMintInfo(detail?.mint ?? "");
   const decimals = mintDecimals ?? 9; // default SOL decimals
 
+  // beneficiary → raw claimed amount string, for AllocationEditor floor validation
+  const claimedAmountMap = useMemo(() => {
+    const map: Record<string, string> = {};
+    if (detail?.recipients) {
+      for (const r of detail.recipients) {
+        if (r.claimedAmount && r.claimedAmount !== "0") {
+          map[r.beneficiary] = r.claimedAmount;
+        }
+      }
+    }
+    return map;
+  }, [detail]);
+
   // Fetch full leaf data (with schedule) for the editor
   const [fullLeaves, setFullLeaves] = useState<Array<{
     beneficiary: string; amount: string; releaseType: number;
@@ -167,8 +196,26 @@ export default function CampaignAllocationsPage({
     cancelAuthority: treeState?.cancelAuthority,
     cancellable: treeState?.cancellable ?? false,
     cancelledAt: treeState?.cancelledAt ? BigInt(treeState.cancelledAt.toString()) : null,
+    paused: detail?.paused ?? false,
     leafCount: treeState?.leafCount ?? detail?.leafCount ?? 0,
   });
+
+  const hasAnyClaim = (detail?.analytics.claimCount ?? 0) > 0;
+  const allVested =
+    detail !== undefined &&
+    Number(detail.totalSupply) > 0 &&
+    Number(detail.totalClaimed) >= Number(detail.totalSupply);
+
+  const lockedReason: string | null =
+    (detail && detail.cancelledAt !== null)
+      ? detail.instantRefunded
+        ? "Locked: campaign cancelled (instant refund)"
+        : "Locked: campaign cancelled"
+      : detail?.paused ? "Locked: campaign paused" :
+    hasAnyClaim ? "Locked: claims already exist" :
+    allVested ? "Locked: all tokens vested" :
+    !canRotate ? "Locked: wallet is not cancel authority" :
+    null;
 
   const currentMerkleRoot = treeState
     ? Array.from(treeState.merkleRoot).map((b) => b.toString(16).padStart(2, "0")).join("")
@@ -180,7 +227,7 @@ export default function CampaignAllocationsPage({
     ? fullLeaves.map((l, i) => ({
         id: `leaf-${i}`,
         beneficiary: l.beneficiary,
-        amount: (Number(l.amount) / 10 ** decimals).toString(),
+        amount: rawToDisplayDecimal(String(l.amount), decimals),
         releaseType: l.releaseType,
         startTime: l.startTime,
         cliffTime: l.cliffTime,
@@ -198,7 +245,7 @@ export default function CampaignAllocationsPage({
       // Step 1: Call prepare API to build new Merkle tree
       const recipients = rows.map((r) => ({
         beneficiary: r.beneficiary,
-        amount: Math.round(Number(r.amount) * 10 ** decimals).toString(),
+        amount: toRawAmount(r.amount, decimals),
         releaseType: r.releaseType,
         startTime: r.startTime,
         cliffTime: r.cliffTime,
@@ -210,6 +257,27 @@ export default function CampaignAllocationsPage({
         toast("Schedule data missing. Cannot update allocations without complete schedule.", "error");
         setSubmitting(false);
         return;
+      }
+
+      // Pre-submit guard 1: sum check
+      const sumRaw = recipients.reduce((acc, r) => acc + BigInt(r.amount), 0n);
+      if (sumRaw > BigInt(detail.totalSupply)) {
+        const supplyDisplay = (Number(detail.totalSupply) / 10 ** decimals).toLocaleString(undefined, { maximumFractionDigits: 6 });
+        toast(`Total allocation exceeds campaign supply of ${supplyDisplay} tokens. Root rotation cannot expand the budget.`, "error");
+        setSubmitting(false);
+        return;
+      }
+
+      // Pre-submit guard 2: removal check — belt-and-suspenders
+      const currentBenefSet = new Set(rows.map((r) => r.beneficiary).filter(Boolean));
+      for (const recip of detail.recipients) {
+        if (!currentBenefSet.has(recip.beneficiary) && BigInt(recip.claimedAmount ?? "0") > 0n) {
+          const short = `${recip.beneficiary.slice(0, 4)}…${recip.beneficiary.slice(-4)}`;
+          const claimedDisplay = (Number(recip.claimedAmount) / 10 ** decimals).toLocaleString(undefined, { maximumFractionDigits: 6 });
+          toast(`Cannot remove ${short} — they have already claimed ${claimedDisplay} tokens.`, "error");
+          setSubmitting(false);
+          return;
+        }
       }
 
       const prepareRes = await fetch("/api/campaigns/prepare", {
@@ -284,24 +352,24 @@ export default function CampaignAllocationsPage({
   return (
     <div className="mx-auto max-w-5xl space-y-6 pb-12">
       {/* Header */}
-      <div className="rounded-2xl border border-white/[0.08] bg-[#0d1117] p-6">
+      <div className="rounded-2xl border border-foreground/[0.08] bg-card p-6">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
           <div className="space-y-2">
             <Link
               href={`/campaign/${treeAddress}`}
-              className="inline-flex items-center gap-2 text-[12px] font-medium text-[#8b92a5] transition hover:text-white"
+              className="inline-flex items-center gap-2 text-[12px] font-medium text-muted-foreground transition hover:text-foreground"
             >
               <span aria-hidden="true">←</span> Back to campaign
             </Link>
-            <h1 className="text-[24px] font-semibold text-white">Allocation Editor</h1>
-            <p className="max-w-3xl text-[14px] leading-7 text-[#8b92a5]">
+            <h1 className="text-[24px] font-semibold text-foreground">Allocation Editor</h1>
+            <p className="max-w-3xl text-[14px] leading-7 text-muted-foreground">
               Add, remove, or update recipients. Changes take effect after you approve the transaction.
             </p>
           </div>
           {currentMerkleRoot && (
-            <div className="rounded-xl border border-white/[0.08] bg-white/[0.02] px-4 py-3">
-              <p className="text-[11px] uppercase tracking-[0.18em] text-[#6f7c95]">Active Root</p>
-              <p className="mt-2 font-mono text-[12px] text-white">{truncateHash(currentMerkleRoot)}</p>
+            <div className="rounded-xl border border-foreground/[0.08] bg-foreground/[0.02] px-4 py-3">
+              <p className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">Active Root</p>
+              <p className="mt-2 font-mono text-[12px] text-foreground">{truncateHash(currentMerkleRoot)}</p>
             </div>
           )}
         </div>
@@ -309,53 +377,57 @@ export default function CampaignAllocationsPage({
 
       {/* Info cards */}
       <div className="grid gap-3 md:grid-cols-3">
-        <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-4">
-          <p className="text-[11px] uppercase tracking-[0.18em] text-[#6f7c95]">Step 1</p>
-          <p className="mt-2 text-[13px] font-medium text-white">Edit recipients</p>
-          <p className="mt-1 text-[12px] text-[#8b92a5]">Add, remove, or change amounts below.</p>
+        <div className="rounded-xl border border-foreground/[0.06] bg-foreground/[0.02] p-4">
+          <p className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">Step 1</p>
+          <p className="mt-2 text-[13px] font-medium text-foreground">Edit recipients</p>
+          <p className="mt-1 text-[12px] text-muted-foreground">Add, remove, or change amounts below.</p>
         </div>
-        <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-4">
-          <p className="text-[11px] uppercase tracking-[0.18em] text-[#6f7c95]">Step 2</p>
-          <p className="mt-2 text-[13px] font-medium text-white">Click Update</p>
-          <p className="mt-1 text-[12px] text-[#8b92a5]">We rebuild the Merkle tree automatically.</p>
+        <div className="rounded-xl border border-foreground/[0.06] bg-foreground/[0.02] p-4">
+          <p className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">Step 2</p>
+          <p className="mt-2 text-[13px] font-medium text-foreground">Click Update</p>
+          <p className="mt-1 text-[12px] text-muted-foreground">We rebuild the Merkle tree automatically.</p>
         </div>
-        <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-4">
-          <p className="text-[11px] uppercase tracking-[0.18em] text-[#6f7c95]">Step 3</p>
-          <p className="mt-2 text-[13px] font-medium text-white">Approve transaction</p>
-          <p className="mt-1 text-[12px] text-[#8b92a5]">Sign once — old proofs are replaced.</p>
+        <div className="rounded-xl border border-foreground/[0.06] bg-foreground/[0.02] p-4">
+          <p className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">Step 3</p>
+          <p className="mt-2 text-[13px] font-medium text-foreground">Approve transaction</p>
+          <p className="mt-1 text-[12px] text-muted-foreground">Sign once — old proofs are replaced.</p>
         </div>
       </div>
 
       {/* States */}
       {!publicKey && (
-        <div className="rounded-2xl border border-white/[0.06] bg-white/[0.02] p-6 text-[13px] text-[#8b92a5]">
+        <div className="rounded-2xl border border-foreground/[0.06] bg-foreground/[0.02] p-6 text-[13px] text-muted-foreground">
           Connect your wallet to edit allocations.
         </div>
       )}
 
       {publicKey && loading && (
-        <div className="rounded-2xl border border-white/[0.06] bg-white/[0.02] p-6 text-[13px] text-[#8b92a5]">
+        <div className="rounded-2xl border border-foreground/[0.06] bg-foreground/[0.02] p-6 text-[13px] text-muted-foreground">
           Loading…
         </div>
       )}
 
       {publicKey && error && (
-        <div className="rounded-2xl border border-red-500/20 bg-red-500/5 p-6 text-[13px] text-red-400">
+        <div className="rounded-2xl border border-red-500/20 bg-red-500/5 p-6 text-[13px] text-red-700 dark:text-red-400">
           {error}
         </div>
       )}
 
       {/* Editor */}
       {publicKey && !loading && !error && (
-        <div className="rounded-2xl border border-white/[0.06] bg-white/[0.02] p-5">
+        <div className="rounded-2xl border border-foreground/[0.06] bg-foreground/[0.02] p-5">
           {leavesLoading ? (
-            <p className="text-[13px] text-[#8b92a5]">Loading recipient data…</p>
+            <p className="text-[13px] text-muted-foreground">Loading recipient data…</p>
           ) : (
             <AllocationEditor
               initialRecipients={initialRows.length > 0 ? initialRows : [emptyRow()]}
-              loading={submitting}
+              loading={submitting || !!leavesLoading}
               onSubmit={handleSubmit}
               canRotate={canRotate}
+              lockedReason={lockedReason}
+              claimedAmounts={claimedAmountMap}
+              mintDecimals={decimals}
+              totalSupplyRaw={detail ? String(detail.totalSupply) : undefined}
             />
           )}
         </div>

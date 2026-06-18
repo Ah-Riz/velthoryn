@@ -7,6 +7,8 @@ import { AuthError } from "@/lib/api/errors";
 const NONCE_PREFIX = "auth:nonce:";
 const NONCE_TTL_SECONDS = 300;
 const TIMESTAMP_WINDOW_MS = 5 * 60 * 1000;
+// Allow client clocks up to 60 s ahead of server to handle normal NTP drift.
+const CLOCK_SKEW_TOLERANCE_MS = 60 * 1000;
 
 export interface AuthMessage {
   nonce: string;
@@ -75,7 +77,7 @@ export async function verifyWalletAuth(
     throw new AuthError("Unauthorized");
   }
 
-  if (message.timestamp > Date.now() || Date.now() - message.timestamp > TIMESTAMP_WINDOW_MS) {
+  if (message.timestamp > Date.now() + CLOCK_SKEW_TOLERANCE_MS || Date.now() - message.timestamp > TIMESTAMP_WINDOW_MS) {
     throw new AuthError("Unauthorized");
   }
 

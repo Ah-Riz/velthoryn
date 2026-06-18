@@ -12,6 +12,8 @@ type VestingChartProps = {
   cancelledAt?: number | null;
   milestoneCount?: number;
   formatAmount?: (raw: bigint) => string;
+  /** Pre-computed aggregate samples from the API for multi-recipient campaigns. */
+  aggregateSamples?: Array<{ t: number; vested: string }> | null;
 };
 
 type TimeRange = "1d" | "1w" | "1m" | "1y" | "all";
@@ -157,7 +159,9 @@ export function VestingChart({
   cancelledAt,
   milestoneCount = 1,
   formatAmount = defaultFmtAmount,
+  aggregateSamples,
 }: VestingChartProps) {
+  const isAggregate = aggregateSamples && aggregateSamples.length > 1;
   const now = Math.floor(Date.now() / 1000);
   const W = 400;
   const H = 160;
@@ -218,10 +222,48 @@ export function VestingChart({
   const y = useCallback((pct: number) => padTop + chartH - (safePct(pct) / 100) * chartH, [padTop, chartH]);
   const tFromX = useCallback((px: number) => tMin + ((px - padLeft) / chartW) * tRange, [tMin, padLeft, chartW, tRange]);
 
+  // ── Aggregate helper: interpolate percentage from pre-computed samples ──
+  const aggTotalSupplyNum = isAggregate ? Number(totalAmount) : 0;
+  const aggPctAt = useCallback((t: number): number => {
+    if (!isAggregate || aggTotalSupplyNum <= 0) return 0;
+    const samples = aggregateSamples!;
+    if (t <= samples[0].t) return 0;
+    if (t >= samples[samples.length - 1].t) {
+      return safePct((Number(BigInt(samples[samples.length - 1].vested)) / aggTotalSupplyNum) * 100);
+    }
+    for (let i = 1; i < samples.length; i++) {
+      if (t <= samples[i].t) {
+        const s0 = samples[i - 1];
+        const s1 = samples[i];
+        const frac = (t - s0.t) / (s1.t - s0.t || 1);
+        const v = Number(BigInt(s0.vested)) + frac * (Number(BigInt(s1.vested)) - Number(BigInt(s0.vested)));
+        return safePct((v / aggTotalSupplyNum) * 100);
+      }
+    }
+    return 0;
+  }, [isAggregate, aggregateSamples, aggTotalSupplyNum]);
+
   let curvePath: string;
   let fillPath: string;
 
-  if (releaseType === 0) {
+  if (isAggregate) {
+    // Build path from pre-computed samples
+    const pts: [number, number][] = aggregateSamples!.map((s) => {
+      const pct = aggTotalSupplyNum > 0
+        ? safePct((Number(BigInt(s.vested)) / aggTotalSupplyNum) * 100)
+        : 0;
+      return [x(s.t), y(pct)];
+    });
+    curvePath = `M${pts.map((p) => `${p[0]},${p[1]}`).join(" L")}`;
+
+    if (vestingComplete && now > effectiveEnd) {
+      const lastPct = aggPctAt(effectiveEnd);
+      curvePath += ` L${x(Math.min(now, tMax))},${y(lastPct)}`;
+    }
+
+    const trailEnd = vestingComplete ? Math.min(now, tMax) : endTs;
+    fillPath = `${curvePath} L${x(trailEnd)},${y(0)} L${x(startTs)},${y(0)} Z`;
+  } else if (releaseType === 0) {
     const cX = x(cliffTs);
     const r = Math.min(4, Math.max(0, (x(effectiveEnd) - cX) * 0.1));
     curvePath = [
@@ -278,15 +320,17 @@ export function VestingChart({
   }
 
   const nowX = x(Math.min(now, tMax));
-  const nowCurvePct = vestedPctAt(
-    Math.min(now, effectiveEnd),
-    releaseType,
-    startTs,
-    cliffTs,
-    endTs,
-    cancelledAt ?? null,
-    milestoneCount,
-  );
+  const nowCurvePct = isAggregate
+    ? aggPctAt(Math.min(now, effectiveEnd))
+    : vestedPctAt(
+        Math.min(now, effectiveEnd),
+        releaseType,
+        startTs,
+        cliffTs,
+        endTs,
+        cancelledAt ?? null,
+        milestoneCount,
+      );
 
   const svgRef = useRef<SVGSVGElement>(null);
   const [hover, setHover] = useState<{ svgX: number; t: number; pct: number } | null>(null);
@@ -302,10 +346,12 @@ export function VestingChart({
         return;
       }
       const t = tFromX(svgX);
-      const pct = vestedPctAt(t, releaseType, startTs, cliffTs, endTs, cancelledAt ?? null, milestoneCount);
+      const pct = isAggregate
+        ? aggPctAt(t)
+        : vestedPctAt(t, releaseType, startTs, cliffTs, endTs, cancelledAt ?? null, milestoneCount);
       setHover({ svgX, t, pct });
     },
-    [W, padLeft, padRight, tFromX, releaseType, startTs, cliffTs, endTs, cancelledAt, milestoneCount],
+    [W, padLeft, padRight, tFromX, isAggregate, aggPctAt, releaseType, startTs, cliffTs, endTs, cancelledAt, milestoneCount],
   );
 
   const handleMouseLeave = useCallback(() => setHover(null), []);
@@ -315,7 +361,9 @@ export function VestingChart({
       ? formatAmount((totalAmount * BigInt(Math.round(hover.pct * 100))) / 10000n)
       : null;
 
-  const releaseLabel = releaseType === 0 ? "Cliff" : releaseType === 1 ? "Linear" : "Milestone";
+  const releaseLabel = isAggregate
+    ? "Campaign"
+    : releaseType === 0 ? "Cliff" : releaseType === 1 ? "Linear" : "Milestone";
 
   const availableRanges = useMemo(() => {
     const totalDuration = endTs - startTs;

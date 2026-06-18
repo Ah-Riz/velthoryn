@@ -36,21 +36,32 @@ export default function ActivityPage() {
     return unique.size === 1 ? (vals[0] ?? null) : null;
   }, [mintAddresses, decimalsMap]);
 
+  const mintByTree = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const c of (senderQuery.data?.campaigns ?? []) as Array<{ treeAddress: string; mint: string }>) {
+      if (c.mint) map.set(c.treeAddress, c.mint);
+    }
+    for (const c of vestingCampaigns) {
+      if (c.mint) map.set(c.treeAddress, c.mint);
+    }
+    return map;
+  }, [senderQuery.data?.campaigns, vestingCampaigns]);
+
   return (
     <div className="mx-auto max-w-5xl space-y-6">
       <div>
-        <div className="mb-2 font-mono text-[11px] font-medium uppercase tracking-[0.18em] text-[#7c3aed]/70">
+        <div className="mb-2 font-mono text-[11px] font-medium uppercase tracking-[0.18em] text-primary/70">
           History
         </div>
-        <h1 className="text-[28px] font-semibold tracking-tight text-[#e5e7eb]">Activity</h1>
-        <p className="mt-1 font-mono text-[12px] text-[#64748b]">
+        <h1 className="text-[28px] font-semibold tracking-tight text-foreground">Activity</h1>
+        <p className="mt-1 font-mono text-[12px] text-muted-foreground">
           All on-chain events across your campaigns
         </p>
       </div>
 
       {!walletAddress ? (
-        <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-[#222838] bg-[#13161f]/60 px-8 py-16 text-center">
-          <div className="flex h-14 w-14 items-center justify-center rounded-2xl border border-[#7c3aed]/20 bg-[#7c3aed]/10 text-[#a78bfa]">
+        <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-line bg-muted/60 px-8 py-16 text-center">
+          <div className="flex h-14 w-14 items-center justify-center rounded-2xl border border-primary/20 bg-primary/10 text-accent-light">
             <svg
               width="24"
               height="24"
@@ -66,8 +77,8 @@ export default function ActivityPage() {
               <path d="M16 7V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v2" />
             </svg>
           </div>
-          <h2 className="mt-4 text-[15px] font-medium text-[#e5e7eb]">No wallet connected</h2>
-          <p className="mt-2 font-mono text-[13px] text-[#64748b]">
+          <h2 className="mt-4 text-[15px] font-medium text-foreground">No wallet connected</h2>
+          <p className="mt-2 font-mono text-[13px] text-muted-foreground">
             Connect your Solana wallet to view activity history.
           </p>
         </div>
@@ -76,6 +87,8 @@ export default function ActivityPage() {
           address={walletAddress}
           limit={50}
           mintDecimals={activityMintDecimals}
+          mintByTree={mintByTree}
+          decimalsMap={decimalsMap}
         />
       )}
     </div>

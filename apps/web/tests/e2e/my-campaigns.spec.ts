@@ -17,9 +17,9 @@ test.describe("My Campaigns page", () => {
     await gotoWithRetry(page, "/campaigns");
 
     await expect(page.getByRole("heading", { name: /vesting streams/i })).toBeVisible();
-    await expect(page.getByRole("button", { name: /all/i })).toBeVisible();
-    await expect(page.getByRole("button", { name: /as recipient/i })).toBeVisible();
-    await expect(page.getByRole("button", { name: /as sender/i })).toBeVisible();
+    await expect(page.getByRole("button", { name: /^all/i })).toBeVisible();
+    await expect(page.getByRole("button", { name: /^recipient/i })).toBeVisible();
+    await expect(page.getByRole("button", { name: /^sender/i })).toBeVisible();
     expect(pageErrors).toEqual([]);
   });
 
@@ -28,9 +28,9 @@ test.describe("My Campaigns page", () => {
     await enableE2eWallet(page);
     await gotoWithRetry(page, "/campaigns");
 
-    await page.getByRole("button", { name: /as sender/i }).click();
-    await page.getByRole("button", { name: /as recipient/i }).click();
-    await page.getByRole("button", { name: /all/i }).click();
+    await page.getByRole("button", { name: /^sender/i }).click();
+    await page.getByRole("button", { name: /^recipient/i }).click();
+    await page.getByRole("button", { name: /^all/i }).click();
 
     // No crash after switching tabs
     await expect(page.getByRole("heading", { name: /vesting streams/i })).toBeVisible();

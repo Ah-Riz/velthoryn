@@ -10,6 +10,7 @@ test-ledger/
 # Solana keypairs
 *-keypair.json
 !**/programs/**/*-keypair.json.example
+test-wallet.json
 
 # Node / TS
 node_modules/

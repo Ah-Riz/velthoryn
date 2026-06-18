@@ -81,7 +81,7 @@ export function PauseToggleButton({
       <button
         onClick={handleToggle}
         disabled={loading}
-        className="w-full rounded-xl border border-emerald-500/20 py-2.5 text-[13px] font-medium text-emerald-400 transition hover:border-emerald-500/40 hover:bg-emerald-500/5 disabled:cursor-not-allowed disabled:opacity-50"
+        className="w-full rounded-xl border border-emerald-500/20 py-2.5 text-[13px] font-medium text-emerald-700 dark:text-emerald-400 transition hover:border-emerald-500/40 hover:bg-emerald-500/5 disabled:cursor-not-allowed disabled:opacity-50"
       >
         {loading ? "Resuming..." : "Unpause Campaign"}
       </button>
@@ -92,7 +92,7 @@ export function PauseToggleButton({
     <button
       onClick={handleToggle}
       disabled={loading}
-      className="w-full rounded-xl border border-amber-500/20 py-2.5 text-[13px] font-medium text-amber-400 transition hover:border-amber-500/40 hover:bg-amber-500/5 disabled:cursor-not-allowed disabled:opacity-50"
+      className="w-full rounded-xl border border-amber-500/20 py-2.5 text-[13px] font-medium text-amber-700 dark:text-amber-400 transition hover:border-amber-500/40 hover:bg-amber-500/5 disabled:cursor-not-allowed disabled:opacity-50"
     >
       {loading ? "Pausing..." : "Pause Campaign"}
     </button>

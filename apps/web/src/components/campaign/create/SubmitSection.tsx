@@ -30,7 +30,7 @@ export function SubmitSection({
         type={type}
         onClick={onClick}
         disabled={disabled || loading}
-        className={`w-full rounded-xl py-3 text-[14px] font-medium text-white transition disabled:cursor-not-allowed disabled:opacity-50 ${toneStyles.button} ${toneStyles.buttonHover}`}
+        className={`w-full rounded-xl py-3 text-[14px] font-medium text-foreground transition disabled:cursor-not-allowed disabled:opacity-50 ${toneStyles.button} ${toneStyles.buttonHover}`}
       >
         {loading ? (
           <span className="inline-flex items-center gap-2">

@@ -16,8 +16,10 @@ import { toRawAmount } from "@/lib/campaign/bulk";
 import {
   buildCreateStreamIndexPayload,
   indexCampaign,
+  savePendingCampaignIndexLocal,
   saveStreamScheduleLocal,
 } from "@/lib/stream/persist";
+import { createAuthHeader } from "@/lib/api/client-auth";
 
 import { buildWrapSolInstructions, isNativeSol, solToLamports } from "@/lib/sol/auto-wrap";
 
@@ -45,12 +47,16 @@ export interface CreateStreamResult {
 
 export function useCreateStream() {
   const program = useVestingProgram();
-  const { publicKey, sendTransaction } = useWallet();
+  const { publicKey, sendTransaction, signMessage } = useWallet();
   const { connection } = useConnection();
 
   const createStream = useCallback(
     async (params: CreateStreamParams): Promise<CreateStreamResult> => {
       if (!program || !publicKey) throw new Error("Wallet not connected");
+
+      const authHeader = signMessage
+        ? await createAuthHeader({ publicKey, signMessage })
+        : undefined;
 
       const beneficiaryKey = new PublicKey(params.beneficiary);
       const mintKey = new PublicKey(params.mintAddress);
@@ -162,26 +168,27 @@ export function useCreateStream() {
 
       let indexWarning: string | null = null;
 
+      const indexPayload = buildCreateStreamIndexPayload({
+        treeAddress,
+        creator: publicKey.toBase58(),
+        mint: mintKey.toBase58(),
+        campaignId: Number(params.campaignId),
+        beneficiary: beneficiaryKey.toBase58(),
+        amount: rawAmount,
+        releaseType: params.releaseType,
+        startTime: params.startTime,
+        cliffTime: params.cliffTime,
+        endTime: params.endTime,
+        milestoneIdx: params.milestoneIdx,
+        cancellable: params.cancellable,
+        cancelAuthority: params.cancellable ? publicKey.toBase58() : null,
+        pauseAuthority: publicKey.toBase58(),
+      });
+
       try {
-        await indexCampaign(
-          buildCreateStreamIndexPayload({
-            treeAddress,
-            creator: publicKey.toBase58(),
-            mint: mintKey.toBase58(),
-            campaignId: Number(params.campaignId),
-            beneficiary: beneficiaryKey.toBase58(),
-            amount: rawAmount,
-            releaseType: params.releaseType,
-            startTime: params.startTime,
-            cliffTime: params.cliffTime,
-            endTime: params.endTime,
-            milestoneIdx: params.milestoneIdx,
-            cancellable: params.cancellable,
-            cancelAuthority: params.cancellable ? publicKey.toBase58() : null,
-            pauseAuthority: publicKey.toBase58(),
-          }),
-        );
+        await indexCampaign(indexPayload, authHeader);
       } catch (error) {
+        savePendingCampaignIndexLocal(indexPayload);
         indexWarning =
           error instanceof Error
             ? `Stream created on-chain, but DB indexing failed and was queued for retry: ${error.message}`
@@ -204,7 +211,7 @@ export function useCreateStream() {
         indexWarning,
       };
     },
-    [program, publicKey, connection, sendTransaction],
+    [program, publicKey, connection, sendTransaction, signMessage],
   );
 
   return { createStream, formatVestingError };

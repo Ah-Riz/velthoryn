@@ -146,7 +146,7 @@ test.describe("Allocation Editor — authorization", () => {
     });
     await gotoWithRetry(page, `/campaign/${ADDR}/allocations`);
 
-    await expect(page.getByText(/only the cancel authority/i)).toBeVisible({ timeout: 25_000 });
+    await expect(page.getByText(/wallet is not cancel authority/i).first()).toBeVisible({ timeout: 25_000 });
     expect(pageErrors).toEqual([]);
   });
 
@@ -204,7 +204,7 @@ test.describe("Allocation Editor — table interactions", () => {
     ).toBeVisible({ timeout: 25_000 });
 
     // Count rows before
-    const addBtn = page.getByRole("button", { name: /\+ add recipient/i });
+    const addBtn = page.getByRole("button", { name: /add recipient/i });
     await expect(addBtn).toBeVisible();
     await addBtn.click();
 
