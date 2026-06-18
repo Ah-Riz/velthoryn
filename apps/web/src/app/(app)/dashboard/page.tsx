@@ -10,8 +10,7 @@ import { useVestingProgressSummary } from "@/hooks/useVestingProgress";
 import { ActivityFeed } from "@/components/dashboard/ActivityFeed";
 import { StatCard } from "@/components/ui/StatCard";
 import { GracePeriodCountdown } from "@/components/campaign/detail/GracePeriodCountdown";
-import { getRecipientStreamStatus, getSenderStreamStatus } from "@/lib/vesting/list";
-import { isStreamSettledLocal } from "@/lib/stream/persist";
+import { getRecipientStreamStatus, getSenderStreamStatus, isGracePeriodVisible } from "@/lib/vesting/list";
 import {
   formatCountdown,
   formatTokenAmount,
@@ -84,16 +83,12 @@ export default function DashboardPage() {
       cancelledAt: number | null;
       instantRefunded: boolean;
       streamSettled: boolean;
+      hasCancelEvent: boolean;
       totalSupply: number | string;
       totalClaimed: number | string;
       creator: string;
       metadata?: { name?: string } | null;
-    }>).filter((campaign) => campaign.creator === walletAddress).map((campaign) => {
-      if (!campaign.streamSettled && isStreamSettledLocal(campaign.treeAddress)) {
-        return { ...campaign, streamSettled: true };
-      }
-      return campaign;
-    });
+    }>).filter((campaign) => campaign.creator === walletAddress);
     const seen = new Set(dbCampaigns.map((c) => c.treeAddress));
     const localOnly = senderQuery.error
       ? localCampaigns.senderCampaigns.filter((c) => !seen.has(c.treeAddress))
@@ -112,9 +107,18 @@ export default function DashboardPage() {
   );
   const { decimalsMap, isLoading: decimalsLoading } = useMintDecimals(allMintAddresses);
 
+  const mintCount = vestingSummary?.mintSums.size ?? 0;
+  const isMixedTokens = mintCount > 1;
+
   const claimableFormatted = vestingSummary
-    ? formatSummedMintAmounts(vestingSummary.mintSums, "claimable", decimalsMap)
+    ? isMixedTokens
+      ? "Mixed tokens"
+      : formatSummedMintAmounts(vestingSummary.mintSums, "claimable", decimalsMap)
     : "—";
+
+  const claimableSub = isMixedTokens
+    ? "Open portfolio for per-token amounts"
+    : undefined;
 
   const activityMintDecimals = useMemo(() => {
     if (allMintAddresses.length === 0) return null;
@@ -245,7 +249,11 @@ export default function DashboardPage() {
 
   const needsAttention = useMemo(() => {
     return senderCampaigns
-      .filter((c) => getSenderStreamStatus(c) === "Grace Period")
+      .filter((c) => isGracePeriodVisible({
+        cancelledAt: c.cancelledAt,
+        instantRefunded: c.instantRefunded,
+        streamSettled: c.streamSettled,
+      }))
       .map((c) => ({
         campaign: c,
         graceState: getGracePeriodState(BigInt(c.cancelledAt!), nowTs),
@@ -255,6 +263,16 @@ export default function DashboardPage() {
           graceState.status === "grace_active" || graceState.status === "grace_expired",
       );
   }, [senderCampaigns, nowTs]);
+
+  const recipientGraceActions = useMemo(() => {
+    return vestingCampaigns.filter((c) =>
+      isGracePeriodVisible({
+        cancelledAt: c.cancelledAt !== null ? Number(c.cancelledAt) : null,
+        instantRefunded: c.instantRefunded,
+        streamSettled: c.streamSettled,
+      }) && BigInt(c.progress.claimable) > 0n,
+    );
+  }, [vestingCampaigns]);
 
   const topVestingCampaigns = useMemo(() => {
     return [...vestingCampaigns]
@@ -397,9 +415,11 @@ export default function DashboardPage() {
                 )}
               </div>
               <div className="relative mt-4 font-mono text-[11px] text-muted-foreground">
-                {claimableStreams > 0
-                  ? `${claimableStreams} stream${claimableStreams > 1 ? "s" : ""} ready to claim`
-                  : "Nothing available to claim right now"}
+                {claimableSub
+                  ? claimableSub
+                  : claimableStreams > 0
+                    ? `${claimableStreams} stream${claimableStreams > 1 ? "s" : ""} ready to claim`
+                    : "Nothing available to claim right now"}
               </div>
             </Link>
 
@@ -489,6 +509,38 @@ export default function DashboardPage() {
             </div>
           )}
 
+          {/* Recipient Grace Period Notifications */}
+          {recipientGraceActions.length > 0 && (
+            <div className="space-y-3">
+              <h2 className="font-mono text-[11px] font-medium uppercase tracking-[0.18em] text-muted-foreground">
+                Action Required
+              </h2>
+              {recipientGraceActions.map((campaign) => {
+                const name = campaign.metadata?.name ?? truncateAddress(campaign.treeAddress);
+                return (
+                  <Link
+                    key={`${campaign.treeAddress}-${campaign.leaf.leafIndex}`}
+                    href={`/campaign/${campaign.treeAddress}`}
+                    className="flex items-center gap-3 rounded-2xl border border-amber-500/25 bg-muted p-5 transition-all hover:border-amber-500/40"
+                  >
+                    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-amber-500/20 bg-amber-500/10 text-amber-700 dark:text-amber-400">
+                      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+                    </div>
+                    <div className="flex-1">
+                      <p className="text-[14px] font-medium text-amber-700 dark:text-amber-400">
+                        {name} — Claim before grace period ends
+                      </p>
+                      <p className="font-mono text-[11px] text-muted-foreground">
+                        This campaign was cancelled, but vested tokens are still withdrawable during grace period.
+                      </p>
+                    </div>
+                    <span className="font-mono text-[11px] font-medium text-amber-700 dark:text-amber-400">Claim Now →</span>
+                  </Link>
+                );
+              })}
+            </div>
+          )}
+
           {/* Quick Actions */}
           <div>
             <h2 className="mb-3 font-mono text-[11px] font-medium uppercase tracking-[0.18em] text-muted-foreground">
@@ -542,9 +594,9 @@ export default function DashboardPage() {
             <StatCard
               label="Claimable Now"
               value={claimableValueUsd !== null ? formatUsd(claimableValueUsd) : claimableFormatted}
-              sub={claimableStreams > 0
+              sub={claimableSub ?? (claimableStreams > 0
                 ? `${claimableStreams} stream${claimableStreams > 1 ? "s" : ""} ready`
-                : "Nothing available to claim"}
+                : "Nothing available to claim")}
               accent
               loading={portfolioLoading}
             />

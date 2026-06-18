@@ -26,6 +26,8 @@ export interface VestingProgressCampaign {
   };
   cancelledAt: string | null;
   paused: boolean;
+  instantRefunded: boolean;
+  streamSettled: boolean;
   milestoneReleased: boolean;
 }
 

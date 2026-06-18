@@ -5,6 +5,7 @@ import { withRoute } from "@/lib/api/route-wrapper";
 import { bulkRecipientSchema } from "@/lib/api/validators";
 import { getRequestId } from "@/lib/api/request-id";
 import { logger } from "@/lib/api/logger";
+import { parseCsvRows, normalizeCsvHeader } from "@/lib/campaign/csv";
 
 const REQUIRED_HEADERS = [
   "beneficiary",
@@ -39,13 +40,13 @@ function parseCsvText(text: string): {
   validRows: number;
   errors: CsvError[];
 } {
-  const lines = text.split(/\r?\n/).filter((l) => l.trim().length > 0);
+  const allRows = parseCsvRows(text);
 
-  if (lines.length === 0) {
+  if (allRows.length === 0) {
     throw new ValidationError("CSV file is empty");
   }
 
-  const headerLine = lines[0].split(",").map((h) => h.trim());
+  const headerLine = allRows[0].map(normalizeCsvHeader);
   for (const required of REQUIRED_HEADERS) {
     if (!headerLine.includes(required)) {
       throw new ValidationError(
@@ -59,14 +60,14 @@ function parseCsvText(text: string): {
     colIndex[col] = headerLine.indexOf(col);
   }
 
-  const dataLines = lines.slice(1);
-  const totalRows = dataLines.length;
+  const dataRows = allRows.slice(1);
+  const totalRows = dataRows.length;
   const recipients: ValidRecipient[] = [];
   const errors: CsvError[] = [];
 
-  for (let i = 0; i < dataLines.length; i++) {
+  for (let i = 0; i < dataRows.length; i++) {
     const rowNum = i + 2; // 1-indexed, header is row 1
-    const cells = dataLines[i].split(",").map((c) => c.trim());
+    const cells = dataRows[i].map((c) => c.trim());
 
     const raw = {
       beneficiary: cells[colIndex.beneficiary] ?? "",

@@ -45,6 +45,16 @@ export default function RootLayout({
   const analyticsEnabled = process.env.NEXT_PUBLIC_ENABLE_VERCEL_ANALYTICS === "true";
   return (
     <html lang="en" className={cn(spaceGrotesk.variable, jetbrainsMono.variable, "font-sans", geist.variable)} suppressHydrationWarning>
+      <head>
+        {/* Disable browser scroll restoration before React hydrates to prevent the
+            brief "wrong scroll position" flash that occurs when the browser restores
+            a saved position before Next.js takes control of scroll management. */}
+        <script
+          dangerouslySetInnerHTML={{
+            __html: "if(typeof window!=='undefined'){window.history.scrollRestoration='manual';}",
+          }}
+        />
+      </head>
       <body suppressHydrationWarning>
         <ThemeProvider>
           <QueryProvider>

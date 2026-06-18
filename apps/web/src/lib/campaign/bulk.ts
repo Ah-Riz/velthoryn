@@ -41,6 +41,8 @@ export type BulkCsvRow = {
 export type BulkCsvParseResult = {
   rows: BulkCsvRow[];
   issues: BulkCsvIssue[];
+  validRowCount: number;
+  invalidRowCount: number;
 };
 
 export type PreparedBulkCampaign = {
@@ -220,6 +222,8 @@ export function parseBulkCsv(
     return {
       rows: [],
       issues: [issue("header", "Your CSV is empty.")],
+      validRowCount: 0,
+      invalidRowCount: 0,
     };
   }
 
@@ -245,7 +249,7 @@ export function parseBulkCsv(
   }
 
   if (issues.length > 0) {
-    return { rows: [], issues };
+    return { rows: [], issues, validRowCount: 0, invalidRowCount: 0 };
   }
 
   const parsedRows: BulkCsvRow[] = [];
@@ -382,7 +386,15 @@ export function parseBulkCsv(
     }
   }
 
-  return { rows: issues.length > 0 ? [] : parsedRows, issues };
+  const uniqueInvalidRows = new Set(
+    issues.filter((i) => i.rowNumber !== "header").map((i) => i.rowNumber),
+  );
+  return {
+    rows: issues.length > 0 ? [] : parsedRows,
+    issues,
+    validRowCount: parsedRows.length,
+    invalidRowCount: uniqueInvalidRows.size,
+  };
 }
 
 export function prepareBulkCampaign(rows: BulkCsvRow[]): PreparedBulkCampaign {
@@ -476,27 +488,51 @@ export function bulkCsvTemplate(): string {
   ].join("\n");
 }
 
+function formatCsvDate(date: Date): string {
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}`;
+}
+
 export function bulkCsvTemplateForType(type: "cliff" | "linear" | "milestone"): string {
+  const now = new Date();
+  const DAY = 24 * 60 * 60 * 1000;
+  const startDate = new Date(now.getTime() + DAY);
+  const cliffDate = new Date(startDate.getTime() + 30 * DAY);
+  const endDate = new Date(startDate.getTime() + 90 * DAY);
+  const m1 = new Date(startDate.getTime() + 30 * DAY);
+  const m2 = new Date(startDate.getTime() + 60 * DAY);
+  const m3 = new Date(startDate.getTime() + 90 * DAY);
+
+  const start = formatCsvDate(startDate);
+  const cliff = formatCsvDate(cliffDate);
+  const end = formatCsvDate(endDate);
+  const ms1 = formatCsvDate(m1);
+  const ms2 = formatCsvDate(m2);
+  const ms3 = formatCsvDate(m3);
+
   const header = BULK_CSV_HEADERS.join(",");
+  const addr1 = "7xKXtg2CW87d97TXJSDpbD5jBkheTqA83TZRuJosgAsU";
+  const addr2 = "HN7cABqLq46Es1jh92dQQisAq662SmxELLLsHHe4YWrH";
+  const addr3 = "DzAME3MtzP5N3NDPuMEMWPVdEJLLT3gfnxc7CmPdPLzR";
+
   if (type === "cliff") {
     return [
       "beneficiary,amount,releaseType,startTime,cliffTime",
-      "RECIPIENT_ADDRESS_1,1000,Cliff,2025-06-01 09:00,2025-07-01 09:00",
-      "RECIPIENT_ADDRESS_2,2000,Cliff,2025-06-01 09:00,2025-08-01 09:00",
+      `${addr1},1000,Cliff,${start},${cliff}`,
+      `${addr2},2500,Cliff,${start},${cliff}`,
     ].join("\n");
   }
   if (type === "linear") {
     return [
       header,
-      "RECIPIENT_ADDRESS_1,1000,Linear,2025-06-01 09:00,2025-06-01 09:00,2025-12-01 09:00,0",
-      "RECIPIENT_ADDRESS_2,2500,Linear,2025-06-01 09:00,2025-07-01 09:00,2026-06-01 09:00,0",
+      `${addr1},1000,Linear,${start},${start},${end},0`,
+      `${addr2},2500,Linear,${start},${start},${end},0`,
     ].join("\n");
   }
-  // milestone
   return [
     header,
-    "RECIPIENT_ADDRESS_1,500,Milestone,2025-06-01 09:00,2025-09-01 09:00,2025-09-01 09:00,0",
-    "RECIPIENT_ADDRESS_2,500,Milestone,2025-06-01 09:00,2025-12-01 09:00,2025-12-01 09:00,1",
-    "RECIPIENT_ADDRESS_3,500,Milestone,2025-06-01 09:00,2026-03-01 09:00,2026-03-01 09:00,2",
+    `${addr1},1000,Milestone,${start},${ms1},${ms1},0`,
+    `${addr2},2500,Milestone,${start},${ms2},${ms2},1`,
+    `${addr3},5000,Milestone,${start},${ms3},${ms3},2`,
   ].join("\n");
 }

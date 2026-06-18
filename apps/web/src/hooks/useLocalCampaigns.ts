@@ -24,6 +24,7 @@ type LocalSenderCampaign = {
   cancelledAt: number | null;
   instantRefunded: boolean;
   streamSettled: boolean;
+  hasCancelEvent: boolean;
   createdAt: number;
   metadata: null;
 };
@@ -83,6 +84,8 @@ function buildSenderCampaign(
 ): LocalSenderCampaign | null {
   if (cached.creator !== currentAddress) return null;
 
+  const streamSettled = isStreamSettledLocal(treeAddress);
+  const instantRefunded = cached.instantRefunded ?? false;
   return {
     treeAddress,
     creator: cached.creator,
@@ -94,8 +97,9 @@ function buildSenderCampaign(
     cancellable: cached.cancellable,
     paused: cached.paused,
     cancelledAt: cached.cancelledAt,
-    instantRefunded: cached.instantRefunded ?? false,
-    streamSettled: isStreamSettledLocal(treeAddress),
+    instantRefunded,
+    streamSettled,
+    hasCancelEvent: cached.cancelledAt !== null && !instantRefunded && !streamSettled,
     createdAt: cached.createdAt,
     metadata: null,
   };
@@ -221,6 +225,7 @@ export function useLocalCampaigns(address: string | undefined, refreshKey?: numb
 
               const instantRefunded = Boolean(account.instantRefunded);
 
+              const streamSettled = isStreamSettledLocal(treeAddress);
               const senderCampaign =
                 creator === currentAddress
                   ? {
@@ -235,7 +240,8 @@ export function useLocalCampaigns(address: string | undefined, refreshKey?: numb
                       paused: Boolean(account.paused),
                       cancelledAt,
                       instantRefunded,
-                      streamSettled: isStreamSettledLocal(treeAddress),
+                      streamSettled,
+                      hasCancelEvent: cancelledAt !== null && !instantRefunded && !streamSettled,
                       createdAt,
                       metadata: null,
                     }

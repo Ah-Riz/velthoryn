@@ -33,6 +33,7 @@
 
 body {
   font-family: var(--font-sans, "Space Grotesk", system-ui, sans-serif);
+  overflow-anchor: none;
 }
 
 body[data-vesting-tx-pending="true"] [data-sidebar-nav] {

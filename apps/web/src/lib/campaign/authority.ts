@@ -56,12 +56,14 @@ export function canRotateRoot(params: {
   cancelAuthority: AddressLike;
   cancellable: boolean;
   cancelledAt: bigint | null;
+  paused?: boolean;
   leafCount: number;
 }): boolean {
   return (
     params.leafCount > 1 &&
     params.cancellable &&
     params.cancelledAt === null &&
+    !params.paused &&
     sameAddress(params.viewer, params.cancelAuthority)
   );
 }

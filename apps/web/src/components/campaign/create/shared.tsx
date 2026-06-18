@@ -62,16 +62,7 @@ export function formatDuration(start: string, end: string): string | null {
   const startMs = new Date(start).getTime();
   const endMs = new Date(end).getTime();
   if (!Number.isFinite(startMs) || !Number.isFinite(endMs) || endMs <= startMs) return null;
-
-  const diffMinutes = Math.floor((endMs - startMs) / 60000);
-  const days = Math.floor(diffMinutes / (60 * 24));
-  const hours = Math.floor((diffMinutes % (60 * 24)) / 60);
-  const minutes = diffMinutes % 60;
-  const parts: string[] = [];
-  if (days > 0) parts.push(`${days}d`);
-  if (hours > 0) parts.push(`${hours}h`);
-  if (minutes > 0) parts.push(`${minutes}m`);
-  return parts.length > 0 ? parts.join(" ") : "0m";
+  return formatDurationSeconds(Math.floor((endMs - startMs) / 1000));
 }
 
 export function formatTokenAmount(raw: string, decimals: number | null): string {
@@ -87,6 +78,29 @@ export function formatTokenAmount(raw: string, decimals: number | null): string 
 
 export function formatIssueLabel(rowNumber: number | "header"): string {
   return rowNumber === "header" ? "Header" : `Row ${rowNumber}`;
+}
+
+export function formatUnixToDate(unix: number): string {
+  if (!unix) return "—";
+  const d = new Date(unix * 1000);
+  const date = d.toLocaleDateString("en-US", {
+    year: "numeric",
+    month: "short",
+    day: "numeric",
+  });
+  const hh = d.getHours().toString().padStart(2, "0");
+  const mm = d.getMinutes().toString().padStart(2, "0");
+  return `${date} ${hh}:${mm}`;
+}
+
+export function formatDurationSeconds(secs: number): string {
+  if (secs <= 0) return "—";
+  const days = Math.floor(secs / 86400);
+  const hours = Math.floor((secs % 86400) / 3600);
+  const minutes = Math.floor((secs % 3600) / 60);
+  if (days > 0) return hours > 0 ? `${days}d ${hours}h` : `${days}d`;
+  if (hours > 0) return minutes > 0 ? `${hours}h ${minutes}m` : `${hours}h`;
+  return minutes > 0 ? `${minutes}m` : "< 1m";
 }
 
 // Sub-components

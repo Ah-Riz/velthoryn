@@ -13,7 +13,12 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useClaimRecord } from "@/hooks/useClaimRecord";
 import { toAnchorLeaf } from "@/lib/anchor/adapters";
 import { derivePda } from "@/lib/anchor/client";
-import { formatVestingError } from "@/lib/anchor/errors";
+import {
+  formatVestingError,
+  extractSimulationDetails,
+  getRelevantProgramLog,
+  isWalletCancellation,
+} from "@/lib/anchor/errors";
 import { isNativeSol, isWrappedSol } from "@/lib/sol/auto-wrap";
 import { formatCountdown } from "@/lib/vesting/display";
 import { isMilestoneTriggered } from "@/lib/vesting/milestone";
@@ -22,11 +27,11 @@ import { isMilestoneTriggered } from "@/lib/vesting/milestone";
 interface ProofLeaf {
   leafIndex: number;
   beneficiary: string;
-  amount: number;
+  amount: string;
   releaseType: number;
-  startTime: number;
-  cliffTime: number;
-  endTime: number;
+  startTime: string;
+  cliffTime: string;
+  endTime: string;
   milestoneIdx: number;
 }
 
@@ -51,8 +56,6 @@ type Props = {
   onSuccess: () => void;
   toast: (msg: string, type?: "success" | "error" | "info") => void;
 };
-
-type UnknownRecord = Record<string, unknown>;
 
 function fmtAmount(raw: number | string, decimals: number | null): string {
   if (!decimals) return String(raw);
@@ -84,65 +87,6 @@ function vestedForLeaf(leaf: ProofLeaf, nowUnix: number, milestoneReleasedFlags?
   return duration > 0n ? (amount * elapsed) / duration : 0n;
 }
 
-function isRecord(value: unknown): value is UnknownRecord {
-  return typeof value === "object" && value !== null;
-}
-
-function extractSimulationDetails(err: unknown): {
-  logs: string[];
-  programErr: unknown;
-  message: string;
-} {
-  const logs: string[] = [];
-  const seen = new Set<unknown>();
-  let programErr: unknown;
-
-  function visit(value: unknown) {
-    if (!isRecord(value) && !Array.isArray(value)) return;
-    if (seen.has(value)) return;
-    seen.add(value);
-
-    if (Array.isArray(value)) {
-      if (value.every((entry) => typeof entry === "string")) {
-        logs.push(...(value as string[]));
-        return;
-      }
-      for (const entry of value) visit(entry);
-      return;
-    }
-
-    for (const [key, nested] of Object.entries(value)) {
-      if ((key === "logs" || key === "transactionLogs") && Array.isArray(nested)) {
-        for (const entry of nested) {
-          if (typeof entry === "string") logs.push(entry);
-        }
-      }
-      if (programErr === undefined && key === "err" && nested !== undefined) {
-        programErr = nested;
-      }
-      visit(nested);
-    }
-  }
-
-  visit(err);
-
-  return {
-    logs,
-    programErr,
-    message: err instanceof Error ? err.message : String(err),
-  };
-}
-
-function getRelevantProgramLog(logs: string[]): string | null {
-  const interesting = logs.filter((log) =>
-    log.includes("Program log:") ||
-    log.includes("AnchorError") ||
-    log.includes("custom program error") ||
-    log.includes("failed:") ||
-    log.includes("Error"),
-  );
-  return interesting.at(-1) ?? null;
-}
 
 function stringifyForToast(value: unknown): string {
   if (typeof value === "string") return value;
@@ -170,11 +114,6 @@ function relabelInstructionKeys(
       isWritable: meta.isWritable,
     };
   });
-}
-
-function isWalletCancellation(err: unknown): boolean {
-  const raw = err instanceof Error ? err.message : String(err);
-  return /User rejected|Connection rejected|Transaction cancelled|rejected by user|denied/i.test(raw);
 }
 
 function toWalletApprovalMessage(message: string): string {
@@ -263,7 +202,7 @@ export function ClaimWithProofButton({
   const leaves = allLeavesQuery.data;
   const selected = leaves[selectedIdx] ?? leaves[0];
   const selectedLeaf = selected.leaf;
-  const waitBeforeUnlock = nowUnix < selectedLeaf.cliffTime;
+  const waitBeforeUnlock = nowUnix < Number(selectedLeaf.cliffTime);
   const waitCountdown = waitBeforeUnlock
     ? formatCountdown(BigInt(selectedLeaf.cliffTime), BigInt(nowUnix))
     : null;
@@ -308,7 +247,7 @@ export function ClaimWithProofButton({
       const alreadyClaimed = isMilestoneTriggered(milestoneBitmap, entry.leaf.milestoneIdx);
       if (alreadyClaimed) return 0n;
       const released = isMilestoneTriggered(milestoneReleasedFlags, entry.leaf.milestoneIdx);
-      const nowPastCliff = effectiveNowUnix >= entry.leaf.cliffTime;
+      const nowPastCliff = effectiveNowUnix >= Number(entry.leaf.cliffTime);
       return released && nowPastCliff ? BigInt(String(entry.leaf.amount)) : 0n;
     }
     // Cliff/Linear: use greedy allocation against cumulative claimedAmount.
@@ -359,17 +298,24 @@ export function ClaimWithProofButton({
       let namedAccounts: Record<string, string>;
 
       if (nativeSol) {
-        const placeholder = program.programId;
+        // For native SOL campaigns the program transfers lamports directly via
+        // SystemProgram — there is no SPL token account involved. vault_authority
+        // and vault are declared as optional Token accounts in the Anchor IDL; if
+        // we pass the real vaultAuthority PDA (owned by SystemProgram) Anchor
+        // validates its owner against the Token program and throws
+        // AccountOwnedByWrongProgram (3007). Passing program.programId as the
+        // None sentinel causes Anchor to skip ownership and type checks entirely.
+        const noneMarker = program.programId;
         namedAccounts = {
           beneficiary: publicKey.toBase58(),
           vestingTree: treePubkey.toBase58(),
           claimRecord: claimRecord.toBase58(),
-          vaultAuthority: placeholder.toBase58(),
-          vault: placeholder.toBase58(),
-          mint: placeholder.toBase58(),
-          beneficiaryAta: placeholder.toBase58(),
-          tokenProgram: placeholder.toBase58(),
-          associatedTokenProgram: placeholder.toBase58(),
+          vaultAuthority: noneMarker.toBase58(),
+          vault: noneMarker.toBase58(),
+          beneficiaryAta: noneMarker.toBase58(),
+          mint: noneMarker.toBase58(),
+          tokenProgram: noneMarker.toBase58(),
+          associatedTokenProgram: noneMarker.toBase58(),
           systemProgram: SystemProgram.programId.toBase58(),
         };
 
@@ -386,18 +332,23 @@ export function ClaimWithProofButton({
             { pubkey: publicKey, isSigner: true, isWritable: true },
             { pubkey: treePubkey, isSigner: false, isWritable: true },
             { pubkey: claimRecord, isSigner: false, isWritable: true },
-            { pubkey: placeholder, isSigner: false, isWritable: false }, // vault_authority
-            { pubkey: placeholder, isSigner: false, isWritable: true }, // vault
-            { pubkey: placeholder, isSigner: false, isWritable: false }, // mint
-            { pubkey: placeholder, isSigner: false, isWritable: true }, // beneficiary_ata
-            { pubkey: placeholder, isSigner: false, isWritable: false }, // token_program
-            { pubkey: placeholder, isSigner: false, isWritable: false }, // associated_token_program
+            { pubkey: noneMarker, isSigner: false, isWritable: false },     // vault_authority (None)
+            { pubkey: noneMarker, isSigner: false, isWritable: false },     // vault (None)
+            { pubkey: noneMarker, isSigner: false, isWritable: false },     // beneficiary_ata (None)
+            { pubkey: noneMarker, isSigner: false, isWritable: false },     // mint (None)
+            { pubkey: noneMarker, isSigner: false, isWritable: false },     // token_program (None)
+            { pubkey: noneMarker, isSigner: false, isWritable: false },     // associated_token_program (None)
             { pubkey: SystemProgram.programId, isSigner: false, isWritable: false },
           ],
           data: claimData,
         });
       } else {
         const beneficiaryAta = getAssociatedTokenAddressSync(mint, publicKey);
+        // Derive vault as the ATA of vaultAuthority for this mint.
+        // The prop may point to the wrong account for recipients added after a root
+        // rotation whose vault address was never fetched from chain. Deriving here
+        // guarantees the correct SPL token account regardless of what the caller passed.
+        const derivedVault = getAssociatedTokenAddressSync(mint, vaultAuthority, true);
         const beneficiaryAtaInfo = await connection.getAccountInfo(beneficiaryAta);
         if (!beneficiaryAtaInfo) {
           const [beneficiaryLamports, ataRentLamports] = await Promise.all([
@@ -418,7 +369,7 @@ export function ClaimWithProofButton({
           vestingTree: treePubkey.toBase58(),
           claimRecord: claimRecord.toBase58(),
           vaultAuthority: vaultAuthority.toBase58(),
-          vault: vault.toBase58(),
+          vault: derivedVault.toBase58(),
           mint: mint.toBase58(),
           beneficiaryAta: beneficiaryAta.toBase58(),
         });
@@ -428,7 +379,7 @@ export function ClaimWithProofButton({
           vestingTree: treePubkey.toBase58(),
           claimRecord: claimRecord.toBase58(),
           vaultAuthority: vaultAuthority.toBase58(),
-          vault: vault.toBase58(),
+          vault: derivedVault.toBase58(),
           mint: mint.toBase58(),
           beneficiaryAta: beneficiaryAta.toBase58(),
           tokenProgram: TOKEN_PROGRAM_ID.toBase58(),
@@ -449,7 +400,7 @@ export function ClaimWithProofButton({
             { pubkey: treePubkey, isSigner: false, isWritable: true },
             { pubkey: claimRecord, isSigner: false, isWritable: true },
             { pubkey: vaultAuthority, isSigner: false, isWritable: false },
-            { pubkey: vault, isSigner: false, isWritable: true },
+            { pubkey: derivedVault, isSigner: false, isWritable: true },
             { pubkey: beneficiaryAta, isSigner: false, isWritable: true },
             { pubkey: mint, isSigner: false, isWritable: false },
             { pubkey: TOKEN_PROGRAM_ID, isSigner: false, isWritable: false },

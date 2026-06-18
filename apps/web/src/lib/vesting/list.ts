@@ -5,6 +5,7 @@ export type SenderStream = {
   cancelledAt: number | null;
   instantRefunded?: boolean;
   streamSettled?: boolean;
+  hasCancelEvent?: boolean;
 };
 
 export type RecipientLeaf = {
@@ -84,8 +85,9 @@ export function getSenderStreamStatus(stream: SenderStream): StreamStatus {
   const totalSupply = toBigInt(stream.totalSupply);
   const totalClaimed = toBigInt(stream.totalClaimed);
 
-  if (stream.cancelledAt !== null && (stream.streamSettled || stream.instantRefunded)) return "Settled";
-  if (stream.cancelledAt !== null) return "Grace Period";
+  if (stream.streamSettled || stream.instantRefunded) return "Settled";
+  if (stream.hasCancelEvent) return "Grace Period";
+  if (stream.cancelledAt !== null) return "Cancelled";
   if (stream.paused) return "Paused";
   if (totalSupply > 0n && totalClaimed >= totalSupply) return "Claimed";
   return "Active";

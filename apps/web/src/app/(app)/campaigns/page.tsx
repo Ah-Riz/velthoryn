@@ -38,6 +38,7 @@ type SenderCampaign = {
   cancelledAt: number | null;
   instantRefunded: boolean;
   streamSettled: boolean;
+  hasCancelEvent: boolean;
   createdAt: number;
   metadata: { name?: string; description?: string; logoUri?: string } | null;
 };
@@ -224,12 +225,7 @@ export default function CampaignsPage() {
   const senderCampaigns = useMemo(() => {
     const dbSenderCampaigns = ((senderCampaignsQuery.data?.campaigns ?? []) as SenderCampaign[]).filter(
       (campaign) => campaign.creator === walletAddress,
-    ).map((campaign) => {
-      if (!campaign.streamSettled && isStreamSettledLocal(campaign.treeAddress)) {
-        return { ...campaign, streamSettled: true };
-      }
-      return campaign;
-    });
+    );
 
     const seen = new Set(dbSenderCampaigns.map((campaign) => campaign.treeAddress));
     const localOnly = localCampaigns.senderCampaigns.filter(
