@@ -290,11 +290,14 @@ stateDiagram-v2
     [*] --> active : create_campaign / create_stream (funded)
     active --> paused : pause_campaign
     paused --> active : unpause_campaign
+    active --> claimable : vested amount > 0 (cliff time passed)
+    claimable --> claimed : total_claimed == total_supply
+    claimable --> cancelled_grace : cancel_campaign (starts 7-day grace)
+    claimable --> paused : pause_campaign
     active --> cancelled_grace : cancel_campaign (starts 7-day grace)
     cancelled_grace --> cancelled_expired : 7 days elapsed, no claims possible
     cancelled_grace --> settled : all beneficiaries claimed during grace
     active --> instant_refunded : instant_refund_campaign (before min_cliff_time)
-    active --> claimed : total_claimed == total_supply
 ```
 
 **FE helpers:**
