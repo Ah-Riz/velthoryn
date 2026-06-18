@@ -1,8 +1,10 @@
 # PDD — Velthoryn Vesting Frontend Design (Geral's Scope)
 
 **Author:** Geral — frontend lead  
-**Status:** Week 4 design, Week 6 implementation target  
+**Status:** Week 4 design → **Updated Week 9 (2026-06-18)**  
 **Companion docs:** `docs/PRD_GERAL.md` (requirements), `docs/TDD_GERAL.md` (tests), `docs/SECURITY_GERAL.md` (security), `docs/INTEGRATION.md` (SC interface)
+
+> **Week 9 note**: This document was written at Week 4. Several design decisions changed during implementation (Zustand was not used; shadcn/ui was added in Week 8; 8-state lifecycle was added in Week 7). See the "§ Week 9 Status" annotations within each section. For the authoritative current architecture, see `docs/week9/FE_ARCHITECTURE.md`.
 
 ---
 
@@ -177,7 +179,7 @@ RootLayout
 
 ## §5 State Management Design
 
-### Two-layer architecture
+### Two-layer architecture (Week 4 design)
 
 ```
 ┌─────────────────────────┐     ┌─────────────────────────────┐
@@ -195,39 +197,26 @@ RootLayout
 └─────────────────────────┘     └─────────────────────────────┘
 ```
 
-### Why two layers?
+> ⚠️ **Week 9 status**: **Zustand was never installed or used.** The actual implementation uses **TanStack Query v5** for server state and **React `useState`** for all local UI state (forms, modals, toggles). Zustand was evaluated at Week 4 but dropped — the app's form state is per-page and doesn't need global client state.
 
-| Concern | Zustand | TanStack Query |
+### Actual state management (Week 9)
+
+| Layer | Tool | What it manages |
 |---|---|---|
-| What it manages | UI state, form drafts, selections | Chain account data, RPC responses |
-| Cache strategy | None (ephemeral) | Time-based (staleTime: 10s) |
-| Invalidation | Manual `set()` | Auto via `queryClient.invalidateQueries()` on Anchor events |
-| SSR | Not needed | Hydration-safe with `useState` lazy init |
+| Server state | TanStack Query v5 | Campaign data, proof data, vesting progress, claim records |
+| Local UI state | React `useState` | Form fields, modal open/close, schedule dates |
+| Persistent client | `localStorage` | Pending campaign index queue, sidebar collapse |
+| Wallet state | wallet-adapter context | Connected wallet, public key, sendTransaction |
 
-### Zustand store structure (expanded from current)
+### TanStack Query keys (actual)
 
 ```typescript
-type AppStore = {
-  // Campaign selection
-  selectedCampaignId: string | null;
-  setSelectedCampaign: (id: string | null) => void;
-
-  // Create campaign form
-  createForm: {
-    csvData: ParsedRecipient[] | null;
-    mint: string | null;
-    scheduleType: 0 | 1 | 2;
-    startDate: Date | null;
-    cliffDate: Date | null;
-    endDate: Date | null;
-  };
-  setCreateForm: (patch: Partial<AppStore["createForm"]>) => void;
-  resetCreateForm: () => void;
-
-  // UI state
-  txPending: boolean;
-  setTxPending: (v: boolean) => void;
-};
+["campaign", treeAddress]                    // single campaign detail
+["vestingProgress", address]                 // beneficiary portfolio
+["proof", treeAddress, beneficiary]          // Merkle proof
+["claimRecord", treeAddress, beneficiary]    // on-chain PDA
+["campaigns"]                                // campaign list
+["mintDecimals", mintAddresses.join(",")]     // SPL mint decimals
 ```
 
 ### TanStack Query keys
@@ -679,3 +668,65 @@ Recipient connects wallet
 - Client-side vesting math
 - Frontend unit tests (Vitest)
 - IPFS/Pinata integration
+
+> **Week 9 status**: All SC-dependent components from this table are **✅ fully implemented**.
+
+---
+
+## §15 Week 9 Additions (not in original design)
+
+### shadcn/ui Migration (Week 8)
+
+All custom UI primitives replaced with shadcn/ui components in Week 8 (commit `e1ec4b8`). Components added to `apps/web/src/components/ui/`:
+
+- `badge.tsx`, `button.tsx`, `card.tsx`, `dialog.tsx`, `input.tsx`, `label.tsx`
+- `progress.tsx`, `scroll-area.tsx`, `select.tsx`, `skeleton.tsx`, `sonner.tsx`, `tooltip.tsx`
+
+Design tokens moved from custom Tailwind classes to CSS custom properties (`--background`, `--foreground`, `--primary`, etc.) in `globals.css`.
+
+### 8-State Campaign Lifecycle (Week 7)
+
+The `CampaignLifecycle` type was added to `lib/vesting/list.ts` at Week 7:
+
+```typescript
+export type CampaignLifecycle =
+  | "active"
+  | "paused"
+  | "claimable"
+  | "claimed"
+  | "cancelled_grace"
+  | "cancelled_expired"
+  | "instant_refunded"
+  | "settled";
+```
+
+All UI branching (button visibility, banner content, countdown display) is driven by this enum. The `isGracePeriodVisible()` helper was added in Week 8 to prevent false-positive grace period display when `instantRefunded` or `streamSettled` is true.
+
+### Dark Mode Architecture
+
+`ThemeProvider` (from `next-themes`) wraps the app at root layout level with `defaultTheme="dark"`. CSS custom properties in `globals.css` drive all shadcn/ui component colors. Toggle is in `shell/ThemeToggle.tsx`.
+
+### FE-SC Communication Pattern (vs original design)
+
+The original design assumed client-side Anchor program calls directly from components/hooks. The final implementation uses a **server-side tx-builder** pattern:
+
+1. Client hook calls a Next.js Route Handler (server side)
+2. Server builds the unsigned `Transaction` using `Connection` + `Program IDL`
+3. Server returns serialized base64 transaction
+4. Client deserializes + `wallet.sendTransaction(tx, connection)`
+5. Client calls `/api/*/sync` to record confirmed result in DB
+
+This was not in the original Week 4 design — it was introduced to allow server-side validation before the user signs.
+
+### New routes vs original design
+
+The original design had 3 routes (`/`, `/campaign/create`, `/campaign/[id]`). Week 9 has:
+- `/campaign/create/cliff`, `/campaign/create/linear`, `/campaign/create/milestone` (3 create pages)
+- `/campaign/[id]` (full detail page — creator + recipient combined)
+- `/campaigns` (campaign list with tabs: All / As Recipient / As Sender / Needs Action)
+- `/dashboard` (beneficiary dashboard with needs-attention)
+- `/portfolio` (per-campaign vesting breakdown)
+- `/activity` (cross-campaign event timeline)
+- `/` (public landing page with waitlist)
+
+For full architecture, see: `docs/week9/FE_ARCHITECTURE.md`
