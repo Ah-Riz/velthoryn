@@ -99,8 +99,8 @@ async function createCancellableSolCampaign(
 
   await selectNativeSol(page);
 
-  const cancellableToggle = page.getByRole("checkbox", { name: /allow cancellation/i });
-  await cancellableToggle.check();
+  const cancellableToggle = page.getByText(/allow cancellation/i);
+  await cancellableToggle.click();
 
   // Add a second recipient row so the campaign is bulk-funded (gives us a
   // persistent treeAddress on-chain that we can later navigate to).

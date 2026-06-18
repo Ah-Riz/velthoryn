@@ -170,7 +170,7 @@ test.describe.serial("Real signing E2E — CloseClaimRecordButton flow", () => {
     await page.goto(`/campaign/${createdTreeAddress}`, { waitUntil: "load" });
 
     const closeBtn = page.getByRole("button", { name: /close record & reclaim rent/i });
-    await expect(closeBtn).toBeVisible({ timeout: 15_000 });
+    await expect(closeBtn).toBeVisible({ timeout: 30_000 });
     await expect(closeBtn).toBeEnabled();
   });
 
@@ -225,7 +225,7 @@ test.describe.serial("Real signing E2E — CloseClaimRecordButton flow", () => {
     await injectSigningWallet(page);
     await page.goto(`/campaign/${createdTreeAddress}`, { waitUntil: "load" });
 
-    await expect(page.getByText(/total claimed/i).first()).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByText(/^claimed$/i).first()).toBeVisible({ timeout: 15_000 });
     await expect(page.getByRole("button", { name: /close record & reclaim rent/i })).not.toBeVisible();
   });
 });

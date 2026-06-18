@@ -203,7 +203,7 @@ test.describe.serial("Real signing E2E — beneficiary claim flow", () => {
     // Either the button shows "Claim 0" (nothing claimable) or is disabled
     // under a different label. Both are acceptable — the key check is that
     // the claimable amount is zero, meaning the claim succeeded.
-    const totalClaimedCard = page.getByText(/total claimed/i).first();
+    const totalClaimedCard = page.getByText(/^claimed$/i).first();
     await expect(totalClaimedCard).toBeVisible({ timeout: 15_000 });
 
     // The status badge should now show "Claimed" (fully claimed)

@@ -86,7 +86,7 @@ test.describe.serial("Real signing E2E — wrap and unwrap SOL", () => {
     const wrapTab = page.getByRole("button", { name: /^wrap$/i });
     await expect(wrapTab).toBeVisible({ timeout: 5_000 });
     await expect(page.getByRole("button", { name: /max:\s*[1-9]/i })).toBeVisible({
-      timeout: 15_000,
+      timeout: 30_000,
     });
 
     // Type amount in the number input

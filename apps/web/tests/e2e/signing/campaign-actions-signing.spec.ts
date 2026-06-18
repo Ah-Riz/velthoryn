@@ -77,8 +77,8 @@ async function createCancellableSolCampaign(
 
   await selectNativeSol(page);
 
-  const cancellableToggle = page.getByRole("checkbox", { name: /allow cancellation/i });
-  await cancellableToggle.check();
+  const cancellableToggle = page.getByText(/allow cancellation/i);
+  await cancellableToggle.click();
 
   // Add a second recipient so the form creates a multi-recipient campaign
   // (bulk-funded path → gives us a treeAddress to navigate to)

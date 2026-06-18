@@ -21,7 +21,7 @@
 import { test, expect, type Page } from "@playwright/test";
 import { Keypair, Connection, LAMPORTS_PER_SOL } from "@solana/web3.js";
 import bs58 from "bs58";
-import { alreadyUnlockedDatetimeLocal, expectCampaignLinkReady, selectNativeSol } from "./helpers";
+import { datetimeLocalFromNow, expectCampaignLinkReady, selectNativeSol } from "./helpers";
 
 const LOCALNET_RPC = "http://127.0.0.1:8899";
 
@@ -100,7 +100,7 @@ test.describe.serial("Real signing E2E — milestone release lifecycle", () => {
     // Fill amount
     await page.getByPlaceholder(/e\.g\. 1000/i).first().fill("0.01");
 
-    await page.locator("input[type='datetime-local']").first().fill(alreadyUnlockedDatetimeLocal());
+    await page.locator("input[type='datetime-local']").first().fill(datetimeLocalFromNow(0));
 
     // Submit — single milestone → button reads "Create Milestone Stream"
     const submitBtn = page.getByRole("button", { name: /create milestone stream/i });

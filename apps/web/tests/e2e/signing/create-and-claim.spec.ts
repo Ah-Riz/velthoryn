@@ -108,7 +108,7 @@ test.describe.serial("Real signing E2E — full vesting lifecycle", () => {
     await injectSigningWallet(page);
     await page.goto(`/campaign/${createdTreeAddress}`, { waitUntil: "load" });
 
-    await expect(page.getByText(/total supply|total deposit|vesting schedule/i).first()).toBeVisible({
+    await expect(page.getByText(/total allocation|vested/i).first()).toBeVisible({
       timeout: 30_000,
     });
   });
