@@ -113,95 +113,21 @@ All event names match exactly. No renaming or aliasing was found.
 
 ## §4 FE Architecture Decisions (Week 9 Update)
 
-This section records four frontend Architecture Decision Records (ADRs) that materially affect how any developer integrates with or extends the frontend codebase. These supplement the ADRs in `docs/week9/ADRs/`.
+This section records four frontend Architecture Decision Records (ADRs) that
+materially affect how any developer integrates with or extends the frontend
+codebase. These supplement the SC/BE ADRs in `docs/week9/ADRs/`.
 
----
+Each ADR is available as a standalone file in `docs/week9/ADRs/`:
 
-### ADR-FE-001: shadcn/ui Component Library Adoption
+| ADR | Title | Status |
+|-----|-------|--------|
+| [ADR-FE-001](ADRs/ADR-FE-001-shadcn-ui-adoption.md) | shadcn/ui Component Library Adoption | Active |
+| [ADR-FE-002](ADRs/ADR-FE-002-e2e-mock-wallet-localStorage.md) | E2E Mock Wallet via localStorage Flag | Active |
+| [ADR-FE-003](ADRs/ADR-FE-003-campaign-lifecycle-8-state.md) | 8-State CampaignLifecycle Enum | Active |
+| [ADR-FE-004](ADRs/ADR-FE-004-bankrun-warptoslot-before-setclock.md) | Bankrun `warpToSlot` Before `setClock` | Active |
 
-**Status:** Active (introduced Week 8, still current as of Week 9)
-
-**Context:**
-The Week 6–7 frontend used raw Tailwind CSS utilities for all interactive components including `Button`, `Dialog`, and modal overlays. This produced three compounding problems: (1) accessibility attributes were inconsistent — `WrapSolModal` lacked a proper focus trap and `CancelConfirmDialog` had no `aria-labelledby` wiring; (2) CSS for modal overlay and backdrop was duplicated between the two modal components; (3) there was no unified design token layer for dark mode, meaning color values were hardcoded in class strings rather than referenced from CSS custom properties.
-
-**Decision:**
-Migrate to shadcn/ui (`components.json`) as the primitive component layer. The migration added `Card`, `Badge`, `Dialog`, `Button`, `Input`, and `Label` primitives. `TokenPickerModal` and `WrapSolModal` were upgraded to use `shadcn/ui Dialog` for proper focus trapping, `aria-modal="true"`, and escape-key dismiss behavior. The campaign detail page was fully rewritten with a Card-based layout using a 6-metric grid (funded amount, stream count, claimed total, start date, end date, status badge).
-
-**Consequences:**
-- Consistent ARIA accessibility for all interactive overlays without manual attribute management.
-- Dark mode CSS variables unified in `globals.css` (105-line CSS custom property block covering background, foreground, card, popover, primary, secondary, muted, accent, destructive, border, input, ring tokens).
-- Bundle size increased from the addition of shadcn primitive components; acceptable given their tree-shakeable nature.
-- All existing E2E selectors were updated from brittle CSS class selectors (e.g. `.modal-overlay`) to ARIA role-based selectors (e.g. `role=dialog`, `role=button[name="Cancel"]`), improving test resilience.
-
-**Commit references:** `e1ec4b8`, `07213ca`
-
----
-
-### ADR-FE-002: E2E Mock Wallet via localStorage
-
-**Status:** Active
-
-**Context:**
-Playwright E2E tests require wallet interaction — specifically, approving a wallet connection and signing transactions — without a real browser extension. The standard approach of injecting a `window.solana` mock via Playwright's `addInitScript` is fragile: it must be re-injected on every navigation event, it cannot intercept all wallet adapter calls, and it behaves differently across Chromium, Firefox, and WebKit contexts.
-
-**Decision:**
-Implement a two-layer mock mechanism:
-1. `NEXT_PUBLIC_E2E_MOCK_WALLET` environment variable (set to `"1"` in CI) enables a mock Solana wallet adapter globally. The mock adapter auto-approves all connection and signing requests without opening any extension UI.
-2. `localStorage` flag `velthoryn:e2e-mock-send-tx` = `"1"` activates mock transaction mode within the application. Mock transactions return a hard-coded fake signature immediately. All four `confirmTransaction()` call sites in `src/app/(app)/campaign/[id]/page.tsx` check this flag and skip the RPC confirmation step when it is set.
-
-**Consequences:**
-- CI pipelines run without any installed wallet browser extension dependency.
-- E2E tests cover UI state transitions (button enable/disable, toast messages, loading spinners) reliably.
-- The mock bypasses real Solana RPC transaction submission — this is intentional and correct. Transaction correctness (instruction data, account resolution, signature verification) is covered by the bankrun integration test suite, not Playwright E2E.
-- `NEXT_PUBLIC_E2E_MOCK_WALLET` must never be set in production builds. Deployment CI has a check that fails the build if this variable is set to a non-empty value in production environment config.
-
-**Commit references:** `16248db`, `b27e0fd`
-
----
-
-### ADR-FE-003: 8-State CampaignLifecycle Enum
-
-**Status:** Active
-
-**Context:**
-Prior to Week 8, the FE determined campaign display state using a single `cancelledAt != null` check. This caused two user-visible bugs: (1) campaigns that were instantly refunded (creator called `instant_refund` and the vault was fully drained in the same transaction) still showed a "Grace Period Active — Needs Action" banner on the beneficiary view; (2) campaigns where the stream had settled post-cancel (all beneficiaries claimed during the grace period) also showed the same false banner. The root cause is that `cancelledAt` alone cannot distinguish four distinct post-cancel states.
-
-**Decision:**
-Export a `CampaignLifecycle` type from `apps/web/src/lib/vesting/list.ts` with exactly 8 states:
-
-```
-active | paused | claimable | claimed |
-cancelled_grace | cancelled_expired | instant_refunded | settled
-```
-
-Add an `isGracePeriodVisible()` helper that returns `true` only when all three conditions hold: `cancelledAt != null`, `instantRefunded === false`, and `streamSettled === false`. The beneficiary API at `/api/beneficiary/[address]/vesting-progress` was updated to return `instantRefunded` (boolean) and `streamSettled` (boolean) in the JSON response, derived from `EXISTS(SELECT 1 FROM stream_cancel_events WHERE ...)` subqueries.
-
-**Consequences:**
-- No false "Needs Action" banners for settled or instantly-refunded campaigns.
-- The beneficiary claim button remains visible and active when `claimable > 0` even after a creator cancels, correctly allowing beneficiaries to claim vested-but-unclaimed amounts during the grace window.
-- Requires `streamSettled` and `instantRefunded` fields in the API response. Any consumer of this API must handle the two new boolean fields (non-breaking addition).
-- All eight lifecycle states have corresponding CSS badge variants in `src/components/campaign/CampaignStatusBadge.tsx`.
-
-**Commit references:** `eb71065`, `b27e0fd`
-
----
-
-### ADR-FE-004: Bankrun `warpToSlot` Before `setClock`
-
-**Status:** Active
-
-**Context:**
-Bankrun integration tests in `tests/bankrun/` use `context.setClock()` to advance simulated time for vesting unlock logic. `setClock()` updates the Solana clock sysvar but does not advance the bank's blockhash ring. When two consecutive transactions carry identical instruction data and are submitted at the same slot, they produce the same Ed25519 signature (same message bytes = same signature). The Solana runtime rejects the second transaction with "Transaction already been processed", causing deterministic (non-flaky) test failures on the 2nd and 3rd claims in progressive fractional claim tests.
-
-**Decision:**
-Always call `context.warpToSlot(nextSlot)` before calling `context.setClock()` in the `warpClock()` helper located at `tests/utils/bankrun.ts`. The slot increment produces a new entry in the blockhash ring, ensuring subsequent transactions have a distinct `recentBlockhash` and therefore a different signature even when instruction data is identical. Setting `MOCHA_RETRIES=2` was considered and rejected because the failure is deterministic — retrying the same slot produces the same failure.
-
-**Consequences:**
-- All bankrun integration tests are now deterministic. Tests covering progressive fractional claims, multi-checkpoint `withdraw` calls, and multi-step milestone vesting pass consistently across all environments.
-- `warpClock()` in `tests/utils/bankrun.ts` is the single authoritative utility for time manipulation in bankrun tests. Callers must not call `setClock()` directly.
-- The slot increment is small (1 slot = ~400ms simulated time) and has no material effect on vesting math in existing tests.
-
-**Commit references:** `86eb7e9`
+See the linked files for full context, decision rationale, consequences, and
+commit references.
 
 ---
 
