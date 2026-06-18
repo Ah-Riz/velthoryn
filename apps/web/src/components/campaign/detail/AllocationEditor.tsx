@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
+import { toRawAmount } from "@/lib/campaign/bulk";
 
 export interface RecipientRow {
   id: string;
@@ -21,9 +22,12 @@ interface Props {
   loading: boolean;
   onSubmit: (recipients: RecipientRow[]) => void;
   canRotate: boolean;
+  lockedReason?: string | null;
   /** beneficiary → raw integer token amount (as string) from the DB */
   claimedAmounts?: Record<string, string>;
   mintDecimals?: number;
+  /** raw integer total_supply (as string) — immutable after campaign creation */
+  totalSupplyRaw?: string;
 }
 
 let nextId = 1;
@@ -116,6 +120,10 @@ function computeDiff(original: RecipientRow[], current: RecipientRow[]): Diff {
   return { added, updated, removed, hasChanges: added + updated + removed > 0, addedDelta, updatedDelta, removedDelta };
 }
 
+function fmtAmount(decimal: number): string {
+  return decimal.toLocaleString(undefined, { maximumFractionDigits: 6 });
+}
+
 // ─── row-level validation ────────────────────────────────────────────────────
 
 function computeRowErrors(
@@ -123,11 +131,14 @@ function computeRowErrors(
   claimedAmounts: Record<string, string>,
   decimals: number,
 ): Record<string, string> {
-  // Sum the new decimal allocation per beneficiary (handles multi-leaf milestone campaigns)
-  const newTotalByBenef = new Map<string, number>();
+  // Sum the new raw allocation per beneficiary using BigInt (handles multi-leaf milestone campaigns)
+  const newTotalByBenef = new Map<string, bigint>();
   for (const r of rows) {
     if (!r.beneficiary) continue;
-    newTotalByBenef.set(r.beneficiary, (newTotalByBenef.get(r.beneficiary) ?? 0) + (Number(r.amount) || 0));
+    try {
+      const rowRaw = BigInt(toRawAmount(r.amount || "0", decimals));
+      newTotalByBenef.set(r.beneficiary, (newTotalByBenef.get(r.beneficiary) ?? 0n) + rowRaw);
+    } catch { /* skip rows with invalid amount strings */ }
   }
 
   const errors: Record<string, string> = {};
@@ -135,12 +146,27 @@ function computeRowErrors(
     if (!r.beneficiary) continue;
     const raw = claimedAmounts[r.beneficiary];
     if (!isPositiveRaw(raw)) continue;
-    const claimedDecimal = Number(raw) / 10 ** decimals;
-    if ((newTotalByBenef.get(r.beneficiary) ?? 0) < claimedDecimal) {
+    const claimedBig = BigInt(raw);
+    if ((newTotalByBenef.get(r.beneficiary) ?? 0n) < claimedBig) {
       errors[r.id] = `Cannot go below ${rawToDecimal(raw, decimals)} already claimed`;
     }
   }
   return errors;
+}
+
+function computeRemovalErrors(
+  originalRows: RecipientRow[],
+  currentRows: RecipientRow[],
+  claimedAmounts: Record<string, string>,
+  decimals: number,
+): string[] {
+  const currentBenef = new Set(currentRows.filter((r) => r.beneficiary).map((r) => r.beneficiary));
+  return originalRows
+    .filter((r) => r.beneficiary && !currentBenef.has(r.beneficiary) && isPositiveRaw(claimedAmounts[r.beneficiary]))
+    .map((r) => {
+      const short = `${r.beneficiary.slice(0, 4)}…${r.beneficiary.slice(-4)}`;
+      return `Cannot remove ${short} — they have already claimed ${rawToDecimal(claimedAmounts[r.beneficiary], decimals)} tokens.`;
+    });
 }
 
 // ─── component ───────────────────────────────────────────────────────────────
@@ -150,8 +176,10 @@ export function AllocationEditor({
   loading,
   onSubmit,
   canRotate,
+  lockedReason,
   claimedAmounts = {},
   mintDecimals = 9,
+  totalSupplyRaw,
 }: Props) {
   const [rows, setRows] = useState<RecipientRow[]>(
     initialRecipients.length > 0 ? initialRecipients : [emptyRow()],
@@ -199,13 +227,90 @@ export function AllocationEditor({
   }
 
   const rowErrors = computeRowErrors(rows, claimedAmounts, mintDecimals);
+  const removalErrors = computeRemovalErrors(originalRows, rows, claimedAmounts, mintDecimals);
   const diff = computeDiff(originalRows, rows);
   const netDelta = diff.addedDelta - diff.removedDelta + diff.updatedDelta;
-  const hasErrors = Object.keys(rowErrors).length > 0;
+
+  // Budget check — BigInt path determines overBudget (on-chain gate)
+  const supplyRawBig = totalSupplyRaw != null ? BigInt(totalSupplyRaw) : null;
+  const sumRaw = rows.reduce((acc, r) => {
+    try { return acc + BigInt(toRawAmount(r.amount || "0", mintDecimals)); } catch { return acc; }
+  }, 0n);
+  const overBudget = supplyRawBig != null && sumRaw > supplyRawBig;
+
+  // Float path — display only (progress bar width, decimal label)
+  const sumDecimal = rows.reduce((acc, r) => acc + (Number(r.amount) || 0), 0);
+  const supplyDecimal = supplyRawBig != null
+    ? Number(supplyRawBig / 10n ** BigInt(mintDecimals))
+    : null;
+  const budgetPct = supplyDecimal ? Math.min((sumDecimal / supplyDecimal) * 100, 100) : 0;
+
+  const hasErrors = Object.keys(rowErrors).length > 0 || overBudget || removalErrors.length > 0;
   const valid = !hasErrors && rows.every((r) => r.beneficiary.length >= 32 && r.amount && Number(r.amount) > 0);
 
   return (
     <div className="space-y-4">
+
+      {/* ── Lock state header ── */}
+      <div className={`flex items-center gap-2 rounded-lg px-3 py-2 text-[12px] font-medium ${
+        lockedReason
+          ? "border border-amber-500/20 bg-amber-500/[0.08] text-amber-700 dark:text-amber-400"
+          : "border border-green-500/20 bg-green-500/[0.08] text-green-700 dark:text-green-400"
+      }`}>
+        {lockedReason ? (
+          <>
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+              <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
+              <path d="M7 11V7a5 5 0 0110 0v4"/>
+            </svg>
+            {lockedReason}
+          </>
+        ) : (
+          <>
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+              <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
+              <path d="M7 11V7a5 5 0 019.9-1"/>
+            </svg>
+            Editable
+          </>
+        )}
+      </div>
+
+      {/* ── Budget bar ── */}
+      {supplyDecimal != null && (
+        <div className={cn(
+          "rounded-xl border px-4 py-3",
+          overBudget
+            ? "border-red-500/30 bg-red-500/[0.05]"
+            : "border-emerald-500/20 bg-emerald-500/[0.04]",
+        )}>
+          <div className="flex items-center justify-between gap-3">
+            <span className={cn(
+              "text-[12px] font-medium",
+              overBudget ? "text-red-600 dark:text-red-400" : "text-emerald-700 dark:text-emerald-400",
+            )}>
+              Total allocated
+            </span>
+            <span className={cn(
+              "text-[12px] font-semibold tabular-nums",
+              overBudget ? "text-red-600 dark:text-red-400" : "text-emerald-700 dark:text-emerald-400",
+            )}>
+              {fmtAmount(sumDecimal)} / {fmtAmount(supplyDecimal)}
+            </span>
+          </div>
+          <div className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-foreground/[0.07]">
+            <div
+              className={cn("h-full rounded-full transition-all duration-150", overBudget ? "bg-red-500" : "bg-emerald-500")}
+              style={{ width: `${budgetPct}%` }}
+            />
+          </div>
+          {overBudget && (
+            <p className="mt-2 text-[11px] text-red-600 dark:text-red-400">
+              Total allocation exceeds campaign supply. Root rotation cannot expand the budget.
+            </p>
+          )}
+        </div>
+      )}
 
       {/* ── Toolbar ── */}
       <div className="flex items-center justify-between gap-3">
@@ -420,6 +525,17 @@ export function AllocationEditor({
         </div>
       )}
 
+      {/* ── Removal errors ── */}
+      {removalErrors.length > 0 && (
+        <div className="rounded-xl border border-red-500/20 bg-red-500/[0.05] px-4 py-3 space-y-1.5">
+          {removalErrors.map((err, i) => (
+            <p key={i} className="text-[12px] font-medium text-red-600 dark:text-red-400">
+              ⚠ {err}
+            </p>
+          ))}
+        </div>
+      )}
+
       {canRotate && (
         <Button
           type="button"
@@ -433,7 +549,7 @@ export function AllocationEditor({
 
       {!canRotate && (
         <p className="text-[12px] text-amber-700 dark:text-amber-400">
-          Only the cancel authority can update allocations.
+          {lockedReason ?? "Only the cancel authority can update allocations."}
         </p>
       )}
     </div>
