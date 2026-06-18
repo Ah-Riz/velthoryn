@@ -15,6 +15,11 @@ type ClaimRecordData = {
   bump: number;
 };
 
+/**
+ * Reads the on-chain ClaimRecord PDA for a beneficiary in a campaign.
+ * Returns null if the account does not exist yet (beneficiary has never claimed).
+ * ClaimRecord is zero-copy with a per-leaf ledger (PER_LEAF_CAP=8).
+ */
 export function useClaimRecord(treeAddress: string | undefined, beneficiary: string | undefined) {
   const program = useVestingProgram();
 

@@ -29,6 +29,10 @@ class ProofLookupError extends Error {
   }
 }
 
+/**
+ * Fetches the Merkle proof for a beneficiary in a campaign. Returns null if
+ * the beneficiary is not in the tree (404). Used by ClaimWithProofButton.
+ */
 export function useProofLookup(
   treeAddress: string | undefined,
   beneficiary: string | undefined,

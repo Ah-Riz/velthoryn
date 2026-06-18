@@ -45,6 +45,7 @@ export interface CreateStreamResult {
   indexWarning: string | null;
 }
 
+/** Builds and sends `claimTokens` (with Merkle proof) or `claimTokensSingle` for the connected wallet. */
 export function useCreateStream() {
   const program = useVestingProgram();
   const { publicKey, sendTransaction, signMessage } = useWallet();

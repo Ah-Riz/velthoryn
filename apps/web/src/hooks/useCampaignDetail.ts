@@ -72,6 +72,7 @@ interface CampaignDetail {
   } | null;
 }
 
+/** Fetches full campaign detail from `/api/campaigns/[treeAddress]`, including analytics, recipients, and vesting curve. */
 export function useCampaignDetail(treeAddress: string | undefined) {
   return useQuery<CampaignDetail>({
     queryKey: ["campaign", treeAddress],

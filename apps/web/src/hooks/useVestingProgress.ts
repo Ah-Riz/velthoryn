@@ -54,6 +54,7 @@ export interface VestingProgressSummary {
   mintSums: Map<string, MintSum>;
 }
 
+/** Fetches all active vesting streams for a beneficiary wallet with per-leaf progress data. Refetches every 30s. */
 export function useVestingProgress(address: string | undefined) {
   return useQuery<VestingProgressResponse>({
     queryKey: ["vestingProgress", address],
@@ -70,6 +71,7 @@ export function useVestingProgress(address: string | undefined) {
   });
 }
 
+/** Aggregates vesting progress into totals (entitled/vested/claimed/claimable) across all campaigns. */
 export function useVestingProgressSummary(address: string | undefined) {
   const { data, isLoading, error } = useVestingProgress(address);
 

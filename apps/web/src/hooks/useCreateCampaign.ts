@@ -61,6 +61,11 @@ export interface CreateAndFundCampaignResult {
   indexWarning: string | null;
 }
 
+/**
+ * Builds and submits the `initializeCampaign` + `depositTokens` transactions for
+ * both single-leaf and bulk Merkle campaigns. Handles SOL auto-wrap and local
+ * pending-index storage for the PendingCampaignIndexer.
+ */
 export function useCreateCampaign() {
   const program = useVestingProgram();
   const { publicKey, sendTransaction, signMessage } = useWallet();
