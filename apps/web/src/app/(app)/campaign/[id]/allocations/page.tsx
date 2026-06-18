@@ -12,6 +12,7 @@ import { useUpdateRoot } from "@/hooks/useUpdateRoot";
 import { useMintInfo } from "@/hooks/useMintInfo";
 import { useToast } from "@/components/shell/Toast";
 import { canRotateRoot } from "@/lib/campaign/authority";
+import { toRawAmount } from "@/lib/campaign/bulk";
 
 type OnChainTreeState = {
   merkleRoot: number[];
@@ -45,6 +46,21 @@ async function withTimeout<T>(
 function truncateHash(value: string): string {
   if (value.length <= 18) return value;
   return `${value.slice(0, 10)}...${value.slice(-8)}`;
+}
+
+function rawToDisplayDecimal(raw: string, decimals: number): string {
+  try {
+    const n = BigInt(raw);
+    if (n === 0n) return "0";
+    if (decimals === 0) return n.toString();
+    const div = 10n ** BigInt(decimals);
+    const whole = n / div;
+    const frac = n % div;
+    const fracStr = frac.toString().padStart(decimals, "0").replace(/0+$/, "");
+    return fracStr ? `${whole}.${fracStr}` : whole.toString();
+  } catch {
+    return raw;
+  }
 }
 
 export default function CampaignAllocationsPage({
@@ -180,8 +196,26 @@ export default function CampaignAllocationsPage({
     cancelAuthority: treeState?.cancelAuthority,
     cancellable: treeState?.cancellable ?? false,
     cancelledAt: treeState?.cancelledAt ? BigInt(treeState.cancelledAt.toString()) : null,
+    paused: detail?.paused ?? false,
     leafCount: treeState?.leafCount ?? detail?.leafCount ?? 0,
   });
+
+  const hasAnyClaim = (detail?.analytics.claimCount ?? 0) > 0;
+  const allVested =
+    detail !== undefined &&
+    Number(detail.totalSupply) > 0 &&
+    Number(detail.totalClaimed) >= Number(detail.totalSupply);
+
+  const lockedReason: string | null =
+    (detail && detail.cancelledAt !== null)
+      ? detail.instantRefunded
+        ? "Locked: campaign cancelled (instant refund)"
+        : "Locked: campaign cancelled"
+      : detail?.paused ? "Locked: campaign paused" :
+    hasAnyClaim ? "Locked: claims already exist" :
+    allVested ? "Locked: all tokens vested" :
+    !canRotate ? "Locked: wallet is not cancel authority" :
+    null;
 
   const currentMerkleRoot = treeState
     ? Array.from(treeState.merkleRoot).map((b) => b.toString(16).padStart(2, "0")).join("")
@@ -193,7 +227,7 @@ export default function CampaignAllocationsPage({
     ? fullLeaves.map((l, i) => ({
         id: `leaf-${i}`,
         beneficiary: l.beneficiary,
-        amount: (Number(l.amount) / 10 ** decimals).toString(),
+        amount: rawToDisplayDecimal(String(l.amount), decimals),
         releaseType: l.releaseType,
         startTime: l.startTime,
         cliffTime: l.cliffTime,
@@ -211,7 +245,7 @@ export default function CampaignAllocationsPage({
       // Step 1: Call prepare API to build new Merkle tree
       const recipients = rows.map((r) => ({
         beneficiary: r.beneficiary,
-        amount: Math.round(Number(r.amount) * 10 ** decimals).toString(),
+        amount: toRawAmount(r.amount, decimals),
         releaseType: r.releaseType,
         startTime: r.startTime,
         cliffTime: r.cliffTime,
@@ -225,6 +259,27 @@ export default function CampaignAllocationsPage({
         return;
       }
 
+      // Pre-submit guard 1: sum check
+      const sumRaw = recipients.reduce((acc, r) => acc + BigInt(r.amount), 0n);
+      if (sumRaw > BigInt(detail.totalSupply)) {
+        const supplyDisplay = (Number(detail.totalSupply) / 10 ** decimals).toLocaleString(undefined, { maximumFractionDigits: 6 });
+        toast(`Total allocation exceeds campaign supply of ${supplyDisplay} tokens. Root rotation cannot expand the budget.`, "error");
+        setSubmitting(false);
+        return;
+      }
+
+      // Pre-submit guard 2: removal check — belt-and-suspenders
+      const currentBenefSet = new Set(rows.map((r) => r.beneficiary).filter(Boolean));
+      for (const recip of detail.recipients) {
+        if (!currentBenefSet.has(recip.beneficiary) && BigInt(recip.claimedAmount ?? "0") > 0n) {
+          const short = `${recip.beneficiary.slice(0, 4)}…${recip.beneficiary.slice(-4)}`;
+          const claimedDisplay = (Number(recip.claimedAmount) / 10 ** decimals).toLocaleString(undefined, { maximumFractionDigits: 6 });
+          toast(`Cannot remove ${short} — they have already claimed ${claimedDisplay} tokens.`, "error");
+          setSubmitting(false);
+          return;
+        }
+      }
+
       const prepareRes = await fetch("/api/campaigns/prepare", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -232,7 +287,7 @@ export default function CampaignAllocationsPage({
           recipients,
           mint: detail.mint,
           creator: detail.creator,
-          campaignId: detail.campaignId,
+          campaignId: Number(detail.campaignId),
           cancellable: detail.cancellable,
           cancelAuthority: publicKey.toBase58(),
         }),
@@ -366,11 +421,13 @@ export default function CampaignAllocationsPage({
           ) : (
             <AllocationEditor
               initialRecipients={initialRows.length > 0 ? initialRows : [emptyRow()]}
-              loading={submitting}
+              loading={submitting || !!leavesLoading}
               onSubmit={handleSubmit}
               canRotate={canRotate}
+              lockedReason={lockedReason}
               claimedAmounts={claimedAmountMap}
               mintDecimals={decimals}
+              totalSupplyRaw={detail ? String(detail.totalSupply) : undefined}
             />
           )}
         </div>
