@@ -58,6 +58,7 @@ test.describe("Cliff vesting — create stream", () => {
     await gotoWithRetry(page, "/campaign/create/cliff");
 
     await selectSolToken(page);
+    await fillCliffSchedule(page);
     await openCsvMode(page);
     const cliffTs = String(Math.floor(Date.now() / 1000) + 86400 * 30);
     await parseCsv(
@@ -146,6 +147,7 @@ test.describe("Linear vesting — create stream", () => {
     await gotoWithRetry(page, "/campaign/create/linear");
 
     await selectSolToken(page);
+    await fillLinearSchedule(page);
     await openCsvMode(page);
     const startTs = String(Math.floor(Date.now() / 1000));
     const endTs = String(Math.floor(Date.now() / 1000) + 86400 * 30);
