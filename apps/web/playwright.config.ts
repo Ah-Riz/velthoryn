@@ -35,7 +35,7 @@ export default defineConfig({
     {
       name: "signing",
       use: { ...devices["Desktop Chrome"] },
-      testMatch: "**/signing/**",
+      testMatch: "**/signing/**/*.spec.ts",
       timeout: 180_000,
     },
   ],
