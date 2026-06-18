@@ -141,7 +141,7 @@ export default function CampaignAllocationsPage({
       }
     }
     return map;
-  }, [detail?.recipients]);
+  }, [detail]);
 
   // Fetch full leaf data (with schedule) for the editor
   const [fullLeaves, setFullLeaves] = useState<Array<{

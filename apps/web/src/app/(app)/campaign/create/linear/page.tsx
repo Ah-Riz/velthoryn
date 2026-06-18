@@ -9,9 +9,9 @@ import { useCreateCampaign } from "@/hooks/useCreateCampaign";
 import { useCreateStream, type CreateStreamResult } from "@/hooks/useCreateStream";
 import { useWalletTokens } from "@/hooks/useWalletTokens";
 import { useToast } from "@/components/shell/Toast";
-import { CARD, INPUT, INPUT_ERR, LABEL, SectionHeader, Field, ToggleCard, TxResultCard, ErrorCard } from "@/components/campaign/create/shared";
+import { CARD, INPUT, INPUT_ERR, LABEL, SectionHeader, Field, ToggleCard, TxResultCard, ErrorCard, formatTokenAmount, formatUnixToDate, formatDurationSeconds } from "@/components/campaign/create/shared";
 import { BulkCsvSection } from "@/components/campaign/create/BulkCsvSection";
-import { FormSummary } from "@/components/campaign/create/FormSummary";
+import { FormSummary, type BulkReviewData } from "@/components/campaign/create/FormSummary";
 import { PageHeader } from "@/components/campaign/create/PageHeader";
 import { TokenPickerButton } from "@/components/campaign/create/TokenPickerButton";
 import { PendingFundingsPanel } from "@/components/campaign/create/PendingFundingsPanel";
@@ -99,16 +99,13 @@ export default function LinearCreatePage() {
   const tokenBalance = walletToken?.uiAmount ?? null;
   const totalAmount = streams.reduce((sum, s) => sum + (Number(s.amount) || 0), 0);
 
-  const validateField = useCallback(
-    (key: string, value: string, type: "recipient" | "amount" | "start" | "end") => {
-      let err: string | null = null;
-      if (type === "recipient") err = validatePublicKey(value);
-      else if (type === "amount") err = validateAmountWithDecimals(value, effectiveMintDecimals);
-      else if (type === "end") err = value ? null : "End date is required.";
-      setFormErrors((prev) => ({ ...prev, [key]: err }));
-    },
-    [effectiveMintDecimals],
-  );
+  const validateField = (key: string, value: string, type: "recipient" | "amount" | "start" | "end") => {
+    let err: string | null = null;
+    if (type === "recipient") err = validatePublicKey(value);
+    else if (type === "amount") err = validateAmountWithDecimals(value, effectiveMintDecimals);
+    else if (type === "end") err = value ? null : "End date is required.";
+    setFormErrors((prev) => ({ ...prev, [key]: err }));
+  };
 
   const refreshPendingFundings = useCallback(() => {
     if (!publicKey) {
@@ -128,9 +125,16 @@ export default function LinearCreatePage() {
   }, [refreshPendingFundings]);
 
   function handleTokenSelect(mint: string, decimals: number, autoWrap?: boolean) {
+    const mintChanged = mint !== mintAddress;
     setMintAddress(mint);
     setMintDecimals(decimals);
     setUseAutoWrap(autoWrap ?? false);
+    if (mintChanged && mode === "bulk") {
+      setCsvText("");
+      setCsvResult(null);
+      setTxState({ type: "idle" });
+      return;
+    }
     if (mode === "bulk" && csvText.trim()) {
       if (csvResult?.issues.length === 0 && csvResult.rows.length > 0) {
         setTxState({ type: "bulk-ready", prepared: prepareBulkCampaign(csvResult.rows) });
@@ -408,6 +412,34 @@ export default function LinearCreatePage() {
       ? txState.prepared
       : null;
 
+  const bulkReview: BulkReviewData | null =
+    prepared && effectiveMintDecimals !== null
+      ? (() => {
+          const starts = prepared.leaves.map((l) => Number(l.startTime));
+          const ends = prepared.leaves.map((l) => Number(l.endTime));
+          const earliest = Math.min(...starts);
+          const latest = Math.max(...ends);
+          const { cliff, linear, milestone } = prepared.releaseMix;
+          const releaseType =
+            cliff && !linear && !milestone
+              ? "Cliff"
+              : !cliff && linear && !milestone
+              ? "Linear"
+              : !cliff && !linear && milestone
+              ? "Milestone"
+              : "Mixed";
+          return {
+            recipients: prepared.leafCount,
+            tokenSymbol,
+            totalSupply: `${formatTokenAmount(prepared.totalSupply, effectiveMintDecimals)}${tokenSymbol ? ` ${tokenSymbol}` : ""}`,
+            releaseType,
+            earliestStart: formatUnixToDate(earliest),
+            latestEnd: formatUnixToDate(latest),
+            duration: formatDurationSeconds(latest - earliest),
+          };
+        })()
+      : null;
+
   if (!publicKey) {
     return (
       <div className="mx-auto max-w-3xl space-y-6">
@@ -616,6 +648,7 @@ export default function LinearCreatePage() {
               csvResult={csvResult}
               prepared={prepared}
               vestingType="linear"
+              tokenSymbol={tokenSymbol}
             />
           )}
 
@@ -684,6 +717,7 @@ export default function LinearCreatePage() {
               ? handleSubmit
               : handleBulkCreate
           }
+          bulkReview={mode === "bulk" ? bulkReview : null}
         />
       </div>
     </div>

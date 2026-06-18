@@ -28,12 +28,12 @@ describe("getVestingTypeLabel", () => {
 });
 
 describe("getVestingTypeBadgeColor", () => {
-  it("returns amber classes for cliff", () => {
-    expect(getVestingTypeBadgeColor(0)).toContain("amber");
+  it("returns indigo classes for cliff", () => {
+    expect(getVestingTypeBadgeColor(0)).toContain("indigo");
   });
 
-  it("returns purple classes for linear", () => {
-    expect(getVestingTypeBadgeColor(1)).toContain("purple");
+  it("returns violet classes for linear", () => {
+    expect(getVestingTypeBadgeColor(1)).toContain("violet");
   });
 
   it("returns blue classes for milestone", () => {
