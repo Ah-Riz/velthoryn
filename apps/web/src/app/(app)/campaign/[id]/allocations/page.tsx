@@ -287,7 +287,7 @@ export default function CampaignAllocationsPage({
           recipients,
           mint: detail.mint,
           creator: detail.creator,
-          campaignId: Number(detail.campaignId),
+          campaignId: detail.campaignId,
           cancellable: detail.cancellable,
           cancelAuthority: publicKey.toBase58(),
         }),
