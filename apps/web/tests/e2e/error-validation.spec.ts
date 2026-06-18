@@ -50,7 +50,7 @@ test.describe("Error messages and validation", () => {
       "beneficiary,amount,releaseType,startTime,cliffTime,endTime,milestoneIdx\n" +
       `${recipientWallet},0.001,Linear,1779899400,1779899700,1779899700,0`
     );
-    await page.getByRole("button", { name: /parse & validate/i }).click();
+    await page.getByRole("button", { name: /validate csv/i }).click();
 
     await expect(page.getByText(/this page only accepts cliff rows/i)).toBeVisible();
     expect(pageErrors).toEqual([]);
@@ -64,7 +64,7 @@ test.describe("Error messages and validation", () => {
       "beneficiary,amount,releaseType,startTime,cliffTime,endTime,milestoneIdx\n" +
       "INVALID_ADDRESS,0.001,Cliff,1779899400,1779899700,1779899700,0"
     );
-    await page.getByRole("button", { name: /parse & validate/i }).click();
+    await page.getByRole("button", { name: /validate csv/i }).click();
 
     // Should show some validation error
     await expect(page.getByText(/invalid|error|failed/i).first()).toBeVisible();

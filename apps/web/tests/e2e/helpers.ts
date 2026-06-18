@@ -95,12 +95,12 @@ export async function selectSolToken(page: Page) {
 
 export async function openCsvMode(page: Page, label = /use csv|csv campaign/i) {
   await page.getByRole("button", { name: label }).click();
-  await expect(page.getByRole("button", { name: /parse & validate/i })).toBeVisible();
+  await expect(page.getByRole("button", { name: /validate csv/i })).toBeVisible();
 }
 
 export async function parseCsv(page: Page, csv: string) {
   await page.locator("textarea").fill(csv);
-  await page.getByRole("button", { name: /parse & validate/i }).click();
+  await page.getByRole("button", { name: /validate csv/i }).click();
 }
 
 export function csv(rows: string[]) {
