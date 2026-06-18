@@ -10,6 +10,8 @@ import {
   recipientWallet,
   secondWallet,
   selectSolToken,
+  fillCliffSchedule,
+  fillLinearSchedule,
 } from "./helpers";
 
 const schedules = {
@@ -24,6 +26,11 @@ async function openCsvCreatePage(page: Page, path: string, csvButton?: RegExp) {
   const response = await gotoWithRetry(page, path);
   expect(response?.ok()).toBe(true);
   await selectSolToken(page);
+  if (path.includes("/cliff")) {
+    await fillCliffSchedule(page);
+  } else if (path.includes("/linear")) {
+    await fillLinearSchedule(page);
+  }
   await openCsvMode(page, csvButton);
   return pageErrors;
 }

@@ -110,6 +110,30 @@ export async function selectSolToken(page: Page) {
   await expect(page.getByRole("button", { name: /SOL.*Native/i })).toBeVisible();
 }
 
+/** ISO datetime-local string offset from now (campaign schedule fields). */
+export function datetimeLocalOffset(msFromNow: number): string {
+  return new Date(Date.now() + msFromNow).toISOString().slice(0, 16);
+}
+
+/** Cliff create: Schedule card has Start (optional) then Cliff Date (required). */
+export async function fillCliffSchedule(page: Page, cliffDate?: string) {
+  const cliffStr = cliffDate ?? datetimeLocalOffset(86400_000 * 30);
+  const inputs = page.locator("input[type='datetime-local']");
+  await inputs.nth(1).fill(cliffStr);
+}
+
+/** Linear create: Schedule card has Start, Cliff (optional), End (required). */
+export async function fillLinearSchedule(
+  page: Page,
+  opts?: { startDate?: string; endDate?: string },
+) {
+  const startStr = opts?.startDate ?? datetimeLocalOffset(86400_000);
+  const endStr = opts?.endDate ?? datetimeLocalOffset(86400_000 * 31);
+  const inputs = page.locator("input[type='datetime-local']");
+  await inputs.nth(0).fill(startStr);
+  await inputs.nth(2).fill(endStr);
+}
+
 export async function openCsvMode(page: Page, label = /use csv|csv campaign/i) {
   await page.getByRole("button", { name: label }).click();
   await expect(page.getByRole("button", { name: /validate csv/i })).toBeVisible();

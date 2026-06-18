@@ -28,8 +28,6 @@ type StreamEntry = {
   id: string;
   recipient: string;
   amount: string;
-  cliffTime: string;
-  startTime: string;
 };
 
 type TxState =
@@ -49,7 +47,7 @@ type TxState =
   | { type: "bulk-funded"; sig: string; treeAddress: string; prepared: PreparedBulkCampaign };
 
 function newStream(): StreamEntry {
-  return { id: crypto.randomUUID(), recipient: "", amount: "", cliffTime: "", startTime: "" };
+  return { id: crypto.randomUUID(), recipient: "", amount: "" };
 }
 
 function waitForLoadingPaint() {
@@ -74,6 +72,11 @@ export default function CliffCreatePage() {
   const [useAutoWrap, setUseAutoWrap] = useState(false);
   const [cancellable, setCancellable] = useState(false);
   const [baseCampaignId, setBaseCampaignId] = useState(() => Math.floor(Date.now() / 1000) % 1000000);
+
+  // Campaign-level schedule — applies to every recipient so all unlock on the same date
+  const [startTime, setStartTime] = useState("");
+  const [cliffTime, setCliffTime] = useState("");
+  const [scheduleError, setScheduleError] = useState<string | null>(null);
 
   // Stream entries (manual mode)
   const [streams, setStreams] = useState<StreamEntry[]>([newStream()]);
@@ -148,17 +151,7 @@ export default function CliffCreatePage() {
       return;
     }
     if (mode === "bulk" && csvText.trim()) {
-      if (csvResult?.issues.length === 0 && csvResult.rows.length > 0) {
-        setTxState({ type: "bulk-ready", prepared: prepareBulkCampaign(csvResult.rows) });
-      } else {
-        const result = parseBulkCsv(csvText, decimals, 0);
-        setCsvResult(result);
-        if (result.issues.length === 0 && result.rows.length > 0) {
-          setTxState({ type: "bulk-ready", prepared: prepareBulkCampaign(result.rows) });
-        } else {
-          setTxState({ type: "idle" });
-        }
-      }
+      runBulkParse(csvText, decimals);
     }
   }
 
@@ -176,30 +169,73 @@ export default function CliffCreatePage() {
     setStreams((prev) => prev.filter((_, i) => i !== index));
   }
 
+  function resolveSchedule() {
+    const cliffUnix = datetimeLocalToUnix(cliffTime);
+    const startUnix = startTime
+      ? datetimeLocalToUnix(startTime)
+      : Math.min(Math.floor(Date.now() / 1000), cliffUnix);
+    return { startTime: startUnix, cliffTime: cliffUnix, endTime: cliffUnix };
+  }
+
+  function validateScheduleField() {
+    const sched = resolveSchedule();
+    setScheduleError(!cliffTime ? "Cliff date is required." : validateSchedule(sched.startTime, sched.cliffTime, sched.endTime, 0));
+  }
+
+  function updateScheduleField(field: "start" | "cliff", value: string) {
+    if (field === "start") setStartTime(value);
+    else setCliffTime(value);
+    // A schedule change invalidates any previously parsed bulk payload.
+    if (mode === "bulk") {
+      setCsvResult(null);
+      setTxState({ type: "idle" });
+    }
+  }
+
+  function runBulkParse(text: string, decimals: number | null) {
+    const sched = resolveSchedule();
+    const schedErr = !cliffTime
+      ? "Cliff date is required."
+      : validateSchedule(sched.startTime, sched.cliffTime, sched.endTime, 0);
+    setScheduleError(schedErr);
+    if (schedErr) {
+      setCsvResult(null);
+      setTxState({ type: "idle" });
+      return;
+    }
+    const result = parseBulkCsv(text, decimals, 0, sched);
+    setCsvResult(result);
+    if (result.issues.length === 0 && result.rows.length > 0) {
+      setTxState({ type: "bulk-ready", prepared: prepareBulkCampaign(result.rows) });
+    } else {
+      setTxState({ type: "idle" });
+    }
+  }
+
   function buildManualCampaignRows(): BulkCsvRow[] {
-    return streams.map((stream, index) => {
-      const cliffUnix = datetimeLocalToUnix(stream.cliffTime);
-      const startUnix = stream.startTime
-        ? datetimeLocalToUnix(stream.startTime)
-        : Math.min(Math.floor(Date.now() / 1000), cliffUnix);
-      return {
-        rowNumber: index + 1,
-        beneficiary: stream.recipient.trim(),
-        amountInput: stream.amount.trim(),
-        amountRaw: effectiveMintDecimals !== null ? toRawAmount(stream.amount.trim(), effectiveMintDecimals) : stream.amount.trim(),
-        releaseType: 0,
-        startTime: startUnix,
-        cliffTime: cliffUnix,
-        endTime: cliffUnix,
-        milestoneIdx: 0,
-      };
-    });
+    const { startTime: s, cliffTime: c } = resolveSchedule();
+    return streams.map((stream, index) => ({
+      rowNumber: index + 1,
+      beneficiary: stream.recipient.trim(),
+      amountInput: stream.amount.trim(),
+      amountRaw: effectiveMintDecimals !== null ? toRawAmount(stream.amount.trim(), effectiveMintDecimals) : stream.amount.trim(),
+      releaseType: 0,
+      startTime: s,
+      cliffTime: c,
+      endTime: c,
+      milestoneIdx: 0,
+    }));
   }
 
   async function handleSubmit() {
     if (!publicKey || !mintAddress) return;
 
-    // Validate all streams
+    // Validate the campaign-level schedule once (shared by every recipient).
+    const { startTime: sStart, cliffTime: sCliff } = resolveSchedule();
+    const schedErr = !cliffTime ? "Cliff date is required." : validateSchedule(sStart, sCliff, sCliff, 0);
+    setScheduleError(schedErr);
+
+    // Validate recipients (wallet + amount only; schedule is shared).
     const errors: Record<string, string | null> = {};
     const recipientRows = new Map<string, number[]>();
     for (let i = 0; i < streams.length; i++) {
@@ -212,13 +248,6 @@ export default function CliffCreatePage() {
       }
       const amtErr = validateAmountWithDecimals(s.amount, effectiveMintDecimals);
       if (amtErr) errors[`amount_${i}`] = amtErr;
-      if (!s.cliffTime) errors[`cliff_${i}`] = "Cliff date is required.";
-      const cliffUnix = s.cliffTime ? datetimeLocalToUnix(s.cliffTime) : 0;
-      const startUnix = s.startTime
-        ? datetimeLocalToUnix(s.startTime)
-        : Math.min(Math.floor(Date.now() / 1000), cliffUnix);
-      const schedErr = s.cliffTime ? validateSchedule(startUnix, cliffUnix, cliffUnix, 0) : null;
-      if (schedErr) errors[`cliff_${i}`] = schedErr;
     }
     for (const indexes of recipientRows.values()) {
       if (indexes.length > 1) {
@@ -228,7 +257,7 @@ export default function CliffCreatePage() {
       }
     }
     setFormErrors(errors);
-    if (hasErrors(errors)) return;
+    if (hasErrors(errors) || schedErr) return;
 
     if (streams.length > 1) {
       setTxState({ type: "loading", label: `Creating campaign for ${streams.length} recipients...` });
@@ -256,6 +285,7 @@ export default function CliffCreatePage() {
           setTxState({ type: "bulk-funded", sig: funded.sig, treeAddress: created.treeAddress, prepared });
           setStreams([newStream()]);
           setFormErrors({});
+          setScheduleError(null);
           setBaseCampaignId(Math.floor(Date.now() / 1000) % 1000000);
         } catch (error: unknown) {
           if (error instanceof Error && /User rejected|Connection rejected/i.test(error.message)) {
@@ -286,19 +316,16 @@ export default function CliffCreatePage() {
     const results: CreateStreamResult[] = [];
 
     try {
+      const { startTime: sStart, cliffTime: sCliff } = resolveSchedule();
       for (let i = 0; i < streams.length; i++) {
         setTxState({ type: "loading", label: `Creating stream ${i + 1} of ${streams.length}...` });
         const s = streams[i];
-        const cliffUnix = datetimeLocalToUnix(s.cliffTime);
-        const startUnix = s.startTime
-          ? datetimeLocalToUnix(s.startTime)
-          : Math.min(Math.floor(Date.now() / 1000), cliffUnix);
         const cid = String(baseCampaignId * 100 + i);
 
         const result = await createStream({
           beneficiary: s.recipient, mintAddress, amount: s.amount, mintDecimals: effectiveMintDecimals,
-          campaignId: cid, releaseType: 0, startTime: startUnix, cliffTime: cliffUnix,
-          endTime: cliffUnix, milestoneIdx: 0, cancellable, autoWrap: useAutoWrap,
+          campaignId: cid, releaseType: 0, startTime: sStart, cliffTime: sCliff,
+          endTime: sCliff, milestoneIdx: 0, cancellable, autoWrap: useAutoWrap,
         });
         results.push(result);
       }
@@ -306,6 +333,7 @@ export default function CliffCreatePage() {
       setTxState({ type: "success", results });
       setStreams([newStream()]);
       setFormErrors({});
+      setScheduleError(null);
       setBaseCampaignId(Math.floor(Date.now() / 1000) % 1000000);
     } catch (error: unknown) {
       if (error instanceof Error && /User rejected|Connection rejected/i.test(error.message)) {
@@ -329,13 +357,7 @@ export default function CliffCreatePage() {
   // Bulk handlers
   function handleCsvParse() {
     if (!csvText.trim()) return;
-    const result = parseBulkCsv(csvText, effectiveMintDecimals, 0);
-    setCsvResult(result);
-    if (result.issues.length === 0 && result.rows.length > 0) {
-      setTxState({ type: "bulk-ready", prepared: prepareBulkCampaign(result.rows) });
-    } else {
-      setTxState({ type: "idle" });
-    }
+    runBulkParse(csvText, effectiveMintDecimals);
   }
 
   async function handleBulkCreate() {
@@ -516,6 +538,38 @@ export default function CliffCreatePage() {
 
             {/* Cancellation */}
             <ToggleCard checked={cancellable} onChange={setCancellable} title="Allow cancellation?" body="Creator can cancel and reclaim unvested tokens after a 7-day grace period." />
+          </div>
+
+          {/* Campaign Schedule — shared by every recipient so all unlock on the same date */}
+          <div className={`${CARD} space-y-4 p-5`}>
+            <SectionHeader title="Schedule" caption="Applies to every recipient in this campaign" />
+            <div className="grid gap-4 sm:grid-cols-2">
+              <Field
+                label="Start Time (optional)"
+                input={
+                  <input
+                    type="datetime-local"
+                    value={startTime}
+                    onChange={(e) => updateScheduleField("start", e.target.value)}
+                    className={INPUT}
+                  />
+                }
+                hint="Defaults to now if empty"
+              />
+              <Field
+                label="Cliff Date (Full Unlock)"
+                input={
+                  <input
+                    type="datetime-local"
+                    value={cliffTime}
+                    onChange={(e) => updateScheduleField("cliff", e.target.value)}
+                    onBlur={validateScheduleField}
+                    className={`${INPUT} ${scheduleError ? INPUT_ERR : ""}`}
+                  />
+                }
+                error={scheduleError}
+              />
+            </div>
           </div>
 
           {/* Manual Mode: Stream Cards */}
@@ -714,7 +768,7 @@ export default function CliffCreatePage() {
           loading={txState.type === "loading"}
           disabled={
             mode === "single"
-              ? !mintAddress || streams.some((s) => !s.amount || !s.recipient || !s.cliffTime)
+              ? !mintAddress || !cliffTime || streams.some((s) => !s.amount || !s.recipient)
               : txState.type !== "bulk-ready"
           }
           onSubmit={

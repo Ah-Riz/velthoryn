@@ -13,6 +13,11 @@ async function openCsvCreatePage(page: Page, path: string, csvButton?: RegExp) {
   await enableE2eWallet(page);
   await gotoWithRetry(page, path);
   await selectSolToken(page);
+  if (path.includes("/cliff")) {
+    await fillCliffSchedule(page);
+  } else if (path.includes("/linear")) {
+    await fillLinearSchedule(page);
+  }
   await openCsvMode(page, csvButton);
   return pageErrors;
 }

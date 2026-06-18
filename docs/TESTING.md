@@ -5,11 +5,11 @@
 **~705+ tests total** — green on local CI reproduction (June 2026).
 
 - On-chain (Anchor): **127+ passing** across 15 files (`pnpm test:localnet`)
-- Web (Vitest): **563 passing** (`vitest.unit.config.ts`; Postgres required for API tests)
+- Web (Vitest): **569 passing** (`vitest.unit.config.ts`; Postgres required for API tests)
 - Trident fuzz: smoke test in CI (`trident-tests/fuzz_vesting`)
 - Rust unit tests: **31** (math/merkle + math/schedule proptests + inline)
-- Mollusk instruction tests: **72 active** across 7 test files (18 ignored — Mollusk limitations)
-- Mollusk CU benchmarks: **9 active** benchmark functions (17 scenarios) in `programs/vesting/tests/benchmarks.rs`; `bench_claim_native` ignored (Mollusk 0.13 `init_if_needed` blocker)
+- Mollusk instruction tests: **73 active** across 8 test files (18 ignored — Mollusk limitations)
+- Mollusk CU benchmarks: **10 active** benchmark functions (17 scenarios) in `programs/vesting/tests/benchmarks.rs`; `bench_claim_native` ignored (Mollusk 0.13 `init_if_needed` blocker)
 
 | Test File | Tests | Purpose |
 |-----------|-------|---------|
@@ -178,7 +178,7 @@ BPF_OUT_DIR=../../target/deploy cargo test --manifest-path programs/vesting/Carg
 BPF_OUT_DIR=../../target/deploy cargo test --manifest-path programs/vesting/Cargo.toml --test lifecycle -- --show-output   # 8
 ```
 
-Instruction-level tests using [Mollusk](https://github.com/anza-xyz/mollusk) to execute Anchor instructions directly against the SVM — no validator, no network. Tests are organized by instruction domain across 7 test files with shared helpers in `test_helpers.rs` (938 lines). Covers 13/18 instruction handlers (72%); remaining 5 use `init_if_needed` or optional SPL accounts that Mollusk 0.13 cannot resolve.
+Instruction-level tests using [Mollusk](https://github.com/anza-xyz/mollusk) to execute Anchor instructions directly against the SVM — no validator, no network. Tests are organized by instruction domain across 8 test files with shared helpers in `test_helpers.rs` (938 lines). Covers 14/18 instruction handlers (78%); remaining 4 use `init_if_needed` or optional SPL accounts that Mollusk 0.13 cannot resolve.
 
 | Test File | Active | Ignored | Instructions Covered |
 |-----------|--------|---------|---------------------|
@@ -189,6 +189,7 @@ Instruction-level tests using [Mollusk](https://github.com/anza-xyz/mollusk) to 
 | `claim.rs` | 16 | 0 | claim (SPL + native SOL) |
 | `cleanup.rs` | 2 | 3 | withdraw_unvested, close_claim_record |
 | `lifecycle.rs` | 8 | 0 | Multi-instruction state transitions |
+| `withdraw_unvested.rs` | 3 | 0 | native-SOL `withdraw_unvested` drain-to-rent (SC-FIND-02 audit) |
 
 ### Mollusk CU Benchmarks (Rust)
 

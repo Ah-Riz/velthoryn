@@ -43,13 +43,10 @@ test.describe("Cliff vesting — create stream", () => {
     await gotoWithRetry(page, "/campaign/create/cliff");
 
     await selectSolToken(page);
+    await fillCliffSchedule(page);
 
     await page.getByPlaceholder(/solana wallet/i).first().fill("3coyVxLQYHdQ6MNQRRdm2KuCABJopxPfo9XuQeosUmf3");
     await page.getByPlaceholder(/e\.g\. 1000/i).first().fill("0.001");
-
-    const cliffDate = new Date(Date.now() + 86400_000 * 30);
-    const cliffStr = cliffDate.toISOString().slice(0, 16);
-    await page.locator("input[type='datetime-local']").first().fill(cliffStr);
 
     await expect(page.getByRole("button", { name: /create.*stream/i })).toBeEnabled({ timeout: 5_000 });
     expect(pageErrors).toEqual([]);
@@ -62,7 +59,6 @@ test.describe("Cliff vesting — create stream", () => {
 
     await selectSolToken(page);
     await openCsvMode(page);
-    const cliffTs = String(Math.floor(Date.now() / 1000) + 86400 * 30);
     await parseCsv(
       page,
       csv([`3coyVxLQYHdQ6MNQRRdm2KuCABJopxPfo9XuQeosUmf3,0.001,Cliff,0,${cliffTs},${cliffTs},0`]),
@@ -79,11 +75,10 @@ test.describe("Cliff vesting — create stream", () => {
 
     await selectSolToken(page);
     await openCsvMode(page);
-    const endTs = String(Math.floor(Date.now() / 1000) + 86400 * 60);
-    // releaseType=1 (linear) on cliff page should fail
+    // releaseType=Linear on cliff page should fail
     await parseCsv(
       page,
-      csv([`3coyVxLQYHdQ6MNQRRdm2KuCABJopxPfo9XuQeosUmf3,1000000,1,0,0,${endTs},0`]),
+      csv([`3coyVxLQYHdQ6MNQRRdm2KuCABJopxPfo9XuQeosUmf3,0.001,Linear`]),
     );
 
     await expect(page.getByRole("button", { name: /create & fund campaign/i })).toBeDisabled({ timeout: 10_000 });
@@ -136,15 +131,9 @@ test.describe("Linear vesting — create stream", () => {
     await gotoWithRetry(page, "/campaign/create/linear");
 
     await selectSolToken(page);
+    await fillLinearSchedule(page);
     await page.getByPlaceholder(/solana wallet/i).first().fill("3coyVxLQYHdQ6MNQRRdm2KuCABJopxPfo9XuQeosUmf3");
     await page.getByPlaceholder(/e\.g\. 1000/i).first().fill("0.001");
-
-    const now = Date.now();
-    const startStr = new Date(now + 86400_000).toISOString().slice(0, 16);
-    const endStr = new Date(now + 86400_000 * 31).toISOString().slice(0, 16);
-    const inputs = page.locator("input[type='datetime-local']");
-    await inputs.nth(0).fill(startStr);
-    await inputs.nth(1).fill(endStr);
 
     await expect(page.getByRole("button", { name: /create.*stream/i })).toBeEnabled({ timeout: 5_000 });
     expect(pageErrors).toEqual([]);
@@ -157,8 +146,6 @@ test.describe("Linear vesting — create stream", () => {
 
     await selectSolToken(page);
     await openCsvMode(page);
-    const startTs = String(Math.floor(Date.now() / 1000) + 86400);
-    const endTs = String(Math.floor(Date.now() / 1000) + 86400 * 31);
     await parseCsv(
       page,
       csv([`3coyVxLQYHdQ6MNQRRdm2KuCABJopxPfo9XuQeosUmf3,0.001,Linear,${startTs},0,${endTs},0`]),
@@ -175,9 +162,7 @@ test.describe("Linear vesting — create stream", () => {
 
     await selectSolToken(page);
     await openCsvMode(page);
-    const startTs = String(Math.floor(Date.now() / 1000) + 86400);
-    const endTs = String(Math.floor(Date.now() / 1000) + 86400 * 31);
-    const row = `3coyVxLQYHdQ6MNQRRdm2KuCABJopxPfo9XuQeosUmf3,1000000,1,${startTs},0,${endTs},0`;
+    const row = `3coyVxLQYHdQ6MNQRRdm2KuCABJopxPfo9XuQeosUmf3,0.001,Linear`;
     await parseCsv(page, csv([row, row])); // same wallet twice
 
     await expect(page.getByRole("button", { name: /create & fund campaign/i })).toBeDisabled({ timeout: 10_000 });

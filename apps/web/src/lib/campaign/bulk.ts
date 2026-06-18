@@ -45,6 +45,18 @@ export type BulkCsvParseResult = {
   invalidRowCount: number;
 };
 
+/**
+ * A campaign-level schedule applied uniformly to every recipient. When passed
+ * to `parseBulkCsv` for a cliff/linear page, per-row date columns are ignored
+ * and every leaf is stamped with these values — so all recipients unlock on the
+ * same schedule regardless of amount. Ignored for milestone (releaseType 2).
+ */
+export type SharedSchedule = {
+  startTime: number;
+  cliffTime: number;
+  endTime: number;
+};
+
 export type PreparedBulkCampaign = {
   leafCount: number;
   merkleRoot: string;
@@ -216,6 +228,7 @@ export function parseBulkCsv(
   text: string,
   mintDecimals: number | null,
   expectedReleaseType?: 0 | 1 | 2,
+  sharedSchedule?: SharedSchedule,
 ): BulkCsvParseResult {
   const rows = parseCsvText(text);
   if (rows.length === 0) {
@@ -227,6 +240,12 @@ export function parseBulkCsv(
     };
   }
 
+  // When a shared schedule is supplied for a cliff/linear page, every leaf is
+  // stamped with it and per-row date columns are ignored. Milestone always
+  // keeps per-row unlock times, so the override never applies to releaseType 2.
+  const useSharedSchedule =
+    !!sharedSchedule && expectedReleaseType !== undefined && expectedReleaseType !== 2;
+
   const headerRow = rows[0].map(normalizeHeader);
   const headerMap = new Map<string, number>();
   headerRow.forEach((header, index) => {
@@ -234,13 +253,9 @@ export function parseBulkCsv(
   });
 
   const issues: BulkCsvIssue[] = [];
-  const requiredHeaders: BulkHeader[] = [
-    "beneficiary",
-    "amount",
-    "releaseType",
-    "startTime",
-    "cliffTime",
-  ];
+  const requiredHeaders: BulkHeader[] = useSharedSchedule
+    ? ["beneficiary", "amount"]
+    : ["beneficiary", "amount", "releaseType", "startTime", "cliffTime"];
 
   for (const header of requiredHeaders) {
     if (!headerMap.has(normalizeHeader(header))) {
@@ -276,7 +291,11 @@ export function parseBulkCsv(
     const amountError = validateAmountWithDecimals(amountInput, mintDecimals);
     if (amountError) rowIssues.push(humanizeAmountError(amountError));
 
-    const releaseType = parseReleaseType(releaseTypeValue);
+    const releaseType = releaseTypeValue.trim()
+      ? parseReleaseType(releaseTypeValue)
+      : useSharedSchedule && expectedReleaseType !== undefined
+        ? expectedReleaseType
+        : null;
     if (releaseType === null) {
       rowIssues.push("Unknown vesting type. Use Cliff, Linear, Milestone, or 0, 1, 2.");
     } else if (expectedReleaseType !== undefined && releaseType !== expectedReleaseType) {
@@ -285,18 +304,17 @@ export function parseBulkCsv(
       );
     }
 
-    const startTime = parseTimestamp(startTimeRaw);
-    let cliffTime = parseTimestamp(cliffTimeRaw);
-    if (releaseType === 1 && (!cliffTimeRaw.trim() || cliffTimeRaw.trim() === "0")) {
+    const startTime = useSharedSchedule ? sharedSchedule!.startTime : parseTimestamp(startTimeRaw);
+    let cliffTime = useSharedSchedule ? sharedSchedule!.cliffTime : parseTimestamp(cliffTimeRaw);
+    if (!useSharedSchedule && releaseType === 1 && (!cliffTimeRaw.trim() || cliffTimeRaw.trim() === "0")) {
       cliffTime = startTime;
     }
-    const endTime = parseTimestamp(endTimeRaw);
-    const scheduleError = validateSchedule(
-      startTime,
-      cliffTime,
-      endTime,
-      releaseType ?? 1,
-    );
+    const endTime = useSharedSchedule ? sharedSchedule!.endTime : parseTimestamp(endTimeRaw);
+    // The shared schedule is validated once by the caller (per-campaign); per-row
+    // schedule validation only runs when each row carries its own dates.
+    const scheduleError = useSharedSchedule
+      ? null
+      : validateSchedule(startTime, cliffTime, endTime, releaseType ?? 1);
     if (scheduleError) rowIssues.push(humanizeScheduleError(scheduleError));
 
     let milestoneIdx = 0;
@@ -516,6 +534,8 @@ export function bulkCsvTemplateForType(type: "cliff" | "linear" | "milestone"): 
   const addr3 = "DzAME3MtzP5N3NDPuMEMWPVdEJLLT3gfnxc7CmPdPLzR";
 
   if (type === "cliff") {
+    // Schedule (start/cliff) is set in the UI and applies to every recipient;
+    // the CSV only carries wallet + amount (+ releaseType).
     return [
       "beneficiary,amount,releaseType,startTime,cliffTime",
       `${addr1},1000,Cliff,${start},${cliff}`,
@@ -523,6 +543,8 @@ export function bulkCsvTemplateForType(type: "cliff" | "linear" | "milestone"): 
     ].join("\n");
   }
   if (type === "linear") {
+    // Schedule (start/cliff/end) is set in the UI and applies to every recipient;
+    // the CSV only carries wallet + amount (+ releaseType).
     return [
       header,
       `${addr1},1000,Linear,${start},${start},${end},0`,

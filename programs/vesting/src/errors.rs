@@ -101,4 +101,7 @@ pub enum VestingError {
 
     #[msg("Instant refund is only allowed on multi-leaf campaigns")]
     NotMultiLeafCampaign,
+
+    #[msg("Beneficiary has exceeded the per-leaf claim slot capacity (PER_LEAF_CAP)")]
+    PerLeafCapExceeded,
 }
