@@ -1,6 +1,6 @@
 import { expect, test, type Page } from "@playwright/test";
 import { collectRelevantPageErrors } from "./pageErrors";
-import { enableE2eWallet, expectCsvReadyToFund, gotoWithRetry, selectSolToken, openCsvMode, csv, parseCsv, recipientWallet, secondWallet } from "./helpers";
+import { enableE2eWallet, expectCsvReadyToFund, gotoWithRetry, selectSolToken, openCsvMode, csv, parseCsv, recipientWallet, secondWallet, fillCliffSchedule, fillLinearSchedule } from "./helpers";
 
 const schedules = {
   start: 1779899400,
