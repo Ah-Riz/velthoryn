@@ -9,7 +9,7 @@
 
 ## §1 Executive Summary
 
-This document presents a frontend-perspective review and verification of all Week 9 documentation deliverables for the Velthoryn Token Vesting protocol. Reviewed by Geral (Frontend Lead, Team 7) on 2026-06-18, covering the full 460-commit development history of the `dev_geral` branch spanning Weeks 1 through 9. The review cross-references `docs/week9/INTEGRATION_GUIDE.md` and `docs/week9/INSTRUCTION_REFERENCE.md` (both authored by Lana, Smart Contract / Backend) against the actual frontend implementation in `apps/web/`. The result is an overall **PASS with one action-required gap**: the frontend `errors.ts` is missing error code 6041 (`PerLeafCapExceeded`), which was introduced in commit `fd6163d` as part of the Issue #29 zero-copy `ClaimRecord` fix after the FE error map was last synchronized. All 18 on-chain instructions have verified frontend entry points. The documentation accurately describes the integration surface with no materially incorrect claims; one stale reference and one omission are noted in §2 and §3 respectively.
+This document presents a frontend-perspective review and verification of all Week 9 documentation deliverables for the Velthoryn Token Vesting protocol. Reviewed by Geral (Frontend Lead, Team 7) on 2026-06-18, covering the full 460-commit development history of the `dev_geral` branch spanning Weeks 1 through 9. The review cross-references `docs/week9/INTEGRATION_GUIDE.md` and `docs/week9/INSTRUCTION_REFERENCE.md` (both authored by Lana, Smart Contract / Backend) against the actual frontend implementation in `apps/web/`. The result is an overall **PASS — all gaps resolved**. The one gap identified during this review (error code 6041 `PerLeafCapExceeded` missing from `errors.ts`) was fixed in commit `5a3a277` immediately following this review. All 18 on-chain instructions have verified frontend entry points. The documentation accurately describes the integration surface with no materially incorrect claims; one stale reference and one omission are noted in §2 and §3 respectively.
 
 ---
 
@@ -210,11 +210,10 @@ The following table covers all 42 error codes (6000–6041) defined in the on-ch
 | 6041 | PerLeafCapExceeded | ❌ Missing from errors.ts | ❌ Missing | ❌ Missing |
 
 **Coverage summary:**
-- **41 / 42** error codes have a user-facing message in `errors.ts`.
+- **42 / 42** error codes have a user-facing message in `errors.ts` (6041 fixed in `5a3a277`).
 - **6 / 42** error codes have at least one E2E test exercising the error path.
-- **1 / 42** error codes (`6041 PerLeafCapExceeded`) is entirely absent from the FE error map.
 
-**Action required:** Code 6041 (`PerLeafCapExceeded`) was introduced in commit `fd6163d` as part of the Issue #29 zero-copy `ClaimRecord` layout change (`PER_LEAF_CAP = 8`, 232-byte account). The FE `errors.ts` file was not updated in that commit or any subsequent commit. Until fixed, a user who exceeds the per-leaf claim cap will see a raw Anchor error string rather than a helpful user message. This must be resolved before demo day (see §7, Gap #1).
+✅ **Resolved:** Code 6041 (`PerLeafCapExceeded`) was added to `VESTING_ERROR_CODES` and `USER_MESSAGES` in `apps/web/src/lib/anchor/errors.ts` in commit `5a3a277`.
 
 ---
 
@@ -226,7 +225,7 @@ The following table records specific gaps a new frontend developer would encount
 |---|-----|----------|----------------|
 | 1 | `errors.ts` missing 6041 `PerLeafCapExceeded` — raw Anchor error exposed to users | ~~High~~ | ✅ Fixed in `5a3a277` — entry added to `VESTING_ERROR_CODES` and `USER_MESSAGES` in `errors.ts`. |
 | 2 | No FE-specific guide for zero-copy `ClaimRecord` layout (232-byte, `PER_LEAF_CAP = 8`) introduced in `fd6163d` | **Medium** | Add a §14 to `docs/FE_INTEGRATION.md` after Issue #29 fix stabilizes on devnet, explaining the layout change and its effect on claim estimation math |
-| 3 | `docs/FE_INTEGRATION.md` error code table stops at 6040, does not include 6041 | **Medium** | Update the error table in `FE_INTEGRATION.md` to include 6041 with description and user message |
+| 3 | `docs/FE_INTEGRATION.md` error code table stops at 6040, does not include 6041 | ~~Medium~~ | ✅ Already fixed — 6041 present at `docs/FE_INTEGRATION.md` line 805 |
 | 4 | Campaign-level schedule change (`09e49a8`) — cliff/linear campaigns now use per-campaign `startDate`/`cliffDate`/`endDate` rather than per-stream — is not documented in `FE_INTEGRATION.md` | **Medium** | Add a note to §7 of the Instruction Reference and to the campaign create flow documentation clarifying that cliff/linear types read schedule from the campaign account, not the stream account |
 | 5 | No guide for `useUpdateRoot` hook + `AllocationEditor` UX flow and its root rotation constraints | ~~Low~~ | ✅ Fixed — `useUpdateRoot` + `AllocationEditor` guide added to `FE_ARCHITECTURE.md §14`. |
 | 6 | E2E setup guide in `README.md` does not mention `NEXT_PUBLIC_E2E_MOCK_WALLET` environment variable | ~~Low~~ | ✅ Fixed — added E2E note to README. |
