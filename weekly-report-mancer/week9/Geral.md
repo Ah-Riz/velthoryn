@@ -119,6 +119,7 @@ The Week 9 KPI is: an unfamiliar developer can integrate from docs alone. My con
    - ADR-FE-02: Mock wallet via localStorage flag (not browser extension stub)
    - ADR-FE-03: 8-state `CampaignLifecycle` type over boolean flags
    - ADR-FE-04: `warpToSlot()` before `setClock()` in Bankrun test utilities
+   All 4 ADRs extracted to standalone files in `docs/week9/ADRs/` (ADR-FE-001 through ADR-FE-004) for direct reviewer discoverability.
 4. FE-SC interface matrix — maps all 18 instructions + view functions to their FE call site, params, and error handling path.
 5. Error code coverage table (6000–6041) — which codes have FE user messages, which fall through to generic error handler.
 6. 7 documentation gaps with recommendations (e.g., missing `6041`, no FE wallet adapter version pinned in integration guide, no mention of `NEXT_PUBLIC_E2E_MOCK_WALLET` env var).
@@ -233,7 +234,7 @@ Up from 569 (Week 8) — 3 new tests added for BigInt arithmetic edge cases in `
 | Signing E2E needs localnet validator | 🟡 Workaround | Tests pass locally; CI disabled (`129538c`). Needs GitHub Actions Solana validator setup |
 | BE route tests need Postgres | 🟡 Pending | Staged in `tests/api/**`; not runnable in CI without Postgres service |
 | Mollusk 4 handlers blocked (init_if_needed) | 🟡 External | Waiting on Mollusk 0.14 upstream release (Lana's scope) |
-| `errors.ts` missing 6041 PerLeafCapExceeded | 🟡 Known gap | Flagged in `FE_DOCUMENTATION_REVIEW.md §6`; 2-line fix needed before demo |
+| `errors.ts` missing 6041 PerLeafCapExceeded | ✅ Fixed | Added in `5a3a277` (post-review); `VESTING_ERROR_CODES` and `USER_MESSAGES` both updated |
 
 ---
 
@@ -253,7 +254,7 @@ Up from 569 (Week 8) — 3 new tests added for BigInt arithmetic edge cases in `
 | Bug fix tasks completed (cumulative) | **4 / 10** | Tasks 1, 2, 7, 10 fully done |
 | Bug fix tasks partial | **5 / 10** | Tasks 3, 4, 6, 8, 9 |
 | Bug fix tasks pending | **1 / 10** | Task 5 (block cancel/pause fully vested) |
-| Error codes with FE user messages | **41 / 42** | Missing 6041 (PerLeafCapExceeded) |
+| Error codes with FE user messages | **42 / 42** | 6041 added in `5a3a277` (post-review fix) |
 | FE-SC instruction coverage | **18 / 18** | All instructions have FE integration path |
 | CI workflows active + green | **3 / 3** | Lint, Web CI, ci/build-test |
 | CI workflows disabled | **1** | Signing E2E (needs localnet); disabled, not broken |
