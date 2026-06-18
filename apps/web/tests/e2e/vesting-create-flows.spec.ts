@@ -60,6 +60,7 @@ test.describe("Cliff vesting — create stream", () => {
     await enableE2eWallet(page);
     await gotoWithRetry(page, "/campaign/create/cliff");
 
+    await selectSolToken(page);
     await openCsvMode(page);
     const cliffTs = String(Math.floor(Date.now() / 1000) + 86400 * 30);
     await parseCsv(
@@ -67,7 +68,6 @@ test.describe("Cliff vesting — create stream", () => {
       csv([`3coyVxLQYHdQ6MNQRRdm2KuCABJopxPfo9XuQeosUmf3,1000000,0,0,${cliffTs},${cliffTs},0`]),
     );
 
-    await selectSolToken(page);
     await expect(page.getByRole("button", { name: /create & fund campaign/i })).toBeEnabled({ timeout: 10_000 });
     expect(pageErrors).toEqual([]);
   });
@@ -77,6 +77,7 @@ test.describe("Cliff vesting — create stream", () => {
     await enableE2eWallet(page);
     await gotoWithRetry(page, "/campaign/create/cliff");
 
+    await selectSolToken(page);
     await openCsvMode(page);
     const endTs = String(Math.floor(Date.now() / 1000) + 86400 * 60);
     // releaseType=1 (linear) on cliff page should fail
@@ -154,6 +155,7 @@ test.describe("Linear vesting — create stream", () => {
     await enableE2eWallet(page);
     await gotoWithRetry(page, "/campaign/create/linear");
 
+    await selectSolToken(page);
     await openCsvMode(page);
     const startTs = String(Math.floor(Date.now() / 1000) + 86400);
     const endTs = String(Math.floor(Date.now() / 1000) + 86400 * 31);
@@ -162,7 +164,6 @@ test.describe("Linear vesting — create stream", () => {
       csv([`3coyVxLQYHdQ6MNQRRdm2KuCABJopxPfo9XuQeosUmf3,1000000,1,${startTs},0,${endTs},0`]),
     );
 
-    await selectSolToken(page);
     await expect(page.getByRole("button", { name: /create & fund campaign/i })).toBeEnabled({ timeout: 10_000 });
     expect(pageErrors).toEqual([]);
   });
@@ -172,6 +173,7 @@ test.describe("Linear vesting — create stream", () => {
     await enableE2eWallet(page);
     await gotoWithRetry(page, "/campaign/create/linear");
 
+    await selectSolToken(page);
     await openCsvMode(page);
     const startTs = String(Math.floor(Date.now() / 1000) + 86400);
     const endTs = String(Math.floor(Date.now() / 1000) + 86400 * 31);
@@ -213,6 +215,7 @@ test.describe("Milestone vesting — create stream", () => {
     await enableE2eWallet(page);
     await gotoWithRetry(page, "/campaign/create/milestone");
 
+    await selectSolToken(page);
     await openCsvMode(page, /csv campaign/i);
     const cliffTs = String(Math.floor(Date.now() / 1000) + 86400 * 30);
     // Same wallet, different milestoneIdx (0 and 1) — should be valid
@@ -220,7 +223,6 @@ test.describe("Milestone vesting — create stream", () => {
     const row1 = `3coyVxLQYHdQ6MNQRRdm2KuCABJopxPfo9XuQeosUmf3,500000,2,0,${cliffTs},${cliffTs},1`;
     await parseCsv(page, csv([row0, row1]));
 
-    await selectSolToken(page);
     await expect(page.getByRole("button", { name: /create & fund campaign/i })).toBeEnabled({ timeout: 10_000 });
     expect(pageErrors).toEqual([]);
   });
@@ -230,6 +232,7 @@ test.describe("Milestone vesting — create stream", () => {
     await enableE2eWallet(page);
     await gotoWithRetry(page, "/campaign/create/milestone");
 
+    await selectSolToken(page);
     await openCsvMode(page, /csv campaign/i);
     const cliffTs = String(Math.floor(Date.now() / 1000) + 86400 * 30);
     // Same wallet, SAME milestoneIdx — should fail

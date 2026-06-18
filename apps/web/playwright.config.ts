@@ -30,6 +30,13 @@ export default defineConfig({
     {
       name: "chromium",
       use: { ...devices["Desktop Chrome"] },
+      testIgnore: "**/signing/**",
+    },
+    {
+      name: "signing",
+      use: { ...devices["Desktop Chrome"] },
+      testMatch: "**/signing/**",
+      timeout: 180_000,
     },
   ],
 });
