@@ -224,24 +224,26 @@ The following table records specific gaps a new frontend developer would encount
 
 | # | Gap | Severity | Recommendation |
 |---|-----|----------|----------------|
-| 1 | `errors.ts` missing 6041 `PerLeafCapExceeded` — raw Anchor error exposed to users | **High** | Add entry to `VESTING_ERROR_CODES` and `USER_MESSAGES` in `apps/web/src/lib/anchor/errors.ts` before next devnet demo. Message suggestion: "This recipient has reached the maximum number of claims for this campaign." |
+| 1 | `errors.ts` missing 6041 `PerLeafCapExceeded` — raw Anchor error exposed to users | ~~High~~ | ✅ Fixed in `5a3a277` — entry added to `VESTING_ERROR_CODES` and `USER_MESSAGES` in `errors.ts`. |
 | 2 | No FE-specific guide for zero-copy `ClaimRecord` layout (232-byte, `PER_LEAF_CAP = 8`) introduced in `fd6163d` | **Medium** | Add a §14 to `docs/FE_INTEGRATION.md` after Issue #29 fix stabilizes on devnet, explaining the layout change and its effect on claim estimation math |
 | 3 | `docs/FE_INTEGRATION.md` error code table stops at 6040, does not include 6041 | **Medium** | Update the error table in `FE_INTEGRATION.md` to include 6041 with description and user message |
 | 4 | Campaign-level schedule change (`09e49a8`) — cliff/linear campaigns now use per-campaign `startDate`/`cliffDate`/`endDate` rather than per-stream — is not documented in `FE_INTEGRATION.md` | **Medium** | Add a note to §7 of the Instruction Reference and to the campaign create flow documentation clarifying that cliff/linear types read schedule from the campaign account, not the stream account |
-| 5 | No guide for `useUpdateRoot` hook + `AllocationEditor` UX flow and its root rotation constraints | **Low** | Add a §15 to `docs/FE_INTEGRATION.md` covering root rotation UX: when it is allowed (before any claims), what the `SameRoot` error means to the user, and how `AllocationEditor` rebuilds the Merkle tree client-side before submitting |
-| 6 | E2E setup guide in `README.md` does not mention `NEXT_PUBLIC_E2E_MOCK_WALLET` environment variable | **Low** | Add `NEXT_PUBLIC_E2E_MOCK_WALLET=1` to the `.env.test.local` example block in the E2E Testing section of `README.md` |
-| 7 | No documentation of the 8 `CampaignLifecycle` states for external integrators or future FE contributors | **Low** | Add a lifecycle state diagram (Mermaid statechart) to `docs/FE_INTEGRATION.md` showing all 8 states and the on-chain events / conditions that trigger each transition |
+| 5 | No guide for `useUpdateRoot` hook + `AllocationEditor` UX flow and its root rotation constraints | ~~Low~~ | ✅ Fixed — `useUpdateRoot` + `AllocationEditor` guide added to `FE_ARCHITECTURE.md §14`. |
+| 6 | E2E setup guide in `README.md` does not mention `NEXT_PUBLIC_E2E_MOCK_WALLET` environment variable | ~~Low~~ | ✅ Fixed — added E2E note to README. |
+| 7 | No documentation of the 8 `CampaignLifecycle` states for external integrators or future FE contributors | ~~Low~~ | ✅ Fixed — Mermaid lifecycle statechart added to `FE_ARCHITECTURE.md §13`. |
 
-### Week 10 Priority Order
+### Resolution Status (updated 2026-06-18)
 
-**Before demo day (must fix):**
-- Gap #1 — Add `PerLeafCapExceeded` (6041) to `errors.ts`. This is a two-line change with no risk of regression.
+**Fixed in this session:**
+- Gap #1 — `PerLeafCapExceeded` (6041) added to `errors.ts` in `5a3a277`.
+- Gap #6 — `NEXT_PUBLIC_E2E_MOCK_WALLET` added to README E2E setup note.
+- Gap #7 — Mermaid lifecycle statechart added to `FE_ARCHITECTURE.md §13`.
 
-**Documentation sprint (can batch into one PR):**
-- Gaps #2, #3, #4 — All documentation-only changes to `docs/FE_INTEGRATION.md` and `INSTRUCTION_REFERENCE.md`. No code changes required.
-
-**Follow-up / nice to have:**
-- Gaps #5, #6, #7 — Developer ergonomics improvements. Low user impact, but will reduce onboarding friction for any new team member or external integrator.
+**Remaining (documentation-only, no code change required):**
+- Gap #2 — Zero-copy `ClaimRecord` layout guide (low urgency; Issue #29 fix is documented in KNOWN_ISSUE_29_DESIGN.md).
+- Gap #3 — FE_INTEGRATION.md error table stops at 6040 — **already fixed** (6041 present at line 805).
+- Gap #4 — Campaign-level schedule note in integration reference.
+- Gap #5 — useUpdateRoot + AllocationEditor FE guide — **fixed** (added to FE_ARCHITECTURE.md §14).
 
 ---
 

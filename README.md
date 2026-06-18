@@ -104,6 +104,8 @@ For deeper reads:
 - [`docs/week9/FE_COMPONENT_REFERENCE.md`](docs/week9/FE_COMPONENT_REFERENCE.md) — all 68 FE components with props, purpose, and usage context.
 - [`docs/week9/FE_BUG_LOG.md`](docs/week9/FE_BUG_LOG.md) — 15 FE bugs (FE-BUG-01 to FE-BUG-15): root cause, fix status, prevention.
 - [`docs/week9/FE_E2E_GUIDE.md`](docs/week9/FE_E2E_GUIDE.md) — E2E quick start, mock wallet architecture, env setup, writing tests, debugging, CI.
+
+> **E2E setup note:** Set `NEXT_PUBLIC_E2E_MOCK_WALLET=1` in `.env.test.local` to run the Playwright chromium suite without a browser wallet extension. See [`docs/week9/FE_E2E_GUIDE.md`](docs/week9/FE_E2E_GUIDE.md) for full setup.
 - [`docs/FE_CHANGELOG.md`](docs/FE_CHANGELOG.md) — per-week FE changelog (Week 3–9) based on actual commit diffs.
 
 ## Prerequisites

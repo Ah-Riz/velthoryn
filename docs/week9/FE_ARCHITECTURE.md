@@ -278,3 +278,53 @@ Set in `next.config.ts`:
 | `cd apps/web && npx playwright test --config playwright.signing.config.ts` | E2E signing (10 specs) |
 
 CI pipelines: `.github/workflows/ci.yml` (unit + type), `.github/workflows/web-ci.yml` (build), `.github/workflows/lint.yml` (Biome).
+
+---
+
+## 13. Campaign Lifecycle State Diagram
+
+The `CampaignLifecycle` type has 8 states. The diagram below shows valid transitions; all others are blocked by on-chain guards.
+
+```mermaid
+stateDiagram-v2
+    [*] --> active : create_campaign / create_stream (funded)
+    active --> paused : pause_campaign
+    paused --> active : unpause_campaign
+    active --> cancelled_grace : cancel_campaign (starts 7-day grace)
+    cancelled_grace --> cancelled_expired : 7 days elapsed, no claims possible
+    cancelled_grace --> settled : all beneficiaries claimed during grace
+    active --> instant_refunded : instant_refund_campaign (before min_cliff_time)
+    active --> claimed : total_claimed == total_supply
+```
+
+**FE helpers:**
+- `isGracePeriodVisible(campaign)` → `true` when `cancelledAt != null && !instantRefunded && !streamSettled`
+- `CampaignStatusBadge` renders a distinct badge variant for each of the 8 states.
+- Source: `apps/web/src/lib/vesting/list.ts`
+
+---
+
+## 14. Root Rotation UI (useUpdateRoot + AllocationEditor)
+
+`useUpdateRoot` hook (`src/hooks/useUpdateRoot.ts`) drives the Allocations page
+(`src/app/(app)/campaign/[id]/allocations/page.tsx`).
+
+**Flow:**
+1. `AllocationEditor` rebuilds the Merkle tree client-side from the edited
+   recipient list (via `src/lib/merkle/builder.ts`).
+2. The hook calls `update_root(newRoot, newLeafCount, newMinCliffTime)` via
+   `tx-builder.ts` (server action).
+3. On success, posts the new leaves + proofs to
+   `POST /api/campaigns/[id]/root-versions`.
+4. TanStack Query key `["campaign", treeAddress]` is invalidated → campaign
+   detail refetches with the new root.
+
+**Constraints enforced by the program:**
+- `SameRoot` (6004) — recomputed root equals the current on-chain root (no change).
+- `NotCancellable` (6019) — `update_root` is signed by `cancel_authority`; only
+  campaigns created with `cancellable: true` can rotate.
+- Root rotation is all-or-nothing: the entire recipient set is replaced atomically.
+
+**FE guard:** The `AllocationEditor` disables the "Save Allocations" button when
+`computedRoot === campaign.merkleRoot` (pre-computes client-side to avoid a
+wasted transaction).
