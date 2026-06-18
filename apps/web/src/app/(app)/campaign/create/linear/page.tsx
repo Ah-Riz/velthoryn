@@ -28,6 +28,9 @@ type StreamEntry = {
   id: string;
   recipient: string;
   amount: string;
+  startTime: string;
+  cliffTime: string;
+  endTime: string;
 };
 
 type TxState =
@@ -47,7 +50,7 @@ type TxState =
   | { type: "bulk-funded"; sig: string; treeAddress: string; prepared: PreparedBulkCampaign };
 
 function newStream(): StreamEntry {
-  return { id: crypto.randomUUID(), recipient: "", amount: "" };
+  return { id: crypto.randomUUID(), recipient: "", amount: "", startTime: "", cliffTime: "", endTime: "" };
 }
 
 function waitForLoadingPaint() {
