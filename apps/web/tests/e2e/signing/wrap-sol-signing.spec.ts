@@ -83,7 +83,8 @@ test.describe.serial("Real signing E2E — wrap and unwrap SOL", () => {
     await openWrapSolModal(page);
 
     // Verify we are in wrap mode by default (Wrap tab active)
-    const wrapTab = page.getByRole("button", { name: /^wrap$/i });
+    // Use .first() to avoid strict-mode collision with the disabled submit "Wrap" button
+    const wrapTab = page.getByRole("button", { name: /^wrap$/i }).first();
     await expect(wrapTab).toBeVisible({ timeout: 5_000 });
     await expect(page.getByRole("button", { name: /max:\s*[1-9]/i })).toBeVisible({
       timeout: 30_000,

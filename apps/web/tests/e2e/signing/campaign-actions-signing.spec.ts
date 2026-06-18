@@ -99,11 +99,11 @@ async function createCancellableSolCampaign(
   await amountInputs.nth(0).fill("0.005");
   await cliffInputs.nth(0).fill(cliffValue);
 
-  // Recipient 2
+  // Recipient 2 — cliff inputs are at nth(2) because each row has 2 datetime inputs (cliff + optional start time)
   const rec2 = Keypair.generate().publicKey.toBase58();
   await recipientInputs.nth(1).fill(rec2);
   await amountInputs.nth(1).fill("0.005");
-  await cliffInputs.nth(1).fill(cliffValue);
+  await cliffInputs.nth(2).fill(cliffValue);
 
   // Submit — button reads "Create Campaign (2 Recipients)"
   const submitBtn = page.getByRole("button", { name: /create campaign/i });

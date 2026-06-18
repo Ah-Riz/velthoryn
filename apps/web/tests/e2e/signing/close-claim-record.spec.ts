@@ -169,6 +169,9 @@ test.describe.serial("Real signing E2E — CloseClaimRecordButton flow", () => {
     // Re-navigate to pick up the post-claim UI state
     await page.goto(`/campaign/${createdTreeAddress}`, { waitUntil: "load" });
 
+    // Wait for the Campaign Management section to confirm program is initialized
+    await expect(page.getByText(/campaign management|account/i).first()).toBeVisible({ timeout: 30_000 });
+
     const closeBtn = page.getByRole("button", { name: /close record & reclaim rent/i });
     await expect(closeBtn).toBeVisible({ timeout: 30_000 });
     await expect(closeBtn).toBeEnabled();

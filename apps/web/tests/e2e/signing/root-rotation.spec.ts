@@ -122,9 +122,10 @@ async function createCancellableSolCampaign(
 
   // Recipient 2 — another random throwaway wallet.
   const rec2 = Keypair.generate().publicKey.toBase58();
+  // Cliff inputs at nth(2): each recipient row has 2 datetime inputs (cliff + optional start time)
   await recipientInputs.nth(1).fill(rec2);
   await amountInputs.nth(1).fill("0.005");
-  await cliffInputs.nth(1).fill(cliffValue);
+  await cliffInputs.nth(2).fill(cliffValue);
 
   // Submit.
   const submitBtn = page.getByRole("button", { name: /create campaign/i });

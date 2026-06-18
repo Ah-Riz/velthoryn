@@ -178,15 +178,16 @@ test.describe.serial("Real signing E2E — single-leaf cancel stream", () => {
     await cancelStreamBtn.click();
 
     // Dialog opens — heading: "Cancel this vesting stream?"
-    await expect(page.getByText(/cancel this vesting stream/i)).toBeVisible({ timeout: 10_000 });
+    // Scope lookups to the dialog to avoid collision with the "Cancel Stream" trigger button
+    // (which stays in the DOM behind the overlay and has the same accessible name).
+    const dialog = page.getByRole("dialog");
+    await dialog.waitFor({ state: "visible", timeout: 10_000 });
 
-    // The dialog shows a toggle: "Instant Settle" / "Grace Period" for single-stream.
     // Confirm button is either:
     //   "Cancel & Settle"  — when schedule is loaded (instant mode, default)
     //   "Cancel Stream"    — when schedule not loaded (grace period fallback)
-    // We click whichever is present.
-    const cancelAndSettleBtn = page.getByRole("button", { name: /cancel & settle/i });
-    const cancelStreamConfirmBtn = page.getByRole("button", { name: /^cancel stream$/i });
+    const cancelAndSettleBtn = dialog.getByRole("button", { name: /cancel & settle/i });
+    const cancelStreamConfirmBtn = dialog.getByRole("button", { name: /cancel stream/i });
 
     // Wait for one of the two confirm buttons to be visible
     await Promise.race([
