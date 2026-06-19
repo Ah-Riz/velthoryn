@@ -16,6 +16,8 @@ jobs:
     env:
       CARGO_INCREMENTAL: 0
       CARGO_TERM_COLOR: always
+      CARGO_NET_RETRY: 10
+      CARGO_NET_TIMEOUT: 30
 
     steps:
       - uses: actions/checkout@v4
@@ -69,7 +71,11 @@ jobs:
       - name: Install Anchor CLI 1.0.0
         if: steps.anchor-cache.outputs.cache-hit != 'true'
         run: |
-          cargo install --git https://github.com/coral-xyz/anchor avm --locked --force
+          for i in 1 2 3; do
+            cargo install --git https://github.com/coral-xyz/anchor avm --locked --force && break
+            echo "cargo install avm failed (attempt $i/3), retrying in 15s..."
+            sleep 15
+          done
           avm install 1.0.0
           avm use 1.0.0
 

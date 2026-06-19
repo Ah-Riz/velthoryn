@@ -155,7 +155,7 @@ await program.methods
 Multi-leaf campaigns only, **before** `min_cliff_time`: refund the entire vault to the creator immediately (cancels + sets `instant_refunded`).
 
 - **Accounts:** `creator` (signer, mut), `vesting_tree` (mut). Native-SOL adds `system_program`; SPL adds `vault_authority`, `vault`, `creator_ata`, `token_program`.
-- **Guards:** `NotMultiLeafCampaign` (6040), `CampaignAlreadyStarted` (6036, `now < min_cliff_time`), `MilestoneAlreadyReleased` (6034, if any flag set), `NothingToClaim` (6015). Plus `NotCancellable`/`AlreadyCancelled`/`Unauthorized`/`FullyVested`.
+- **Guards:** `NotMultiLeafCampaign` (6040), `CampaignAlreadyStarted` (6036, fires when `now >= min_cliff_time` — campaign has already started; instant refund is only allowed before `min_cliff_time`), `MilestoneAlreadyReleased` (6034, if any flag set), `NothingToClaim` (6015). Plus `NotCancellable`/`AlreadyCancelled`/`Unauthorized`/`FullyVested`.
 - **Emits:** `InstantRefunded { tree, cancelled_at, refunded_to, amount }`.
 - **After instant refund:** `claim`/`withdraw` are blocked (`InstantRefundedCampaign` 6035).
 

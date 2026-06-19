@@ -802,6 +802,7 @@ try {
 | 6038 | `NativeSolRentViolation` | Transfer would violate rent minimum |
 | 6039 | `UnsupportedMint` | Token-2022 mints not supported |
 | 6040 | `NotMultiLeafCampaign` | Instant refund only for multi-leaf |
+| 6041 | `PerLeafCapExceeded` | Beneficiary has too many leaves (max PER_LEAF_CAP=8) |
 
 ---
 

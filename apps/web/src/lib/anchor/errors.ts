@@ -47,6 +47,7 @@ export const VESTING_ERROR_CODES = {
   NativeSolRentViolation: 6038,
   UnsupportedMint: 6039,
   NotMultiLeafCampaign: 6040,
+  PerLeafCapExceeded: 6041,
 } as const;
 
 type ErrorKey = keyof typeof VESTING_ERROR_CODES;
@@ -100,6 +101,7 @@ const USER_MESSAGES: Record<ErrorKey, string> = {
     "Native SOL transfer would drop PDA below rent-exempt minimum.",
   UnsupportedMint: "Token-2022 mints are not supported; use classic SPL Token.",
   NotMultiLeafCampaign: "Instant refund is only allowed on multi-leaf campaigns.",
+  PerLeafCapExceeded: "Beneficiary has reached the maximum number of vesting streams (8) for this campaign.",
 };
 
 function codeToHex(code: number): string {

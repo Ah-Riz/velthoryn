@@ -21,6 +21,7 @@ export interface UpdateRootResult {
   indexWarning: string | null;
 }
 
+/** Builds and sends `updateRoot` to rotate the campaign Merkle root, then saves the new root version to the API. */
 export function useUpdateRoot() {
   const program = useVestingProgram();
   const { publicKey, sendTransaction, signMessage } = useWallet();
