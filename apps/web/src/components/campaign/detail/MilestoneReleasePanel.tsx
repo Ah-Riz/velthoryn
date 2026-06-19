@@ -92,12 +92,12 @@ export function MilestoneReleasePanel({
   if (!canRelease || indices.length === 0) return null;
 
   return (
-    <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-4">
+    <div className="rounded-xl border border-foreground/[0.06] bg-foreground/[0.02] p-4">
       {/* Header with summary */}
       <div className="flex items-center justify-between">
         <div>
-          <p className="text-[12px] font-medium text-white">Milestone Releases</p>
-          <p className="mt-0.5 text-[11px] text-[#6f7c95]">
+          <p className="text-[12px] font-medium text-foreground">Milestone Releases</p>
+          <p className="mt-0.5 text-[11px] text-muted-foreground">
             {releasedCount}/{indices.length} released
           </p>
         </div>
@@ -105,7 +105,7 @@ export function MilestoneReleasePanel({
           <button
             onClick={() => handleRelease(nextUnreleased)}
             disabled={loadingIdx !== null}
-            className="rounded-lg border border-violet-500/20 bg-violet-500/5 px-3 py-1.5 text-[11px] font-medium text-violet-400 transition hover:bg-violet-500/10 disabled:opacity-50"
+            className="rounded-lg border border-violet-500/20 bg-violet-500/5 px-3 py-1.5 text-[11px] font-medium text-violet-700 dark:text-violet-400 transition hover:bg-violet-500/10 disabled:opacity-50"
           >
             {loadingIdx === nextUnreleased ? "..." : `Release #${nextUnreleased}`}
           </button>
@@ -124,14 +124,14 @@ export function MilestoneReleasePanel({
               className={`flex flex-col items-center justify-center rounded-lg border px-1 py-2 text-center transition ${
                 released
                   ? "border-emerald-500/20 bg-emerald-500/5 cursor-default"
-                  : "border-white/[0.06] bg-white/[0.02] hover:border-violet-500/30 hover:bg-violet-500/5 disabled:opacity-50"
+                  : "border-foreground/[0.06] bg-foreground/[0.02] hover:border-violet-500/30 hover:bg-violet-500/5 disabled:opacity-50"
               }`}
               title={released ? `Milestone #${idx} released` : `Release milestone #${idx}`}
             >
-              <span className={`text-[11px] font-semibold ${released ? "text-emerald-400" : "text-white"}`}>
+              <span className={`text-[11px] font-semibold ${released ? "text-emerald-700 dark:text-emerald-400" : "text-foreground"}`}>
                 #{idx}
               </span>
-              <span className={`mt-0.5 text-[9px] ${released ? "text-emerald-400/60" : "text-[#555d73]"}`}>
+              <span className={`mt-0.5 text-[9px] ${released ? "text-emerald-700/60 dark:text-emerald-400/60" : "text-muted-foreground"}`}>
                 {loadingIdx === idx ? "..." : released ? "done" : "pending"}
               </span>
             </button>
@@ -146,18 +146,18 @@ export function MilestoneReleasePanel({
             type="button"
             onClick={() => setPage((p) => Math.max(0, p - 1))}
             disabled={page === 0}
-            className="rounded-md border border-white/[0.08] px-2 py-1 text-[11px] text-[#8b92a5] transition hover:bg-white/[0.04] disabled:opacity-30"
+            className="rounded-md border border-foreground/[0.08] px-2 py-1 text-[11px] text-muted-foreground transition hover:bg-foreground/[0.04] disabled:opacity-30"
           >
             Prev
           </button>
-          <span className="text-[11px] text-[#6f7c95]">
+          <span className="text-[11px] text-muted-foreground">
             {page + 1} / {totalPages}
           </span>
           <button
             type="button"
             onClick={() => setPage((p) => Math.min(totalPages - 1, p + 1))}
             disabled={page >= totalPages - 1}
-            className="rounded-md border border-white/[0.08] px-2 py-1 text-[11px] text-[#8b92a5] transition hover:bg-white/[0.04] disabled:opacity-30"
+            className="rounded-md border border-foreground/[0.08] px-2 py-1 text-[11px] text-muted-foreground transition hover:bg-foreground/[0.04] disabled:opacity-30"
           >
             Next
           </button>

@@ -116,7 +116,7 @@ export const WithdrawUnvestedButton = forwardRef<HTMLButtonElement, Props>(funct
     return (
       <button
         disabled
-        className="cursor-not-allowed w-full rounded-xl border border-white/[0.06] py-2.5 text-[13px] font-medium text-[#555d73]"
+        className="cursor-not-allowed w-full rounded-xl border border-foreground/[0.06] py-2.5 text-[13px] font-medium text-muted-foreground"
       >
         Withdraw Unvested — available in {grace.countdown}
       </button>
@@ -139,11 +139,11 @@ export const WithdrawUnvestedButton = forwardRef<HTMLButtonElement, Props>(funct
 
       {confirmOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
-          <div className="mx-4 w-full max-w-md space-y-4 rounded-2xl border border-white/[0.08] bg-[#0d1017] p-6">
-            <h3 className="text-[15px] font-medium text-amber-400">
+          <div className="mx-4 w-full max-w-md space-y-4 rounded-2xl border border-foreground/[0.08] bg-background p-6">
+            <h3 className="text-[15px] font-medium text-amber-700 dark:text-amber-400">
               Withdraw Unvested Tokens?
             </h3>
-            <p className="text-[13px] text-[#8b92a5]">
+            <p className="text-[13px] text-muted-foreground">
               This will transfer all remaining unvested tokens from the vault back to your wallet.
               Recipients can still claim any tokens that were vested before cancellation.
             </p>
@@ -151,7 +151,7 @@ export const WithdrawUnvestedButton = forwardRef<HTMLButtonElement, Props>(funct
               <button
                 onClick={() => setConfirmOpen(false)}
                 disabled={loading}
-                className="flex-1 rounded-xl border border-white/[0.08] py-2.5 text-[13px] text-[#8b92a5] transition hover:bg-white/[0.04] disabled:cursor-not-allowed disabled:opacity-50"
+                className="flex-1 rounded-xl border border-foreground/[0.08] py-2.5 text-[13px] text-muted-foreground transition hover:bg-foreground/[0.04] disabled:cursor-not-allowed disabled:opacity-50"
               >
                 Go Back
               </button>

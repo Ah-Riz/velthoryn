@@ -1,6 +1,6 @@
 import { expect, test, type Page } from "@playwright/test";
 import { collectRelevantPageErrors } from "./pageErrors";
-import { enableE2eWallet, gotoWithRetry, selectSolToken, openCsvMode, recipientWallet } from "./helpers";
+import { enableE2eWallet, gotoWithRetry, selectSolToken, fillCliffSchedule, openCsvMode, recipientWallet } from "./helpers";
 
 async function openConnectedCreatePage(page: Page, path: string) {
   const pageErrors = collectRelevantPageErrors(page);
@@ -18,9 +18,8 @@ test.describe("Error messages and validation", () => {
     await page.getByPlaceholder(/solana wallet/i).first().fill(recipientWallet);
     await page.getByPlaceholder(/e\.g\. 1000/i).first().fill("999999999");
 
-    // Fill cliff date
-    const futureDate = new Date(Date.now() + 86400000 * 30);
-    await page.locator("input[type='datetime-local']").first().fill(futureDate.toISOString().slice(0, 16));
+    // Fill cliff date (campaign-level schedule)
+    await fillCliffSchedule(page);
 
     // Should show insufficient balance warning
     await expect(page.getByText(/insufficient balance/i)).toBeVisible();
@@ -33,8 +32,7 @@ test.describe("Error messages and validation", () => {
     await page.getByPlaceholder(/solana wallet/i).first().fill(recipientWallet);
     await page.getByPlaceholder(/e\.g\. 1000/i).first().fill("999999999");
 
-    const futureDate = new Date(Date.now() + 86400000 * 30);
-    await page.locator("input[type='datetime-local']").first().fill(futureDate.toISOString().slice(0, 16));
+    await fillCliffSchedule(page);
 
     // Button should be disabled due to insufficient balance
     await expect(page.getByRole("button", { name: /create.*stream/i })).toBeDisabled();
@@ -43,6 +41,7 @@ test.describe("Error messages and validation", () => {
 
   test("CSV parse shows row-level validation errors", async ({ page }) => {
     const pageErrors = await openConnectedCreatePage(page, "/campaign/create/cliff");
+    await fillCliffSchedule(page);
     await openCsvMode(page);
 
     // Invalid CSV with wrong release type
@@ -50,7 +49,7 @@ test.describe("Error messages and validation", () => {
       "beneficiary,amount,releaseType,startTime,cliffTime,endTime,milestoneIdx\n" +
       `${recipientWallet},0.001,Linear,1779899400,1779899700,1779899700,0`
     );
-    await page.getByRole("button", { name: /parse & validate/i }).click();
+    await page.getByRole("button", { name: /validate csv/i }).click();
 
     await expect(page.getByText(/this page only accepts cliff rows/i)).toBeVisible();
     expect(pageErrors).toEqual([]);
@@ -58,13 +57,14 @@ test.describe("Error messages and validation", () => {
 
   test("CSV parse shows error for invalid wallet address", async ({ page }) => {
     const pageErrors = await openConnectedCreatePage(page, "/campaign/create/cliff");
+    await fillCliffSchedule(page);
     await openCsvMode(page);
 
     await page.locator("textarea").fill(
       "beneficiary,amount,releaseType,startTime,cliffTime,endTime,milestoneIdx\n" +
       "INVALID_ADDRESS,0.001,Cliff,1779899400,1779899700,1779899700,0"
     );
-    await page.getByRole("button", { name: /parse & validate/i }).click();
+    await page.getByRole("button", { name: /validate csv/i }).click();
 
     // Should show some validation error
     await expect(page.getByText(/invalid|error|failed/i).first()).toBeVisible();

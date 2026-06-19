@@ -50,7 +50,7 @@
 | 17 | `leaf_count > 1` check only enforced in frontend | SC/FE | Documented | On-chain `update_root` has no leaf count check. Frontend gate prevents single-leaf rotation. |
 | 18 | `create_stream` hardcodes `min_cliff_time = 0` | SC | Documented | Safe -- `instant_refund_campaign` requires `leaf_count > 1`, excluding streams. |
 | 19 | Native SOL withdraw drains PDA below rent-exempt | SC | Documented | Intentional -- after grace period, campaign is over. PDA not reused. |
-| 29 | Cumulative `claimed_amount` undercounts claimable for multi-leaf non-milestone campaigns | SC | Documented | `claim.rs` uses `vested(leaf) - cr.claimed_amount` for cliff/linear. If one beneficiary has multiple cliff/linear leaves, `claimed_amount` is cumulative and can undercount later leaves. Common case unaffected (single leaf per beneficiary, or milestones which bypass subtraction). Fix requires per-leaf tracking — breaking on-chain change. |
+| 29 | Cumulative `claimed_amount` undercounts claimable for multi-leaf non-milestone campaigns | SC | ✅ **Fixed on-chain 2026-06-16** | `claim.rs` used `vested(leaf) - cr.claimed_amount` for cliff/linear. If one beneficiary had multiple cliff/linear leaves, `claimed_amount` was cumulative and undercounted later leaves. **Fixed** by a per-leaf ledger (`ClaimRecord` now `zero_copy` with `leaf_claimed_idx`/`leaf_claimed_amt`); ADR-003 superseded. The BE prepare/import guards that rejected this shape remain until a follow-up PR. (Historical note: fix requires per-leaf tracking — breaking on-chain change, now done.) |
 
 ---
 

@@ -6080,6 +6080,7 @@ dependencies = [
  "anchor-lang",
  "anchor-spl",
  "borsh 1.6.1",
+ "bytemuck",
  "hex",
  "mollusk-svm",
  "mollusk-svm-bencher",

@@ -44,4 +44,20 @@ test.describe("Responsive layout", () => {
     await expect(page.getByText("Velthoryn").first()).toBeVisible();
     expect(pageErrors).toEqual([]);
   });
+
+  test("campaign filters use dropdown on mobile at 375px", async ({ page }) => {
+    const pageErrors = collectRelevantPageErrors(page);
+    await enableE2eWallet(page);
+    await page.setViewportSize({ width: 375, height: 812 });
+    await gotoWithRetry(page, "/campaigns");
+
+    // Native select is visible on mobile
+    await expect(page.locator("select")).toBeVisible();
+
+    // Desktop tab buttons are hidden (hidden sm:flex container not visible at 375px)
+    const tabButtons = page.locator(".hidden.sm\\:flex button");
+    await expect(tabButtons.first()).toBeHidden();
+
+    expect(pageErrors).toEqual([]);
+  });
 });

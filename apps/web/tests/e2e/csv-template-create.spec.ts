@@ -1,6 +1,6 @@
 import { expect, test, type Page } from "@playwright/test";
 import { collectRelevantPageErrors } from "./pageErrors";
-import { enableE2eWallet, gotoWithRetry, selectSolToken, openCsvMode, csv, parseCsv, recipientWallet, secondWallet } from "./helpers";
+import { enableE2eWallet, expectCsvReadyToFund, gotoWithRetry, selectSolToken, openCsvMode, csv, parseCsv, recipientWallet, secondWallet, fillCliffSchedule, fillLinearSchedule } from "./helpers";
 
 const schedules = {
   start: 1779899400,
@@ -13,6 +13,11 @@ async function openCsvCreatePage(page: Page, path: string, csvButton?: RegExp) {
   await enableE2eWallet(page);
   await gotoWithRetry(page, path);
   await selectSolToken(page);
+  if (path.includes("/cliff")) {
+    await fillCliffSchedule(page);
+  } else if (path.includes("/linear")) {
+    await fillLinearSchedule(page);
+  }
   await openCsvMode(page, csvButton);
   return pageErrors;
 }
@@ -21,21 +26,21 @@ test.describe("CSV template and create ready state", () => {
   test("cliff CSV mode shows download template button", async ({ page }) => {
     const pageErrors = await openCsvCreatePage(page, "/campaign/create/cliff");
 
-    await expect(page.getByRole("button", { name: /download.*cliff.*csv.*template/i })).toBeVisible();
+    await expect(page.getByRole("button", { name: /download.*cliff.*template/i })).toBeVisible();
     expect(pageErrors).toEqual([]);
   });
 
   test("linear CSV mode shows download template button", async ({ page }) => {
     const pageErrors = await openCsvCreatePage(page, "/campaign/create/linear");
 
-    await expect(page.getByRole("button", { name: /download.*linear.*csv.*template/i })).toBeVisible();
+    await expect(page.getByRole("button", { name: /download.*linear.*template/i })).toBeVisible();
     expect(pageErrors).toEqual([]);
   });
 
   test("milestone CSV mode shows download template button", async ({ page }) => {
     const pageErrors = await openCsvCreatePage(page, "/campaign/create/milestone", /csv campaign/i);
 
-    await expect(page.getByRole("button", { name: /download.*milestone.*csv.*template/i })).toBeVisible();
+    await expect(page.getByRole("button", { name: /download.*milestone.*template/i })).toBeVisible();
     expect(pageErrors).toEqual([]);
   });
 
@@ -51,7 +56,7 @@ test.describe("CSV template and create ready state", () => {
     );
 
     await expect(page.getByText(/this page only accepts/i)).toHaveCount(0);
-    await expect(page.getByRole("button", { name: /create & fund campaign/i })).toBeEnabled();
+    await expectCsvReadyToFund(page);
     expect(pageErrors).toEqual([]);
   });
 
@@ -67,7 +72,7 @@ test.describe("CSV template and create ready state", () => {
     );
 
     await expect(page.getByText(/this page only accepts/i)).toHaveCount(0);
-    await expect(page.getByRole("button", { name: /create & fund campaign/i })).toBeEnabled();
+    await expectCsvReadyToFund(page);
     expect(pageErrors).toEqual([]);
   });
 
@@ -75,14 +80,16 @@ test.describe("CSV template and create ready state", () => {
     const pageErrors = await openCsvCreatePage(page, "/campaign/create/cliff");
 
     await expect(page.locator("textarea")).toBeVisible();
-    await expect(page.getByRole("button", { name: /parse & validate/i })).toBeVisible();
+    await expect(page.getByRole("button", { name: /validate csv/i })).toBeVisible();
     expect(pageErrors).toEqual([]);
   });
 
   test("CSV mode shows file upload area", async ({ page }) => {
     const pageErrors = await openCsvCreatePage(page, "/campaign/create/cliff");
 
-    await expect(page.getByText(/drop csv file|click to upload/i)).toBeVisible();
+    const uploadZone = page.locator("label").filter({ hasText: /drop your csv file here/i });
+    await expect(uploadZone).toBeVisible();
+    await expect(uploadZone).toContainText(/click to browse/i);
     expect(pageErrors).toEqual([]);
   });
 });

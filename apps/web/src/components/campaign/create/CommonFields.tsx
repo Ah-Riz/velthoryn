@@ -66,7 +66,7 @@ export function CommonFields({
               value={amount}
               onChange={(e) => onAmountChange(e.target.value)}
               aria-invalid={!!formErrors.amount}
-              className={`bg-[#11161f] text-[13px] text-white border-white/[0.08] focus-visible:border-white/20 focus-visible:ring-0 placeholder:text-[#8b92a5] ${formErrors.amount ? INPUT_ERR : ""}`}
+              className={`bg-muted text-[13px] text-foreground border-foreground/[0.08] focus-visible:border-foreground/20 focus-visible:ring-0 placeholder:text-muted-foreground ${formErrors.amount ? INPUT_ERR : ""}`}
             />
           }
           error={formErrors.amount}
@@ -86,7 +86,7 @@ export function CommonFields({
               value={beneficiary}
               onChange={(e) => onBeneficiaryChange(e.target.value)}
               aria-invalid={!!formErrors.beneficiary}
-              className={`bg-[#11161f] font-mono text-[13px] text-white border-white/[0.08] focus-visible:border-white/20 focus-visible:ring-0 placeholder:text-[#8b92a5] ${formErrors.beneficiary ? INPUT_ERR : ""}`}
+              className={`bg-muted font-mono text-[13px] text-foreground border-foreground/[0.08] focus-visible:border-foreground/20 focus-visible:ring-0 placeholder:text-muted-foreground ${formErrors.beneficiary ? INPUT_ERR : ""}`}
             />
           }
           error={formErrors.beneficiary}

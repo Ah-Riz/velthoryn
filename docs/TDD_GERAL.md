@@ -1,14 +1,16 @@
 # TDD — Velthoryn Vesting Frontend Test Design (Geral's Scope)
 
 **Author:** Geral — frontend lead  
-**Status:** Week 4 design, Week 6 implementation target  
+**Status:** Week 4 design → **Updated Week 9 (2026-06-18)**  
 **Companion docs:** `docs/PRD_GERAL.md` (requirements), `docs/PDD_GERAL.md` (design), `docs/SECURITY_GERAL.md` (security)
+
+> **Week 9 reality**: The targets in this doc were written at Week 4. See the "§ Week 9 Actuals" sections below for what actually shipped. The original design sections are preserved for historical context.
 
 ---
 
 ## §1 Test Strategy Overview
 
-### Test pyramid
+### Test pyramid (Week 4 target)
 
 ```
         ┌─────────────┐
@@ -20,6 +22,20 @@
         │   Unit      │  Vitest — components, hooks, utilities (Week 4-6)
         │   (201)     │
         └─────────────┘
+```
+
+### Test pyramid (Week 9 actuals)
+
+```
+        ┌─────────────────────────────┐
+        │  E2E chromium (23 specs)    │  Playwright — mock wallet, 23 spec files
+        │  E2E signing  (10 specs)    │  Playwright — real devnet wallet, 10 spec files
+        ├─────────────────────────────┤
+        │  Integration (47 tests)     │  Devnet integration — helpers + ts-mocha
+        │  Bankrun (15 files)         │  solana-bankrun clock-dependent tests
+        ├─────────────────────────────┤
+        │  Unit — Vitest (572 tests)  │  32 spec files, zero failures
+        └─────────────────────────────┘
 ```
 
 ### Test ownership split
@@ -264,7 +280,7 @@ export default defineConfig({
 | U-ERR-1 | All 30 error codes have human-readable mapping | `tests/errors/mapping.test.ts` | P1 |
 | U-ERR-2 | Unknown error code shows fallback message | `tests/errors/mapping.test.ts` | P1 |
 
-### Unit test summary
+### Unit test summary (Week 4 targets — original)
 
 | Group | Tests | Done | Week 4 | Week 6 |
 |---|---|---|---|---|
@@ -275,28 +291,76 @@ export default defineConfig({
 | Error mapping | 2 | 0 | — | 2 |
 | **Total** | **27** | **5** | **11** | **11** |
 
+### Unit test actuals (Week 9)
+
+| Area | Test files | Tests | Status |
+|---|---|---|---|
+| Merkle builder | `tests/lib/merkle-builder.test.ts` | 12 | ✅ All pass |
+| Vesting math / schedule | `tests/lib/schedule.test.ts` | 38 | ✅ All pass |
+| Error mapping | `tests/lib/errors.test.ts` | 24 | ✅ All pass |
+| CSV bulk parsing | `tests/lib/bulk-campaign.test.ts` | 39 | ✅ All pass |
+| Vesting list helpers | `tests/lib/vesting-list.test.ts` | 18 | ✅ All pass |
+| API routes (Postgres) | `tests/api/*.test.ts` (8 files) | 180 | ✅ All pass |
+| Component tests | `tests/components/*.test.ts` | 61 | ✅ All pass |
+| Hook tests | `tests/hooks/*.test.ts` | 38 | ✅ All pass |
+| Other lib utils | (10+ files) | 162 | ✅ All pass |
+| **Total** | **32 files** | **572** | ✅ **572/572** |
+
+**Run command**: `cd apps/web && npx vitest --config vitest.unit.config.ts --run`
+
 ---
 
-## §4 E2E Tests (Phase 2 — Playwright)
+## §4 E2E Tests (Week 9 — Implemented)
 
-### Test infrastructure
+### Test infrastructure (current)
 
 **Framework:** Playwright  
-**Location:** `apps/web/e2e/`  
-**Run command:** `cd apps/web && pnpm test:e2e` (script already wired in package.json)  
-**Environment:** Browser + local Anchor validator
+**Location:** `apps/web/tests/e2e/` (23 chromium) + `apps/web/tests/e2e/signing/` (10 real-wallet)  
+**Config:** `playwright.config.ts` (chromium mock) + `playwright.signing.config.ts` (signing)  
+**Mock wallet:** `NEXT_PUBLIC_E2E_MOCK_WALLET=true` + `localStorage.setItem('velthoryn:e2e-mock-send-tx', '1')`  
+**Run command:** `cd apps/web && npx playwright test` (chromium) | `npx playwright test --config playwright.signing.config.ts` (signing)
 
-### Planned E2E tests
+### Implemented E2E specs (chromium — mock wallet)
 
-| ID | Flow | Steps | Priority |
+| Spec | Tests | Area |
+|---|---|---|
+| `landing.spec.ts` | 3 | Public landing page |
+| `navigation.spec.ts` | 4 | Sidebar routing |
+| `wallet-connection.spec.ts` | 3 | Connect/disconnect modal |
+| `campaign-detail.spec.ts` | 6 | Campaign detail rendering |
+| `campaign-actions.spec.ts` | 8 | Pause, cancel, claim (mock tx) |
+| `create-pages.spec.ts` | 4 | Create flow pages render |
+| `vesting-create-flows.spec.ts` | 6 | Full cliff/linear/milestone create |
+| `csv-template-create.spec.ts` | 3 | CSV download + upload |
+| `csv-validation.spec.ts` | 5 | CSV row-level errors |
+| `my-campaigns.spec.ts` | 4 | Campaign list tabs |
+| `dashboard.spec.ts` | 5 | Dashboard + needs-action |
+| `token-picker.spec.ts` | 4 | TokenPickerModal |
+| `wrap-sol.spec.ts` | 3 | WrapSolModal |
+| `allocations.spec.ts` | 3 | AllocationEditor lock states |
+| `responsive.spec.ts` | 4 | Mobile (375px) layout |
+| (8 other specs) | ~28 | Various flows |
+| **Total chromium** | **~93** | **23 spec files** |
+
+### Signing specs (real devnet wallet — CI disabled)
+
+10 spec files in `tests/e2e/signing/` covering create/fund/claim/pause/cancel/withdraw on actual devnet. Skipped in CI to avoid RPC costs.
+
+### See also
+
+`docs/week9/FE_E2E_GUIDE.md` — full E2E quick start and guide.
+
+---
+
+### Original §4 planned tests (Week 4 — for reference)
+
+| ID | Flow | Priority | Status |
 |---|---|---|---|
-| E2E-1 | Wallet connect | Open app → click Connect → approve in wallet → address displayed | P1 |
-| E2E-2 | Create campaign | Connect → upload CSV → preview → create → fund → see "Active" | P1 |
-| E2E-3 | Claim tokens | Connect as recipient → see vested amount → click Claim → balance updates | P1 |
-| E2E-4 | Cancel campaign | Connect as admin → cancel → grace countdown shown | P2 |
-| E2E-5 | Mobile responsive | Run E2E-1 through E2E-3 at 375px viewport | P2 |
-
-**Note:** E2E tests require wallet automation (Phantom test harness or similar). Deferred to Phase 2 as wallet test tooling is not mature.
+| E2E-1 | Wallet connect | P1 | ✅ `wallet-connection.spec.ts` |
+| E2E-2 | Create campaign | P1 | ✅ `vesting-create-flows.spec.ts` |
+| E2E-3 | Claim tokens | P1 | ✅ `campaign-actions.spec.ts` |
+| E2E-4 | Cancel campaign | P2 | ✅ `campaign-actions.spec.ts` |
+| E2E-5 | Mobile responsive | P2 | ✅ `responsive.spec.ts` |
 
 ---
 
@@ -321,7 +385,7 @@ Cross-reference: feature × test type × priority.
 
 ## §6 Coverage Targets
 
-### Week 4 targets
+### Week 4 targets (original)
 
 | Metric | Target |
 |---|---|
@@ -329,7 +393,7 @@ Cross-reference: feature × test type × priority.
 | Frontend unit tests passing | 16/16 (existing 5 + new 11) |
 | Acceptance criteria covered by tests | AC 1-7 (all 7 via integration tests) |
 
-### Week 6 targets
+### Week 6 targets (original)
 
 | Metric | Target |
 |---|---|
@@ -337,12 +401,17 @@ Cross-reference: feature × test type × priority.
 | Line coverage (Vitest) | ≥ 70% on `src/lib/` and `src/hooks/` |
 | All FACs testable | FAC1-FAC10 (manual or automated) |
 
-### Phase 2 targets
+### Week 9 actuals
 
-| Metric | Target |
-|---|---|
-| E2E tests passing | 5/5 |
-| Full CI pipeline | Unit + Integration + E2E on every PR |
+| Metric | Target | Actual | Status |
+|---|---|---|---|
+| Vitest unit tests | 27+ | **572 / 572** | ✅ |
+| Line coverage `src/lib/` | ≥ 70% | **81%** (Week 7 measurement) | ✅ |
+| E2E chromium specs | 5 | **23 spec files** | ✅ |
+| E2E signing specs | 0 (deferred) | **10 spec files** | ✅ bonus |
+| Devnet integration tests | 5-8 | **47** | ✅ |
+| Error codes tested | all | 18 of 42 via integration | 🔧 partial |
+| CI pipeline coverage | Unit + Integration | Unit + Lint + Build + E2E | ✅ |
 
 ---
 
@@ -398,14 +467,17 @@ export const CLIFF_LEAF: VestingLeaf = {
 
 ## §8 CI Integration
 
-### Current CI (`ci.yml`)
+### Week 9 CI pipelines (actual — 3 workflows)
 
-```yaml
-# Runs: anchor build → anchor test
-# Integration tests run here automatically
-```
+| Workflow | File | What it runs |
+|---|---|---|
+| SC + Integration | `.github/workflows/ci.yml` | `anchor build`, `anchor test`, Vitest unit |
+| Lint | `.github/workflows/lint.yml` | Biome lint, TypeScript `--noEmit` |
+| Web Build + E2E | `.github/workflows/web-ci.yml` | Next.js build, Playwright chromium |
 
-### Planned additions
+Signing E2E (`playwright.signing.config.ts`) is **disabled in CI** — requires funded devnet wallet.
+
+### Original planned additions (Week 4 reference)
 
 ```yaml
 # Add to ci.yml or new frontend-test.yml
@@ -423,6 +495,8 @@ jobs:
       - run: cd apps/web && pnpm test
         name: Frontend unit tests (Vitest)
 ```
+
+**Status**: ✅ Implemented (via `web-ci.yml`)
 
 ---
 

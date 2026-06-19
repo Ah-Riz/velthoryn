@@ -101,6 +101,91 @@ describe("parseBulkCsv", () => {
   });
 });
 
+describe("parseBulkCsv with sharedSchedule (campaign-level schedule)", () => {
+  it("stamps every row with the shared schedule regardless of amount", () => {
+    const csv = [
+      "beneficiary,amount,releaseType",
+      "11111111111111111111111111111111,0.5,Linear",
+      "11111111111111111111111111111112,1,Linear",
+    ].join("\n");
+    const sched = { startTime: 1700000000, cliffTime: 1700000000, endTime: 1731530000 };
+
+    const result = parseBulkCsv(csv, 9, 1, sched);
+
+    expect(result.issues).toEqual([]);
+    expect(result.rows).toHaveLength(2);
+    // amounts differ (0.5 SOL vs 1 SOL)
+    expect(result.rows[0].amountRaw).toBe("500000000");
+    expect(result.rows[1].amountRaw).toBe("1000000000");
+    // schedule identical across both rows — the core fix
+    for (const row of result.rows) {
+      expect(row.startTime).toBe(sched.startTime);
+      expect(row.cliffTime).toBe(sched.cliffTime);
+      expect(row.endTime).toBe(sched.endTime);
+      expect(row.releaseType).toBe(1);
+    }
+
+    const prepared = prepareBulkCampaign(result.rows);
+    expect(prepared.leaves[0].startTime).toBe(prepared.leaves[1].startTime);
+    expect(prepared.leaves[0].cliffTime).toBe(prepared.leaves[1].cliffTime);
+    expect(prepared.leaves[0].endTime).toBe(prepared.leaves[1].endTime);
+  });
+
+  it("cliff sharedSchedule stamps start/cliff and forces endTime === cliffTime", () => {
+    const csv = [
+      "beneficiary,amount",
+      "11111111111111111111111111111111,1000",
+      "11111111111111111111111111111112,2000",
+    ].join("\n");
+    const sched = { startTime: 1700000000, cliffTime: 1700000600, endTime: 1700000600 };
+
+    const result = parseBulkCsv(csv, null, 0, sched);
+
+    expect(result.issues).toEqual([]);
+    expect(result.rows).toHaveLength(2);
+    for (const row of result.rows) {
+      expect(row.startTime).toBe(sched.startTime);
+      expect(row.cliffTime).toBe(sched.cliffTime);
+      expect(row.endTime).toBe(sched.cliffTime);
+      expect(row.releaseType).toBe(0);
+    }
+  });
+
+  it("ignores stale date columns from an old full-width CSV (backward-compat)", () => {
+    const csv = [
+      "beneficiary,amount,releaseType,startTime,cliffTime,endTime,milestoneIdx",
+      "11111111111111111111111111111111,1000,Linear,2025-06-01 09:00,2025-07-01 09:00,2026-06-01 09:00,0",
+    ].join("\n");
+    const sched = { startTime: 1700000000, cliffTime: 1700000000, endTime: 1731530000 };
+
+    const result = parseBulkCsv(csv, null, 1, sched);
+
+    expect(result.issues).toEqual([]);
+    expect(result.rows).toHaveLength(1);
+    // CSV date columns are ignored; shared schedule wins
+    expect(result.rows[0].startTime).toBe(sched.startTime);
+    expect(result.rows[0].cliffTime).toBe(sched.cliffTime);
+    expect(result.rows[0].endTime).toBe(sched.endTime);
+  });
+
+  it("does not apply sharedSchedule to milestone rows (per-row unlock times preserved)", () => {
+    const csv = [
+      "beneficiary,amount,releaseType,startTime,cliffTime,endTime,milestoneIdx",
+      "11111111111111111111111111111111,1000,Milestone,1735689600,1735776000,1735776000,1",
+    ].join("\n");
+    const sched = { startTime: 1700000000, cliffTime: 1700000000, endTime: 1731530000 };
+
+    const result = parseBulkCsv(csv, null, 2, sched);
+
+    expect(result.issues).toEqual([]);
+    expect(result.rows).toHaveLength(1);
+    // milestone keeps its own CSV times, NOT the shared schedule
+    expect(result.rows[0].startTime).toBe(1735689600);
+    expect(result.rows[0].cliffTime).toBe(1735776000);
+    expect(result.rows[0].endTime).toBe(1735776000);
+  });
+});
+
 describe("prepareBulkCampaign", () => {
   it("builds merkle payload and totals from parsed rows", () => {
     const parsed = parseBulkCsv(bulkCsvTemplate(), null);

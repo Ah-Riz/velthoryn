@@ -9,9 +9,9 @@ import { useCreateCampaign } from "@/hooks/useCreateCampaign";
 import { useCreateStream, type CreateStreamResult } from "@/hooks/useCreateStream";
 import { useWalletTokens } from "@/hooks/useWalletTokens";
 import { useToast } from "@/components/shell/Toast";
-import { CARD, INPUT, INPUT_ERR, LABEL, SectionHeader, Field, ToggleCard, TxResultCard, ErrorCard } from "@/components/campaign/create/shared";
+import { CARD, INPUT, INPUT_ERR, LABEL, SectionHeader, Field, ToggleCard, TxResultCard, ErrorCard, formatTokenAmount, formatUnixToDate, formatDurationSeconds } from "@/components/campaign/create/shared";
 import { BulkCsvSection } from "@/components/campaign/create/BulkCsvSection";
-import { FormSummary } from "@/components/campaign/create/FormSummary";
+import { FormSummary, type BulkReviewData } from "@/components/campaign/create/FormSummary";
 import { PageHeader } from "@/components/campaign/create/PageHeader";
 import { TokenPickerButton } from "@/components/campaign/create/TokenPickerButton";
 import { PendingFundingsPanel } from "@/components/campaign/create/PendingFundingsPanel";
@@ -75,6 +75,11 @@ export default function CliffCreatePage() {
   const [cancellable, setCancellable] = useState(false);
   const [baseCampaignId, setBaseCampaignId] = useState(() => Math.floor(Date.now() / 1000) % 1000000);
 
+  // Campaign-level schedule — applies to every recipient so all unlock on the same date
+  const [startTime, setStartTime] = useState("");
+  const [cliffTime, setCliffTime] = useState("");
+  const [scheduleError, setScheduleError] = useState<string | null>(null);
+
   // Stream entries (manual mode)
   const [streams, setStreams] = useState<StreamEntry[]>([newStream()]);
   const [formErrors, setFormErrors] = useState<Record<string, string | null>>({});
@@ -98,16 +103,13 @@ export default function CliffCreatePage() {
   const tokenBalance = walletToken?.uiAmount ?? null;
   const totalAmount = streams.reduce((sum, s) => sum + (Number(s.amount) || 0), 0);
 
-  const validateField = useCallback(
-    (key: string, value: string, type: "recipient" | "amount" | "cliff") => {
-      let err: string | null = null;
-      if (type === "recipient") err = validatePublicKey(value);
-      else if (type === "amount") err = validateAmountWithDecimals(value, effectiveMintDecimals);
-      else if (type === "cliff") err = value ? null : "Cliff date is required.";
-      setFormErrors((prev) => ({ ...prev, [key]: err }));
-    },
-    [effectiveMintDecimals],
-  );
+  const validateField = (key: string, value: string, type: "recipient" | "amount" | "cliff") => {
+    let err: string | null = null;
+    if (type === "recipient") err = validatePublicKey(value);
+    else if (type === "amount") err = validateAmountWithDecimals(value, effectiveMintDecimals);
+    else if (type === "cliff") err = value ? null : "Cliff date is required.";
+    setFormErrors((prev) => ({ ...prev, [key]: err }));
+  };
 
   const refreshPendingFundings = useCallback(() => {
     if (!publicKey) {
@@ -140,21 +142,18 @@ export default function CliffCreatePage() {
   }, [txState.type]);
 
   function handleTokenSelect(mint: string, decimals: number, autoWrap?: boolean) {
+    const mintChanged = mint !== mintAddress;
     setMintAddress(mint);
     setMintDecimals(decimals);
     setUseAutoWrap(autoWrap ?? false);
+    if (mintChanged && mode === "bulk") {
+      setCsvText("");
+      setCsvResult(null);
+      setTxState({ type: "idle" });
+      return;
+    }
     if (mode === "bulk" && csvText.trim()) {
-      if (csvResult?.issues.length === 0 && csvResult.rows.length > 0) {
-        setTxState({ type: "bulk-ready", prepared: prepareBulkCampaign(csvResult.rows) });
-      } else {
-        const result = parseBulkCsv(csvText, decimals, 0);
-        setCsvResult(result);
-        if (result.issues.length === 0 && result.rows.length > 0) {
-          setTxState({ type: "bulk-ready", prepared: prepareBulkCampaign(result.rows) });
-        } else {
-          setTxState({ type: "idle" });
-        }
-      }
+      runBulkParse(csvText, decimals);
     }
   }
 
@@ -172,30 +171,73 @@ export default function CliffCreatePage() {
     setStreams((prev) => prev.filter((_, i) => i !== index));
   }
 
+  function resolveSchedule() {
+    const cliffUnix = datetimeLocalToUnix(cliffTime);
+    const startUnix = startTime
+      ? datetimeLocalToUnix(startTime)
+      : Math.min(Math.floor(Date.now() / 1000), cliffUnix);
+    return { startTime: startUnix, cliffTime: cliffUnix, endTime: cliffUnix };
+  }
+
+  function validateScheduleField() {
+    const sched = resolveSchedule();
+    setScheduleError(!cliffTime ? "Cliff date is required." : validateSchedule(sched.startTime, sched.cliffTime, sched.endTime, 0));
+  }
+
+  function updateScheduleField(field: "start" | "cliff", value: string) {
+    if (field === "start") setStartTime(value);
+    else setCliffTime(value);
+    // A schedule change invalidates any previously parsed bulk payload.
+    if (mode === "bulk") {
+      setCsvResult(null);
+      setTxState({ type: "idle" });
+    }
+  }
+
+  function runBulkParse(text: string, decimals: number | null) {
+    const sched = resolveSchedule();
+    const schedErr = !cliffTime
+      ? "Cliff date is required."
+      : validateSchedule(sched.startTime, sched.cliffTime, sched.endTime, 0);
+    setScheduleError(schedErr);
+    if (schedErr) {
+      setCsvResult(null);
+      setTxState({ type: "idle" });
+      return;
+    }
+    const result = parseBulkCsv(text, decimals, 0, sched);
+    setCsvResult(result);
+    if (result.issues.length === 0 && result.rows.length > 0) {
+      setTxState({ type: "bulk-ready", prepared: prepareBulkCampaign(result.rows) });
+    } else {
+      setTxState({ type: "idle" });
+    }
+  }
+
   function buildManualCampaignRows(): BulkCsvRow[] {
-    return streams.map((stream, index) => {
-      const cliffUnix = datetimeLocalToUnix(stream.cliffTime);
-      const startUnix = stream.startTime
-        ? datetimeLocalToUnix(stream.startTime)
-        : Math.min(Math.floor(Date.now() / 1000), cliffUnix);
-      return {
-        rowNumber: index + 1,
-        beneficiary: stream.recipient.trim(),
-        amountInput: stream.amount.trim(),
-        amountRaw: effectiveMintDecimals !== null ? toRawAmount(stream.amount.trim(), effectiveMintDecimals) : stream.amount.trim(),
-        releaseType: 0,
-        startTime: startUnix,
-        cliffTime: cliffUnix,
-        endTime: cliffUnix,
-        milestoneIdx: 0,
-      };
-    });
+    const { startTime: s, cliffTime: c } = resolveSchedule();
+    return streams.map((stream, index) => ({
+      rowNumber: index + 1,
+      beneficiary: stream.recipient.trim(),
+      amountInput: stream.amount.trim(),
+      amountRaw: effectiveMintDecimals !== null ? toRawAmount(stream.amount.trim(), effectiveMintDecimals) : stream.amount.trim(),
+      releaseType: 0,
+      startTime: s,
+      cliffTime: c,
+      endTime: c,
+      milestoneIdx: 0,
+    }));
   }
 
   async function handleSubmit() {
     if (!publicKey || !mintAddress) return;
 
-    // Validate all streams
+    // Validate the campaign-level schedule once (shared by every recipient).
+    const { startTime: sStart, cliffTime: sCliff } = resolveSchedule();
+    const schedErr = !cliffTime ? "Cliff date is required." : validateSchedule(sStart, sCliff, sCliff, 0);
+    setScheduleError(schedErr);
+
+    // Validate recipients (wallet + amount only; schedule is shared).
     const errors: Record<string, string | null> = {};
     const recipientRows = new Map<string, number[]>();
     for (let i = 0; i < streams.length; i++) {
@@ -208,13 +250,6 @@ export default function CliffCreatePage() {
       }
       const amtErr = validateAmountWithDecimals(s.amount, effectiveMintDecimals);
       if (amtErr) errors[`amount_${i}`] = amtErr;
-      if (!s.cliffTime) errors[`cliff_${i}`] = "Cliff date is required.";
-      const cliffUnix = s.cliffTime ? datetimeLocalToUnix(s.cliffTime) : 0;
-      const startUnix = s.startTime
-        ? datetimeLocalToUnix(s.startTime)
-        : Math.min(Math.floor(Date.now() / 1000), cliffUnix);
-      const schedErr = s.cliffTime ? validateSchedule(startUnix, cliffUnix, cliffUnix, 0) : null;
-      if (schedErr) errors[`cliff_${i}`] = schedErr;
     }
     for (const indexes of recipientRows.values()) {
       if (indexes.length > 1) {
@@ -224,7 +259,7 @@ export default function CliffCreatePage() {
       }
     }
     setFormErrors(errors);
-    if (hasErrors(errors)) return;
+    if (hasErrors(errors) || schedErr) return;
 
     if (streams.length > 1) {
       setTxState({ type: "loading", label: `Creating campaign for ${streams.length} recipients...` });
@@ -252,6 +287,7 @@ export default function CliffCreatePage() {
           setTxState({ type: "bulk-funded", sig: funded.sig, treeAddress: created.treeAddress, prepared });
           setStreams([newStream()]);
           setFormErrors({});
+          setScheduleError(null);
           setBaseCampaignId(Math.floor(Date.now() / 1000) % 1000000);
         } catch (error: unknown) {
           if (error instanceof Error && /User rejected|Connection rejected/i.test(error.message)) {
@@ -282,19 +318,16 @@ export default function CliffCreatePage() {
     const results: CreateStreamResult[] = [];
 
     try {
+      const { startTime: sStart, cliffTime: sCliff } = resolveSchedule();
       for (let i = 0; i < streams.length; i++) {
         setTxState({ type: "loading", label: `Creating stream ${i + 1} of ${streams.length}...` });
         const s = streams[i];
-        const cliffUnix = datetimeLocalToUnix(s.cliffTime);
-        const startUnix = s.startTime
-          ? datetimeLocalToUnix(s.startTime)
-          : Math.min(Math.floor(Date.now() / 1000), cliffUnix);
         const cid = String(baseCampaignId * 100 + i);
 
         const result = await createStream({
           beneficiary: s.recipient, mintAddress, amount: s.amount, mintDecimals: effectiveMintDecimals,
-          campaignId: cid, releaseType: 0, startTime: startUnix, cliffTime: cliffUnix,
-          endTime: cliffUnix, milestoneIdx: 0, cancellable, autoWrap: useAutoWrap,
+          campaignId: cid, releaseType: 0, startTime: sStart, cliffTime: sCliff,
+          endTime: sCliff, milestoneIdx: 0, cancellable, autoWrap: useAutoWrap,
         });
         results.push(result);
       }
@@ -302,6 +335,7 @@ export default function CliffCreatePage() {
       setTxState({ type: "success", results });
       setStreams([newStream()]);
       setFormErrors({});
+      setScheduleError(null);
       setBaseCampaignId(Math.floor(Date.now() / 1000) % 1000000);
     } catch (error: unknown) {
       if (error instanceof Error && /User rejected|Connection rejected/i.test(error.message)) {
@@ -325,13 +359,7 @@ export default function CliffCreatePage() {
   // Bulk handlers
   function handleCsvParse() {
     if (!csvText.trim()) return;
-    const result = parseBulkCsv(csvText, effectiveMintDecimals, 0);
-    setCsvResult(result);
-    if (result.issues.length === 0 && result.rows.length > 0) {
-      setTxState({ type: "bulk-ready", prepared: prepareBulkCampaign(result.rows) });
-    } else {
-      setTxState({ type: "idle" });
-    }
+    runBulkParse(csvText, effectiveMintDecimals);
   }
 
   async function handleBulkCreate() {
@@ -427,12 +455,40 @@ export default function CliffCreatePage() {
       ? txState.prepared
       : null;
 
+  const bulkReview: BulkReviewData | null =
+    prepared && effectiveMintDecimals !== null
+      ? (() => {
+          const starts = prepared.leaves.map((l) => Number(l.startTime));
+          const ends = prepared.leaves.map((l) => Number(l.endTime));
+          const earliest = Math.min(...starts);
+          const latest = Math.max(...ends);
+          const { cliff, linear, milestone } = prepared.releaseMix;
+          const releaseType =
+            cliff && !linear && !milestone
+              ? "Cliff"
+              : !cliff && linear && !milestone
+              ? "Linear"
+              : !cliff && !linear && milestone
+              ? "Milestone"
+              : "Mixed";
+          return {
+            recipients: prepared.leafCount,
+            tokenSymbol,
+            totalSupply: `${formatTokenAmount(prepared.totalSupply, effectiveMintDecimals)}${tokenSymbol ? ` ${tokenSymbol}` : ""}`,
+            releaseType,
+            earliestStart: formatUnixToDate(earliest),
+            latestEnd: formatUnixToDate(latest),
+            duration: formatDurationSeconds(latest - earliest),
+          };
+        })()
+      : null;
+
   if (!publicKey) {
     return (
       <div className="mx-auto max-w-3xl space-y-6">
         <PageHeader title="Cliff Vesting" description="All tokens unlock at a single date. Nothing before, everything after." />
         <div className={`${CARD} p-5`}>
-          <p className="text-[13px] text-[#8b92a5]">Connect your wallet to create a cliff vesting stream.</p>
+          <p className="text-[13px] text-muted-foreground">Connect your wallet to create a cliff vesting stream.</p>
         </div>
       </div>
     );
@@ -463,14 +519,14 @@ export default function CliffCreatePage() {
               <button
                 type="button"
                 onClick={() => { setMode("single"); setTxState({ type: "idle" }); }}
-                className={`flex-1 rounded-lg px-3 py-2.5 text-[12px] font-medium transition ${mode === "single" ? "bg-white/[0.1] text-white" : "text-[#8b92a5] hover:text-white"}`}
+                className={`flex-1 rounded-lg px-3 py-2.5 text-[12px] font-medium transition ${mode === "single" ? "bg-foreground/[0.1] text-foreground" : "text-muted-foreground hover:text-foreground"}`}
               >
                 Manual
               </button>
               <button
                 type="button"
                 onClick={() => { setMode("bulk"); setTxState({ type: "idle" }); }}
-                className={`flex-1 rounded-lg px-3 py-2.5 text-[12px] font-medium transition ${mode === "bulk" ? "bg-white/[0.1] text-white" : "text-[#8b92a5] hover:text-white"}`}
+                className={`flex-1 rounded-lg px-3 py-2.5 text-[12px] font-medium transition ${mode === "bulk" ? "bg-foreground/[0.1] text-foreground" : "text-muted-foreground hover:text-foreground"}`}
               >
                 Use CSV
               </button>
@@ -486,19 +542,51 @@ export default function CliffCreatePage() {
             <ToggleCard checked={cancellable} onChange={setCancellable} title="Allow cancellation?" body="Creator can cancel and reclaim unvested tokens after a 7-day grace period." />
           </div>
 
+          {/* Campaign Schedule — shared by every recipient so all unlock on the same date */}
+          <div className={`${CARD} space-y-4 p-5`}>
+            <SectionHeader title="Schedule" caption="Applies to every recipient in this campaign" />
+            <div className="grid gap-4 sm:grid-cols-2">
+              <Field
+                label="Start Time (optional)"
+                input={
+                  <input
+                    type="datetime-local"
+                    value={startTime}
+                    onChange={(e) => updateScheduleField("start", e.target.value)}
+                    className={INPUT}
+                  />
+                }
+                hint="Defaults to now if empty"
+              />
+              <Field
+                label="Cliff Date (Full Unlock)"
+                input={
+                  <input
+                    type="datetime-local"
+                    value={cliffTime}
+                    onChange={(e) => updateScheduleField("cliff", e.target.value)}
+                    onBlur={validateScheduleField}
+                    className={`${INPUT} ${scheduleError ? INPUT_ERR : ""}`}
+                  />
+                }
+                error={scheduleError}
+              />
+            </div>
+          </div>
+
           {/* Manual Mode: Stream Cards */}
           {mode === "single" && (
             <>
               {streams.map((stream, i) => (
                 <div key={stream.id} className={`${CARD} space-y-4 p-5`}>
                   <div className="flex items-center justify-between">
-                    <p className="text-[13px] font-medium text-white">{streams.length > 1 ? `Recipient #${i + 1}` : `Stream #${i + 1}`}</p>
+                    <p className="text-[13px] font-medium text-foreground">{streams.length > 1 ? `Recipient #${i + 1}` : `Stream #${i + 1}`}</p>
                     <div className="flex gap-1.5">
-                      <button type="button" onClick={() => duplicateStream(i)} className="rounded-md border border-white/[0.08] px-2 py-1 text-[10px] text-[#8b92a5] hover:text-white" title="Add recipient">
+                      <button type="button" onClick={() => duplicateStream(i)} className="rounded-md border border-foreground/[0.08] px-2 py-1 text-[10px] text-muted-foreground hover:text-foreground" title="Add recipient">
                         Add Recipient
                       </button>
                       {streams.length > 1 && (
-                        <button type="button" onClick={() => removeStream(i)} className="rounded-md border border-red-500/20 px-2 py-1 text-[10px] text-red-400 hover:text-red-300" title="Remove">
+                        <button type="button" onClick={() => removeStream(i)} className="rounded-md border border-red-500/20 px-2 py-1 text-[10px] text-red-700 dark:text-red-400 hover:text-red-600 dark:text-red-300" title="Remove">
                           Remove
                         </button>
                       )}
@@ -519,11 +607,11 @@ export default function CliffCreatePage() {
                           className={`${INPUT} pr-24 ${formErrors[`amount_${i}`] ? INPUT_ERR : ""}`}
                         />
                         <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-1.5">
-                          <span className="text-[10px] text-[#555d73]">{tokenSymbol}</span>
+                          <span className="text-[10px] text-muted-foreground">{tokenSymbol}</span>
                           <button
                             type="button"
                             onClick={() => { if (walletToken) updateStream(stream.id, "amount", walletToken.uiAmount); }}
-                            className="rounded-md bg-white/[0.06] px-2 py-0.5 text-[10px] font-medium text-[#8b92a5] hover:text-white"
+                            className="rounded-md bg-foreground/[0.06] px-2 py-0.5 text-[10px] font-medium text-muted-foreground hover:text-foreground"
                           >
                             Max
                           </button>
@@ -565,7 +653,7 @@ export default function CliffCreatePage() {
                           <button
                             type="button"
                             onClick={() => setStreams((prev) => prev.map((s) => ({ ...s, cliffTime: stream.cliffTime, startTime: stream.startTime || s.startTime })))}
-                            className="shrink-0 rounded-md border border-white/[0.08] px-2 py-1 text-[10px] text-[#8b92a5] hover:text-white"
+                            className="shrink-0 rounded-md border border-foreground/[0.08] px-2 py-1 text-[10px] text-muted-foreground hover:text-foreground"
                             title="Apply this date to all streams"
                           >
                             Apply all
@@ -596,7 +684,7 @@ export default function CliffCreatePage() {
               <button
                 type="button"
                 onClick={() => setStreams((prev) => [...prev, newStream()])}
-                className="w-full rounded-xl border border-dashed border-white/[0.12] py-3 text-[13px] font-medium text-[#8b92a5] transition hover:border-white/[0.2] hover:text-white"
+                className="w-full rounded-xl border border-dashed border-foreground/[0.12] py-3 text-[13px] font-medium text-muted-foreground transition hover:border-foreground/[0.2] hover:text-foreground"
               >
                 + Add Recipient
               </button>
@@ -621,13 +709,14 @@ export default function CliffCreatePage() {
               csvResult={csvResult}
               prepared={prepared}
               vestingType="cliff"
+              tokenSymbol={tokenSymbol}
             />
           )}
 
           {/* Results */}
           {txState.type === "success" && (
             <div className="space-y-3">
-              <p className="text-[13px] font-medium text-emerald-400">{txState.results.length} cliff stream(s) created!</p>
+              <p className="text-[13px] font-medium text-emerald-700 dark:text-emerald-400">{txState.results.length} cliff stream(s) created!</p>
               {txState.results.map((r, i) => (
                 <TxResultCard key={r.sig} title={`Stream #${i + 1}`} sig={r.sig} href={r.shareUrl} linkLabel="Open stream" />
               ))}
@@ -635,9 +724,9 @@ export default function CliffCreatePage() {
           )}
           {txState.type === "bulk-created-unfunded" && (
             <div className={`${CARD} p-5`}>
-              <p className="text-[13px] font-medium text-amber-300">Campaign created, funding pending</p>
-              <p className="mt-2 text-[12px] leading-6 text-[#d8c58f]">{txState.msg}</p>
-              <p className="mt-3 break-all font-mono text-[11px] text-[#8b92a5]">Create signature: {txState.createSig}</p>
+              <p className="text-[13px] font-medium text-amber-700 dark:text-amber-300">Campaign created, funding pending</p>
+              <p className="mt-2 text-[12px] leading-6 text-warning">{txState.msg}</p>
+              <p className="mt-3 break-all font-mono text-[11px] text-muted-foreground">Create signature: {txState.createSig}</p>
               <div className="mt-4 flex flex-wrap gap-2">
                 <button
                   type="button"
@@ -653,7 +742,7 @@ export default function CliffCreatePage() {
                 </button>
                 <a
                   href={`/campaign/${txState.treeAddress}`}
-                  className="rounded-lg border border-white/[0.12] px-3 py-2 text-[12px] font-medium text-white"
+                  className="rounded-lg border border-foreground/[0.12] px-3 py-2 text-[12px] font-medium text-foreground"
                 >
                   View campaign
                 </a>
@@ -681,7 +770,7 @@ export default function CliffCreatePage() {
           loading={txState.type === "loading"}
           disabled={
             mode === "single"
-              ? !mintAddress || streams.some((s) => !s.amount || !s.recipient || !s.cliffTime)
+              ? !mintAddress || !cliffTime || streams.some((s) => !s.amount || !s.recipient)
               : txState.type !== "bulk-ready"
           }
           onSubmit={
@@ -689,6 +778,7 @@ export default function CliffCreatePage() {
               ? handleSubmit
               : handleBulkCreate
           }
+          bulkReview={mode === "bulk" ? bulkReview : null}
         />
       </div>
     </div>

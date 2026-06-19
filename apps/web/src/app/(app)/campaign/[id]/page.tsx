@@ -13,7 +13,12 @@ import { useClaimRecord } from "@/hooks/useClaimRecord";
 import { useCampaignDetail } from "@/hooks/useCampaignDetail";
 import { useCreateCampaign } from "@/hooks/useCreateCampaign";
 import { derivePda } from "@/lib/anchor/client";
-import { formatVestingError } from "@/lib/anchor/errors";
+import {
+  extractSimulationDetails,
+  isWalletCancellation,
+  formatVestingError,
+  formatVestingErrorWithLogs,
+} from "@/lib/anchor/errors";
 import { unixToDatetimeLocal, datetimeLocalToUnix } from "@/lib/stream/datetime";
 import {
   loadStreamScheduleLocal,
@@ -392,6 +397,13 @@ export default function CampaignPage({ params }: { params: Promise<{ id: string 
 
   const claimRecordQuery = useClaimRecord(treeAddress, beneficiaryKey);
 
+  // Scroll to top on every navigation to this page (prevents router-cache scroll restoration flash)
+  useEffect(() => {
+    if (!window.location.hash) {
+      window.scrollTo({ top: 0, left: 0, behavior: "instant" as ScrollBehavior });
+    }
+  }, [treeAddress]);
+
   useEffect(() => {
     treeStateRef.current = treeState;
   }, [treeState]);
@@ -442,7 +454,10 @@ export default function CampaignPage({ params }: { params: Promise<{ id: string 
           totalClaimed: account.totalClaimed,
           cancellable: account.cancellable,
           cancelAuthority: account.cancelAuthority ?? null,
-          cancelledAt: account.cancelledAt ?? null,
+          cancelledAt: account.cancelledAt ??
+            (campaignDetailRef.current?.cancelledAt != null
+              ? new BN(campaignDetailRef.current.cancelledAt)
+              : null),
           paused: account.paused,
           pauseAuthority: account.pauseAuthority ?? null,
           createdAt: account.createdAt,
@@ -522,6 +537,18 @@ export default function CampaignPage({ params }: { params: Promise<{ id: string 
       setError(null);
     }
   }, [treeState, loading, campaignDetailQuery.data]);
+
+  // cancelStream (instant settle) does NOT set cancelledAt on-chain — merge DB value when on-chain is null
+  useEffect(() => {
+    const dbCancelledAt = campaignDetailQuery.data?.cancelledAt;
+    if (!dbCancelledAt) return;
+    setTreeState((prev) => {
+      if (!prev || prev.cancelledAt !== null) return prev;
+      const next = { ...prev, cancelledAt: new BN(dbCancelledAt) };
+      treeStateRef.current = next;
+      return next;
+    });
+  }, [campaignDetailQuery.data?.cancelledAt]);
 
   // Real-time: subscribe to on-chain account changes for auto-refresh
   useEffect(() => {
@@ -938,6 +965,13 @@ export default function CampaignPage({ params }: { params: Promise<{ id: string 
     releaseType,
     hasMilestoneLeaves,
   });
+  const hasCampaignControls =
+    isCreator ||
+    canShowPauseToggle ||
+    canShowCancel ||
+    canShowInstantRefund ||
+    canShowWithdrawUnvested ||
+    canShowReleaseMilestone;
   const isCliff = releaseType === 0;
   const isLinear = releaseType === 1;
   const isMilestone = releaseType === 2;
@@ -984,6 +1018,42 @@ export default function CampaignPage({ params }: { params: Promise<{ id: string 
     const flags = treeState?.milestoneReleasedFlags ?? new Uint8Array(32);
     milestoneReleasedCount = milestoneEntries.filter((m) => isMilestoneTriggered(flags, m.index)).length;
   }
+
+  const campaignTotalVested = (() => {
+    const curve = campaignDetailQuery.data?.vestingCurve;
+    if (curve && curve.samples.length > 1) {
+      const effectiveT = cancelledAtBigint !== null
+        ? Math.min(Number(cancelledAtBigint), Number(nowTs))
+        : Number(nowTs);
+      const samples = curve.samples;
+      if (effectiveT <= samples[0].t) return 0n;
+      if (effectiveT >= samples[samples.length - 1].t) return BigInt(samples[samples.length - 1].vested);
+      for (let i = 1; i < samples.length; i++) {
+        if (effectiveT <= samples[i].t) {
+          const s0 = samples[i - 1];
+          const s1 = samples[i];
+          const frac = (effectiveT - s0.t) / (s1.t - s0.t || 1);
+          const v0 = BigInt(s0.vested);
+          const v1 = BigInt(s1.vested);
+          return v0 + BigInt(Math.round(Number(v1 - v0) * frac));
+        }
+      }
+      return 0n;
+    }
+    return vested;
+  })();
+
+  const campaignProgress = progressPercent(campaignTotalVested, totalSupply);
+  const isWalletRecipient = isMultiRecipient ? isRecipientView : !beneficiaryMismatch;
+  const campaignVestedLabel = isMilestone
+    ? milestoneEntries.length > 1
+      ? milestoneReleasedCount === 0
+        ? "Not yet released"
+        : milestoneReleasedCount === milestoneEntries.length
+          ? "All released"
+          : `${milestoneReleasedCount}/${milestoneEntries.length} released`
+      : milestoneReleased ? "Released" : "Pending"
+    : `${campaignProgress}%`;
 
   const rawWithdrawDisabledReason = beneficiaryMismatch && isSingleLeaf
     ? `Only beneficiary ${truncateAddress(expectedBeneficiary)} can claim`
@@ -1120,16 +1190,16 @@ export default function CampaignPage({ params }: { params: Promise<{ id: string 
             : "Active";
 
   const statusBadgeClass = treeState?.instantRefunded
-    ? "border-amber-500/20 bg-amber-500/10 text-amber-400"
+    ? "border-amber-500/20 bg-amber-500/10 text-amber-700 dark:text-amber-400"
     : treeState?.paused
-      ? "border-amber-500/20 bg-amber-500/10 text-amber-400"
+      ? "border-amber-500/20 bg-amber-500/10 text-amber-700 dark:text-amber-400"
       : isWithdrawn
-        ? "border-emerald-500/20 bg-emerald-500/10 text-emerald-400"
+        ? "border-emerald-500/20 bg-emerald-500/10 text-emerald-700 dark:text-emerald-400"
         : treeState?.cancelledAt
-          ? "border-red-500/20 bg-red-500/10 text-red-400"
+          ? "border-red-500/20 bg-red-500/10 text-red-700 dark:text-red-400"
           : displaySupply > 0n && displayClaimed >= displaySupply
-            ? "border-sky-500/20 bg-sky-500/10 text-sky-400"
-            : "border-emerald-500/20 bg-emerald-500/10 text-emerald-400";
+            ? "border-emerald-500/20 bg-emerald-500/10 text-emerald-700 dark:text-emerald-400"
+            : "border-violet-500/20 bg-violet-500/10 text-violet-700 dark:text-violet-400";
 
   async function handleFundExistingCampaign() {
     if (!treeState || fundingRemaining <= 0n) return;
@@ -1208,14 +1278,12 @@ export default function CampaignPage({ params }: { params: Promise<{ id: string 
         .then(() => queryClient.invalidateQueries({ queryKey: ["timeline", treeAddress] }))
         .catch(() => {});
     } catch (err: unknown) {
-      if (
-        err instanceof Error &&
-        /User rejected|Connection rejected/i.test(err.message)
-      ) {
+      if (isWalletCancellation(err)) {
         setTxStatus({ type: "idle" });
         return;
       }
-      const msg = formatVestingError(err);
+      const { logs, programErr } = extractSimulationDetails(err);
+      const msg = formatVestingErrorWithLogs(err, logs, programErr);
       setTxStatus({ type: "error", msg });
       toast(msg, "error");
     } finally {
@@ -1368,14 +1436,12 @@ export default function CampaignPage({ params }: { params: Promise<{ id: string 
       fetchTree(true);
       void campaignDetailQuery.refetch();
     } catch (err: unknown) {
-      if (
-        err instanceof Error &&
-        /User rejected|Connection rejected/i.test(err.message)
-      ) {
+      if (isWalletCancellation(err)) {
         setTxStatus({ type: "idle" });
         return;
       }
-      const msg = formatVestingError(err);
+      const { logs, programErr } = extractSimulationDetails(err);
+      const msg = formatVestingErrorWithLogs(err, logs, programErr);
       setTxStatus({ type: "error", msg });
       toast(msg, "error");
     } finally {
@@ -1409,6 +1475,7 @@ export default function CampaignPage({ params }: { params: Promise<{ id: string 
           .instruction();
         const refundTx = new Transaction().add(refundIx);
         const refundSig = await sendTransaction(refundTx, connection);
+        if (!isE2eMockTx) await connection.confirmTransaction(refundSig, "confirmed");
         fetch("/api/events/sync", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -1439,6 +1506,7 @@ export default function CampaignPage({ params }: { params: Promise<{ id: string 
           .instruction();
         const refundTx = new Transaction().add(refundIx);
         const refundSig = await sendTransaction(refundTx, connection);
+        if (!isE2eMockTx) await connection.confirmTransaction(refundSig, "confirmed");
         fetch("/api/events/sync", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -1481,14 +1549,12 @@ export default function CampaignPage({ params }: { params: Promise<{ id: string 
       void campaignDetailQuery.refetch();
       setTimeout(() => fetchTree(true), 4000);
     } catch (err: unknown) {
-      if (
-        err instanceof Error &&
-        /User rejected|Connection rejected/i.test(err.message)
-      ) {
+      if (isWalletCancellation(err)) {
         setInstantRefundLoading(false);
         return;
       }
-      const msg = formatVestingError(err);
+      const { logs, programErr } = extractSimulationDetails(err);
+      const msg = formatVestingErrorWithLogs(err, logs, programErr);
       setTxStatus({ type: "error", msg });
       toast(msg, "error");
     } finally {
@@ -1556,7 +1622,8 @@ export default function CampaignPage({ params }: { params: Promise<{ id: string 
         milestoneIdx: Number(milestoneIdx),
       };
 
-      const sig = isNativeSol(treeState.mint)
+      // Build the transaction (separated from sending so we can simulate first)
+      const tx: Transaction = isNativeSol(treeState.mint)
         ? await (async () => {
             const sentinel = program.programId;
             const withdrawIx = await program.methods
@@ -1574,13 +1641,12 @@ export default function CampaignPage({ params }: { params: Promise<{ id: string 
                 systemProgram: SystemProgram.programId,
               })
               .instruction();
-            const tx = new Transaction().add(withdrawIx);
-            return sendTransaction(tx, connection);
+            return new Transaction().add(withdrawIx);
           })()
         : await (async () => {
             const [vaultAuthority] = derivePda(["vault_authority", treePubkey.toBuffer()]);
             const { getAssociatedTokenAddressSync } = await import("@solana/spl-token");
-            const beneficiaryAta = getAssociatedTokenAddressSync(treeState.mint, publicKey);
+            const beneficiaryAta = getAssociatedTokenAddressSync(treeState!.mint, publicKey);
 
             const withdrawIx = await program.methods
               .withdraw(args)
@@ -1589,14 +1655,36 @@ export default function CampaignPage({ params }: { params: Promise<{ id: string 
                 vestingTree: treePubkey,
                 claimRecord,
                 vaultAuthority,
-                vault: treeState.vault,
+                vault: treeState!.vault,
                 beneficiaryAta,
-                mint: treeState.mint,
+                mint: treeState!.mint,
               })
               .instruction();
-            const tx = new Transaction().add(withdrawIx);
-            return sendTransaction(tx, connection);
+            return new Transaction().add(withdrawIx);
           })();
+
+      // Simulate to surface program errors (InvalidProof, UnauthorizedClaimer, etc.) before sending
+      const anchorProvider = program.provider as {
+        simulate?: (tx: Transaction, signers?: unknown[]) => Promise<unknown>;
+      };
+      if (anchorProvider.simulate) {
+        try {
+          await anchorProvider.simulate(tx, []);
+        } catch (simErr: unknown) {
+          if (isWalletCancellation(simErr)) {
+            setTxStatus({ type: "idle" });
+            return;
+          }
+          const { logs: simLogs, programErr } = extractSimulationDetails(simErr);
+          console.error("[handleWithdraw] simulation failed", { simErr, simLogs });
+          const simMsg = formatVestingErrorWithLogs(simErr, simLogs, programErr);
+          setTxStatus({ type: "error", msg: simMsg });
+          toast(simMsg, "error");
+          return;
+        }
+      }
+
+      const sig = await sendTransaction(tx, connection);
 
       if (!isE2eMockTx) await connection.confirmTransaction(sig, "confirmed");
 
@@ -1691,14 +1779,13 @@ export default function CampaignPage({ params }: { params: Promise<{ id: string 
         },
       );
     } catch (err: unknown) {
-      if (
-        err instanceof Error &&
-        /User rejected|Connection rejected/i.test(err.message)
-      ) {
+      if (isWalletCancellation(err)) {
         setTxStatus({ type: "idle" });
         return;
       }
-      const msg = formatVestingError(err);
+      const { logs, programErr } = extractSimulationDetails(err);
+      if (logs.length > 0) console.error("[handleWithdraw] tx failure logs:", logs);
+      const msg = formatVestingErrorWithLogs(err, logs, programErr);
       setTxStatus({ type: "error", msg });
       toast(msg, "error");
     }
@@ -1711,7 +1798,7 @@ export default function CampaignPage({ params }: { params: Promise<{ id: string 
   /* -- Loading state -- */
   if (loading) {
     return (
-      <div className="mx-auto max-w-5xl space-y-6">
+      <div className="mx-auto max-w-5xl min-h-screen space-y-6">
         <div className="space-y-2">
           <Skeleton className="h-7 w-1/3" />
           <Skeleton className="h-4 w-1/4" />
@@ -1745,7 +1832,7 @@ export default function CampaignPage({ params }: { params: Promise<{ id: string 
     return (
       <div className="mx-auto max-w-5xl py-16">
         <div className="rounded-2xl border border-red-500/20 bg-red-500/5 p-6">
-          <p className="text-[13px] text-red-400">{error}</p>
+          <p className="text-[13px] text-red-700 dark:text-red-400">{error}</p>
         </div>
       </div>
     );
@@ -1755,7 +1842,7 @@ export default function CampaignPage({ params }: { params: Promise<{ id: string 
   if (!publicKey) {
     return (
       <div className="mx-auto max-w-5xl flex flex-col items-center justify-center py-32">
-        <p className="text-[15px] text-[#555d73]">Connect your wallet to view and claim tokens</p>
+        <p className="text-[15px] text-muted-foreground">Connect your wallet to view and claim tokens</p>
       </div>
     );
   }
@@ -1764,51 +1851,68 @@ export default function CampaignPage({ params }: { params: Promise<{ id: string 
   if (!treeState) return null;
 
   return (
-    <div className="mx-auto max-w-6xl space-y-4 sm:space-y-6 pb-8 sm:pb-12">
-      <Card className="rounded-xl px-3.5 py-3 sm:px-5 sm:py-4">
-        <CardContent className="p-0">
-          <div className="flex flex-col gap-2.5 sm:gap-3 lg:flex-row lg:items-start lg:justify-between">
-            <div className="min-w-0">
-              <h1 className="text-[18px] sm:text-[22px] font-semibold text-foreground truncate">{pageTitle}</h1>
-              <p className="mt-1 sm:mt-2 max-w-3xl text-[13px] sm:text-[14px] text-muted-foreground">
-                {pageDescription}
-              </p>
-            </div>
-            <div className="flex flex-wrap gap-1.5 sm:gap-2">
-              <Badge
-                variant="outline"
-                className={cn("h-auto rounded-full px-2 py-0.5 sm:px-3 sm:py-1 text-[11px] sm:text-[12px] font-medium", statusBadgeClass)}
-              >
-                {statusLabel}
-              </Badge>
-              <Badge
-                variant="outline"
-                className={cn("h-auto rounded-full px-2 py-0.5 sm:px-3 sm:py-1 text-[11px] sm:text-[12px] font-medium", getVestingTypeBadgeColor(releaseType))}
-              >
-                {getVestingTypeLabel(releaseType)}
-              </Badge>
-              {isCliff && cliffTime && nowTs < cliffTsBigint && (
-                <Badge variant="outline" className="h-auto rounded-full border-amber-500/20 bg-amber-500/10 px-3 py-1 text-[12px] font-medium text-amber-400">
-                  Unlocks in {formatCountdown(cliffTsBigint, nowTs)}
-                </Badge>
-              )}
-              {isMilestone && (
-                <Badge
-                  variant="outline"
-                  className={cn(
-                    "h-auto rounded-full px-3 py-1 text-[12px] font-medium",
-                    milestoneTriggered
-                      ? "border-emerald-500/20 bg-emerald-500/10 text-emerald-400"
-                      : "border-white/[0.08] bg-white/[0.02] text-muted-foreground",
-                  )}
-                >
-                  {milestoneLifecycleLabel}
-                </Badge>
-              )}
-            </div>
-          </div>
-        </CardContent>
-      </Card>
+    <div className="mx-auto max-w-6xl space-y-10 pb-16">
+
+      {/* ── Header ───────────────────────────────────────── */}
+      <div className="flex flex-col gap-3">
+        <div className="flex flex-wrap items-center gap-2.5">
+          <h1 className="text-[24px] font-bold tracking-tight text-foreground">{pageTitle}</h1>
+          <Badge variant="outline" className={cn("h-auto rounded-full px-3 py-1 text-[12px] font-semibold", statusBadgeClass)}>
+            {statusLabel}
+          </Badge>
+          <Badge variant="outline" className={cn("h-auto rounded-full px-3 py-1 text-[12px] font-medium", getVestingTypeBadgeColor(releaseType))}>
+            {getVestingTypeLabel(releaseType)}
+          </Badge>
+          {isCliff && cliffTime && nowTs < cliffTsBigint && (
+            <Badge variant="outline" className="h-auto rounded-full border-indigo-500/20 bg-indigo-500/10 px-3 py-1 text-[12px] font-medium text-indigo-700 dark:text-indigo-400">
+              Unlocks in {formatCountdown(cliffTsBigint, nowTs)}
+            </Badge>
+          )}
+          {isMilestone && (
+            <Badge variant="outline" className={cn("h-auto rounded-full px-3 py-1 text-[12px] font-medium", milestoneTriggered ? "border-emerald-500/20 bg-emerald-500/10 text-emerald-700 dark:text-emerald-400" : "border-foreground/[0.08] bg-foreground/[0.02] text-muted-foreground")}>
+              {milestoneLifecycleLabel}
+            </Badge>
+          )}
+        </div>
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 text-[12px] text-muted-foreground">
+          <span>ID #{treeState.campaignId.toString()}</span>
+          <span className="text-foreground/15">·</span>
+          <span className="flex items-center gap-1.5">
+            By{" "}
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <span className="cursor-default font-mono text-foreground/70 transition-colors hover:text-foreground">{truncateAddress(treeState.creator.toBase58())}</span>
+              </TooltipTrigger>
+              <TooltipContent side="bottom"><p className="font-mono text-[11px]">{treeState.creator.toBase58()}</p></TooltipContent>
+            </Tooltip>
+          </span>
+          <span className="text-foreground/15">·</span>
+          <span>{treeState.leafCount} {treeState.leafCount === 1 ? "recipient" : "recipients"}</span>
+          <span className="text-foreground/15">·</span>
+          <span>{formatTokenAmount(totalSupply)} total</span>
+          {mintLabel && (
+            <>
+              <span className="text-foreground/15">·</span>
+              <span className="text-foreground/70">{mintLabel}</span>
+            </>
+          )}
+        </div>
+      </div>
+
+      {/* Recipient claim indicator — only visible to recipients, not creators */}
+      {isWalletRecipient && !isCreator && (
+        <RecipientClaimBanner
+          displayClaimable={displayClaimable}
+          displayProgress={displayProgress}
+          paused={treeState.paused}
+          cancelledAt={cancelledAtBigint}
+          claimFundingDisabledReason={claimFundingDisabledReason}
+          withdrawDisabledReason={withdrawDisabledReason}
+          waitCountdown={waitCountdown}
+          formatTokenAmount={formatTokenAmount}
+          mintLabel={mintLabel}
+        />
+      )}
 
       <CampaignStatusBanner
         cancelledAtBigint={cancelledAtBigint}
@@ -1824,337 +1928,189 @@ export default function CampaignPage({ params }: { params: Promise<{ id: string 
       />
 
       {fundingStatus.type === "error" && isCreator && (
-        <div className="rounded-xl border border-red-500/20 bg-red-500/10 px-4 py-3 text-[12px] text-red-300">
+        <div className="rounded-lg border border-red-500/15 bg-red-500/5 px-4 py-3 text-[12px] text-red-600 dark:text-red-300">
           {fundingStatus.msg}
         </div>
       )}
 
-      <div className="grid gap-4 sm:gap-6 lg:grid-cols-[minmax(0,1fr)_340px]">
-        <div className="space-y-4 sm:space-y-6">
-          {isRecipientMetricsLoading ? (
-            <MetricSkeletonGroup />
-          ) : isRecipientView ? (
-            <div className="space-y-3">
-              <div className="grid gap-2 sm:gap-3 grid-cols-2">
-                <MetricCard label="Total Supply" value={formatTokenAmount(totalSupply)} />
-                <MetricCard label="Your Allocation" value={formatTokenAmount(displaySupply)} accent />
-              </div>
-              <div className="grid gap-2 sm:gap-3 grid-cols-2 md:grid-cols-3">
-                <MetricCard label={claimedLabel} value={formatTokenAmount(displayClaimed)} />
-                <MetricCard label="Vested" value={vestedLabel} />
-                <MetricCard label={claimableLabel} value={formatTokenAmount(displayClaimable)} accent />
-              </div>
-            </div>
-          ) : (
-            <div className="grid grid-cols-2 gap-2 sm:gap-3 lg:grid-cols-4">
-              <MetricCard label="Total Supply" value={formatTokenAmount(totalSupply)} />
-              <MetricCard label={claimedLabel} value={formatTokenAmount(displayClaimed)} />
-              <MetricCard label="Vested" value={vestedLabel} />
-              <MetricCard label={claimableLabel} value={formatTokenAmount(displayClaimable)} accent />
-            </div>
-          )}
+      {/* ═══════════════════════════════════════════════════ */}
+      {/*  SECTION 1: Campaign Overview                      */}
+      {/* ═══════════════════════════════════════════════════ */}
+      <section className="space-y-6">
+        <SectionDivider title="Campaign Overview" />
 
-          {!isMilestone && cliffTime && endTime && (
-            <Card className="rounded-xl">
-              <CardContent className="px-4 py-3">
-                <SectionHeader
-                  title="Progress"
-                  caption={scheduleSummary}
-                />
-                <div className="mt-3 space-y-1.5">
-                  <div className="flex items-center justify-between text-[12px] text-muted-foreground">
-                    <span>Vested</span>
-                    <span className="font-medium text-foreground">{displayProgress}%</span>
-                  </div>
-                  <Progress value={Math.min(displayProgress, 100)} className="h-2" />
-                </div>
-              </CardContent>
-            </Card>
-          )}
+        <StatGrid stats={[
+          { label: "Total Allocation", value: formatTokenAmount(totalSupply) },
+          { label: "Vested",           value: campaignVestedLabel },
+          { label: "Claimed",          value: formatTokenAmount(treeTotalClaimed) },
+          { label: "Recipients",       value: String(treeState.leafCount) },
+        ]} />
 
-          {/* Vesting Curve Chart */}
-          {cliffTime && endTime && (
-            <VestingChart
-              releaseType={releaseType}
-              startTs={datetimeLocalToUnix(startTime || cliffTime)}
-              cliffTs={datetimeLocalToUnix(cliffTime)}
-              endTs={datetimeLocalToUnix(endTime)}
-              totalAmount={displaySupply}
-              vestedAmount={displayVested}
-              cancelledAt={cancelledAtBigint ? Number(cancelledAtBigint) : null}
-              milestoneCount={isMilestone ? (treeState?.leafCount ?? 1) : undefined}
-              formatAmount={formatTokenAmount}
-            />
-          )}
-
-          {isMilestone && milestoneEntries.length > 0 && (
-            <MilestoneCarouselCard
-              milestones={milestoneEntries}
-              milestoneReleasedFlags={treeState?.milestoneReleasedFlags ?? new Uint8Array(32)}
-              milestoneBitmap={milestoneBitmap}
-              nowTs={nowTs}
-              cancelledAt={cancelledAtBigint}
-              isCreator={!!treeState?.creator && !!publicKey && publicKey.equals(treeState.creator)}
-              formatAmount={formatTokenAmount}
-              milestoneUi={milestoneUi}
-            />
-          )}
-
-          <CampaignTimeline treeAddress={treeAddress} mintDecimals={mintDecimals} />
-
-          <Card className="rounded-xl">
-            <CardContent className="px-3.5 py-3 sm:px-4">
-              <SectionHeader
-                title="Details"
-                caption={detailsCaption}
-              />
-              <div className="mt-2.5 sm:mt-3 grid gap-2 sm:gap-2.5">
-                <DetailRow label="Tree Address" value={treeAddress} mono />
-                <DetailRow label="Creator" value={treeState.creator.toBase58()} mono />
-                <DetailRow label="Mint" value={mintLabel ?? treeState.mint.toBase58()} mono={mintLabel === null || mintLabel === treeState.mint.toBase58()} />
-                {expectedBeneficiary && !isMultiWallet && (
-                  <DetailRow label="Beneficiary" value={expectedBeneficiary} mono />
-                )}
-                {isMultiWallet && (
-                  <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] px-4 py-4">
-                    <div className="flex items-start justify-between gap-4">
-                      <div>
-                        <p className="text-[11px] uppercase tracking-[0.14em] text-muted-foreground">Recipients</p>
-                        <p className="mt-2 text-[14px] font-medium text-foreground">
-                          {campaignRecipients.length || treeState.leafCount} wallets in this campaign
-                        </p>
-                        <div className="mt-3 flex flex-wrap gap-2">
-                          {campaignRecipients.slice(0, 3).map((recipient) => (
-                            <Badge
-                              key={recipient.beneficiary}
-                              variant="outline"
-                              className="h-auto rounded-full border-white/[0.08] bg-white/[0.03] px-3 py-1 font-mono text-[11px] text-foreground"
-                            >
-                              {truncateAddress(recipient.beneficiary)}
-                            </Badge>
-                          ))}
-                          {campaignRecipients.length > 3 && (
-                            <Badge variant="outline" className="h-auto rounded-full border-white/[0.08] bg-white/[0.03] px-3 py-1 text-[11px] text-muted-foreground">
-                              +{campaignRecipients.length - 3} more
-                            </Badge>
-                          )}
-                        </div>
-                      </div>
-                      <button
-                        type="button"
-                        onClick={() => setRecipientsOpen(true)}
-                        className="shrink-0 rounded-xl border border-white/[0.08] bg-white/[0.03] px-3 py-2 text-[12px] font-medium text-foreground transition hover:bg-white/[0.06]"
-                      >
-                        View All
-                      </button>
-                    </div>
-                  </div>
-                )}
-                <DetailRow label="Campaign ID" value={treeState.campaignId.toString()} />
-                <DetailRow label="Created" value={formatDate(treeState.createdAt.toNumber())} />
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card className="rounded-xl">
-            <CardContent className="px-3.5 py-3 sm:px-5 sm:py-4">
-              <div className="flex items-start justify-between gap-3 sm:gap-4">
-                <SectionHeader
-                  title={scheduleSectionTitle}
-                  caption={scheduleSectionCaption}
-                />
-                {isSingleLeaf && scheduleLocked && (
-                  <button
-                    type="button"
-                    onClick={() => setShowManualSchedule(true)}
-                    className="text-[12px] font-medium text-foreground underline underline-offset-4"
-                  >
-                    Advanced / Manual
-                  </button>
-                )}
-                {isSingleLeaf && showManualSchedule && (
-                  <button
-                    type="button"
-                    onClick={() => setShowManualSchedule(false)}
-                    className="text-[12px] font-medium text-muted-foreground underline underline-offset-4"
-                  >
-                    Back to Loaded Schedule
-                  </button>
-                )}
-              </div>
-
-              {proofQuery.isLoading && isSingleLeaf && (
-                <p className="mt-4 text-[12px] text-muted-foreground">Loading schedule...</p>
-              )}
-
-              {!showReadOnlySchedule && (
-                <div className="mt-4 rounded-xl border border-amber-500/20 bg-amber-500/5 px-4 py-3 text-[12px] leading-6 text-amber-200">
-                  Editing these values does not change the campaign on-chain. They are only used locally to reconstruct a single-stream claim if the loaded schedule is unavailable.
-                </div>
-              )}
-
-              {showReadOnlySchedule ? (
-                <div className="mt-5 grid gap-3">
-                  <DetailRow label="Vesting Type" value={getVestingTypeLabel(releaseType)} />
-                  <DetailRow label="Start Time" value={startTime ? formatDate(datetimeLocalToUnix(startTime)) : "—"} />
-                  <DetailRow label={isMilestone ? "Unlock Time" : isCliff ? "Unlock Time" : "Cliff Time"} value={cliffTime ? formatDate(datetimeLocalToUnix(cliffTime)) : "—"} />
-                  <DetailRow label="End Time" value={endTime ? formatDate(datetimeLocalToUnix(endTime)) : "—"} />
-                  {isMilestone && <DetailRow label="Milestone Index" value={milestoneIdx} />}
-                </div>
-              ) : (
-                <div className="mt-5 space-y-4">
-                  <FieldRow
-                    label="Vesting Type"
-                    input={(
-                      <Select
-                        value={String(releaseType)}
-                        onValueChange={(v) => setReleaseType(Number(v))}
-                        disabled={scheduleLocked}
-                      >
-                        <SelectTrigger className="w-full">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="0">Cliff</SelectItem>
-                          <SelectItem value="1">Linear</SelectItem>
-                          <SelectItem value="2">Milestone</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    )}
-                  />
-
-                  <div className="grid gap-4 md:grid-cols-3">
-                    <FieldRow
-                      label="Start Time"
-                      input={(
-                        <input
-                          type="datetime-local"
-                          value={startTime}
-                          onChange={(e) => setStartTime(e.target.value)}
-                          disabled={scheduleLocked}
-                          className="w-full rounded-xl border border-white/[0.08] bg-[#11161f] px-4 py-3 text-[13px] text-white outline-none transition focus:border-white/20 disabled:opacity-50"
-                        />
-                      )}
-                    />
-                    <FieldRow
-                      label={isMilestone ? "Unlock Time" : isCliff ? "Unlock Time" : "Cliff Time"}
-                      input={(
-                        <input
-                          type="datetime-local"
-                          value={cliffTime}
-                          onChange={(e) => setCliffTime(e.target.value)}
-                          disabled={scheduleLocked}
-                          className="w-full rounded-xl border border-white/[0.08] bg-[#11161f] px-4 py-3 text-[13px] text-white outline-none transition focus:border-white/20 disabled:opacity-50"
-                        />
-                      )}
-                    />
-                    <FieldRow
-                      label="End Time"
-                      input={(
-                        <input
-                          type="datetime-local"
-                          value={endTime}
-                          onChange={(e) => setEndTime(e.target.value)}
-                          disabled={scheduleLocked}
-                          className="w-full rounded-xl border border-white/[0.08] bg-[#11161f] px-4 py-3 text-[13px] text-white outline-none transition focus:border-white/20 disabled:opacity-50"
-                        />
-                      )}
-                    />
-                  </div>
-
-                  {isMilestone && (
-                    <FieldRow
-                      label="Milestone Index"
-                      input={(
-                        <input
-                          type="number"
-                          min="0"
-                          max="255"
-                          value={milestoneIdx}
-                          onChange={(e) => setMilestoneIdx(e.target.value)}
-                          disabled={scheduleLocked}
-                          className="w-full rounded-xl border border-white/[0.08] bg-[#11161f] px-4 py-3 text-[13px] text-white outline-none transition focus:border-white/20 disabled:opacity-50"
-                        />
-                      )}
-                    />
+        {/* Campaign Vesting Curve */}
+        {!isMilestone && cliffTime && endTime && !campaignDetailQuery.data?.vestingCurve && (
+          <Card className="relative overflow-hidden rounded-2xl border-foreground/[0.06]">
+            <CardContent className="px-5 py-4">
+              <div className="mb-3 flex items-center justify-between">
+                <div>
+                  <p className="text-[14px] font-semibold text-foreground">Vesting Curve</p>
+                  {isMultiWallet && (
+                    <p className="mt-0.5 text-[11px] text-muted-foreground/60">Aggregated across all recipients</p>
                   )}
                 </div>
-              )}
+                <div className="text-right">
+                  <span className="text-[22px] font-bold tabular-nums leading-none tracking-tight text-foreground">{campaignProgress}%</span>
+                  {campaignProgress >= 100 && (
+                    <p className="mt-0.5 text-[11px] font-medium text-emerald-600 dark:text-emerald-400">Fully vested</p>
+                  )}
+                </div>
+              </div>
+              <Progress value={Math.min(campaignProgress, 100)} className="h-1 mb-4" />
+              <VestingChart
+                releaseType={releaseType}
+                startTs={datetimeLocalToUnix(startTime || cliffTime)}
+                cliffTs={datetimeLocalToUnix(cliffTime)}
+                endTs={datetimeLocalToUnix(endTime)}
+                totalAmount={totalSupply}
+                vestedAmount={campaignTotalVested}
+                cancelledAt={cancelledAtBigint ? Number(cancelledAtBigint) : null}
+                milestoneCount={isMilestone ? (treeState?.leafCount ?? 1) : undefined}
+                formatAmount={formatTokenAmount}
+              />
             </CardContent>
+            {campaignProgress >= 100 && (
+              <div className="pointer-events-none absolute inset-0 rounded-2xl ring-1 ring-inset ring-emerald-500/10" />
+            )}
           </Card>
-        </div>
+        )}
 
-        <div className="space-y-4 sm:space-y-6">
-          <Card
-            id="campaign-actions"
-            className="rounded-xl lg:sticky lg:top-6"
-          >
-          <CardContent className="px-3.5 py-3 sm:p-5">
-            <SectionHeader
-              title="Actions"
-              caption={actionsCaption}
-            />
-
-            {scheduleSource === "url" && (
-              <div className="mt-3 sm:mt-5 rounded-xl border border-amber-500/20 bg-amber-500/5 px-3 py-2.5 sm:px-4 sm:py-3 text-[11px] sm:text-[12px] leading-5 sm:leading-6 text-amber-300">
-                <strong>Unverified:</strong> Schedule parameters were loaded from the URL. Values shown (including claimable amount) may not reflect actual on-chain state.
+        {/* Aggregate campaign curve for multi-recipient campaigns */}
+        {campaignDetailQuery.data?.vestingCurve && campaignDetailQuery.data.vestingCurve.samples.length > 0 && (
+          <Card className="relative overflow-hidden rounded-2xl border-foreground/[0.06]">
+            <CardContent className="px-5 py-4">
+              <div className="mb-3 flex items-center justify-between">
+                <div>
+                  <p className="text-[14px] font-semibold text-foreground">Vesting Curve</p>
+                  {isMultiWallet && (
+                    <p className="mt-0.5 text-[11px] text-muted-foreground/60">Aggregated across all recipients</p>
+                  )}
+                </div>
+                <div className="text-right">
+                  <span className="text-[22px] font-bold tabular-nums leading-none tracking-tight text-foreground">{campaignProgress}%</span>
+                  {campaignProgress >= 100 && (
+                    <p className="mt-0.5 text-[11px] font-medium text-emerald-600 dark:text-emerald-400">Fully vested</p>
+                  )}
+                </div>
               </div>
+              <Progress value={Math.min(campaignProgress, 100)} className="h-1 mb-4" />
+              <VestingChart
+                releaseType={releaseType}
+                startTs={campaignDetailQuery.data.vestingCurve.minStartTime}
+                cliffTs={campaignDetailQuery.data.vestingCurve.minStartTime}
+                endTs={campaignDetailQuery.data.vestingCurve.maxEndTime}
+                totalAmount={totalSupply}
+                vestedAmount={campaignTotalVested}
+                cancelledAt={cancelledAtBigint ? Number(cancelledAtBigint) : null}
+                formatAmount={formatTokenAmount}
+                aggregateSamples={campaignDetailQuery.data.vestingCurve.samples}
+              />
+            </CardContent>
+            {campaignProgress >= 100 && (
+              <div className="pointer-events-none absolute inset-0 rounded-2xl ring-1 ring-inset ring-emerald-500/10" />
             )}
+          </Card>
+        )}
 
-            {isSingleLeaf && beneficiaryMismatch && expectedBeneficiary && (
-              <div className="mt-5 rounded-xl border border-amber-500/20 bg-amber-500/5 px-4 py-3 text-[12px] leading-6 text-amber-300">
-                Connected wallet does not match the beneficiary.
-              </div>
-            )}
+        {isMilestone && milestoneEntries.length > 0 && (
+          <MilestoneCarouselCard
+            milestones={milestoneEntries}
+            milestoneReleasedFlags={treeState?.milestoneReleasedFlags ?? new Uint8Array(32)}
+            milestoneBitmap={milestoneBitmap}
+            nowTs={nowTs}
+            cancelledAt={cancelledAtBigint}
+            isCreator={!!treeState?.creator && !!publicKey && publicKey.equals(treeState.creator)}
+            formatAmount={formatTokenAmount}
+            milestoneUi={milestoneUi}
+          />
+        )}
 
-            {isSingleLeaf && !expectedBeneficiary && scheduleSource !== "api" && scheduleSource !== "url" && (
-              <div className="mt-5 rounded-xl border border-white/[0.06] bg-white/[0.02] px-4 py-3 text-[12px] leading-6 text-[#8b92a5]">
-                Beneficiary could not be verified from indexed data.
-              </div>
-            )}
+        {/* Campaign Vesting Schedule */}
+        {(cliffTime && endTime) || campaignDetailQuery.data?.vestingCurve ? (
+          <VestingScheduleTimeline
+            isCliff={isCliff}
+            isLinear={isLinear}
+            isMilestone={isMilestone}
+            startTime={campaignDetailQuery.data?.vestingCurve
+              ? unixToDatetimeLocal(campaignDetailQuery.data.vestingCurve.minStartTime)
+              : startTime}
+            cliffTime={cliffTime || (campaignDetailQuery.data?.vestingCurve
+              ? unixToDatetimeLocal(campaignDetailQuery.data.vestingCurve.minStartTime)
+              : "")}
+            endTime={campaignDetailQuery.data?.vestingCurve
+              ? unixToDatetimeLocal(campaignDetailQuery.data.vestingCurve.maxEndTime)
+              : endTime}
+            nowTs={Number(nowTs)}
+            cancelledAt={cancelledAtBigint !== null ? Number(cancelledAtBigint) : null}
+            aggregateSamples={campaignDetailQuery.data?.vestingCurve?.samples}
+            title="Vesting Schedule"
+            subtitle={isMultiWallet ? "Aggregated across all recipients" : undefined}
+          />
+        ) : null}
 
-            <div className="mt-3 sm:mt-5 space-y-3 sm:space-y-4">
-              {isMultiRecipient && program && !claimFundingDisabledReason ? (
-                <ClaimWithProofButton
-                  program={program}
-                  publicKey={publicKey}
-                  treePubkey={new PublicKey(treeAddress)}
-                  treeAddress={treeAddress}
-                  mint={treeState.mint}
-                  vault={treeState.vault}
-                  vaultAuthority={treeState.vaultAuthority}
-                  mintDecimals={mintDecimals}
-                  paused={treeState.paused}
-                  milestoneReleasedFlags={treeState.milestoneReleasedFlags}
-                  cancelledAt={cancelledAtBigint}
-                  isCreator={treeState.creator && publicKey.equals(treeState.creator)}
-                  onSuccess={() => {
-                    fetchTree(true);
-                    void queryClient.invalidateQueries({ queryKey: ["claimRecord", treeAddress, beneficiaryKey] });
-                  }}
-                  toast={toast}
-                />
-              ) : isMultiRecipient && program ? (
-                <button
-                  type="button"
-                  disabled
-                  className="w-full cursor-not-allowed rounded-xl bg-white px-4 py-3 text-[14px] font-semibold text-[#0d1117] opacity-50"
-                >
-                  {claimFundingDisabledReason}
-                </button>
-              ) : (
-                <button
-                  onClick={handleWithdraw}
-                  disabled={!!withdrawDisabledReason || !!claimFundingDisabledReason}
-                  className="w-full rounded-xl bg-white px-4 py-3 text-[14px] font-semibold text-[#0d1117] transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
-                >
-                  {txStatus.type === "loading" ? "Claiming..." : claimActionLabel}
-                </button>
-              )}
+        <BeneficiariesSection
+          isSingleLeaf={isSingleLeaf}
+          expectedBeneficiary={expectedBeneficiary}
+          campaignRecipients={campaignRecipients}
+          leafCount={treeState.leafCount}
+          viewer={publicKey?.toBase58()}
+          onViewAll={() => setRecipientsOpen(true)}
+        />
 
-              {/* Single-leaf milestone: show status badge + single release button */}
-              {isSingleLeaf && (
-                <>
+        <CampaignTimeline treeAddress={treeAddress} mintDecimals={mintDecimals} />
+
+        <RootVersionSection
+          currentRootHex={currentMerkleRootHex}
+          rootVersions={rootVersions}
+          leafCount={treeState.leafCount}
+          treeAddress={treeAddress}
+          canRotate={canShowRootRotation}
+        />
+      </section>
+
+      {/* ═══════════════════════════════════════════════════ */}
+      {/*  SECTION 2: Your Position                          */}
+      {/* ═══════════════════════════════════════════════════ */}
+      {isWalletRecipient && (
+        <section className="space-y-6">
+          <SectionDivider title="Your Position" accent />
+
+          {isRecipientMetricsLoading ? (
+            <MetricSkeletonGroup />
+          ) : (
+            <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_360px]">
+              <div className="space-y-4">
+                <StatGrid cols={3} stats={[
+                  { label: "Your Allocation", value: formatTokenAmount(displaySupply), accent: true },
+                  { label: "Claimed",         value: formatTokenAmount(displayClaimed) },
+                  { label: "Progress",        value: `${displayProgress}%` },
+                ]} />
+
+                {scheduleSource === "url" && (
+                  <div className="rounded-lg border border-amber-500/15 bg-amber-500/5 px-3.5 py-2.5 text-[11px] leading-5 text-amber-700 dark:text-amber-300">
+                    <strong>Unverified:</strong> Schedule from URL — amounts may differ from on-chain state.
+                  </div>
+                )}
+                {isSingleLeaf && beneficiaryMismatch && expectedBeneficiary && (
+                  <div className="rounded-lg border border-amber-500/15 bg-amber-500/5 px-3.5 py-2.5 text-[11px] leading-5 text-amber-700 dark:text-amber-300">
+                    Connected wallet doesn&apos;t match the beneficiary.
+                  </div>
+                )}
+                {isSingleLeaf && !expectedBeneficiary && scheduleSource !== "api" && scheduleSource !== "url" && (
+                  <div className="rounded-lg border border-foreground/[0.05] bg-foreground/[0.02] px-3.5 py-2.5 text-[11px] leading-5 text-muted-foreground/70">
+                    Beneficiary could not be verified from indexed data.
+                  </div>
+                )}
+
+                {isSingleLeaf && (
                   <MilestoneStatusBadge
                     isMilestoneType={isMilestone}
                     alreadyTriggered={milestoneTriggered}
@@ -2163,32 +2119,153 @@ export default function CampaignPage({ params }: { params: Promise<{ id: string 
                     cliffTime={cliffTsBigint}
                     nowTs={nowTs}
                   />
-                  {program && (
-                    <TriggerMilestoneButton
-                      program={program}
-                      publicKey={publicKey}
-                      treePubkey={new PublicKey(treeAddress)}
-                      milestoneIdx={Number(milestoneIdx)}
-                      alreadyReleased={milestoneReleased}
-                      canRelease={canShowReleaseMilestone}
-                      onSuccess={() => {
-                        setTreeState((prev) => {
-                          if (!prev) return prev;
-                          const newFlags = new Uint8Array(prev.milestoneReleasedFlags);
-                          newFlags[Number(milestoneIdx)] = 1;
-                          const next = { ...prev, milestoneReleasedFlags: newFlags };
-                          treeStateRef.current = next;
-                          return next;
-                        });
-                        setTimeout(() => fetchTree(true), 2000);
-                      }}
-                      toast={toast}
-                    />
-                  )}
-                </>
-              )}
+                )}
+              </div>
 
-              {/* Multi-leaf milestone: show release panel with all milestones */}
+              {/* Claim panel (sticky) */}
+              <div className="space-y-4">
+                <div id="campaign-actions" className="lg:sticky lg:top-6 space-y-4">
+                  <Card className="overflow-hidden rounded-2xl border-emerald-500/15 shadow-sm shadow-emerald-500/5">
+                    <CardContent className="p-0">
+                      <div className="px-5 pt-5 pb-4 border-b border-emerald-500/10 bg-emerald-500/[0.02]">
+                        <p className="text-[10px] uppercase tracking-[0.16em] text-emerald-600/70 dark:text-emerald-400/70 mb-1.5">Your Claimable</p>
+                        <p className="text-[32px] font-bold tabular-nums tracking-tight leading-none text-emerald-600 dark:text-emerald-400">
+                          {formatTokenAmount(displayClaimable)}
+                        </p>
+                        {mintLabel && <p className="mt-1.5 text-[12px] text-muted-foreground/60">{mintLabel}</p>}
+                      </div>
+
+                      <div className="px-5 py-4 space-y-3">
+                        {isMultiRecipient && program && !claimFundingDisabledReason ? (
+                          <ClaimWithProofButton
+                            program={program}
+                            publicKey={publicKey}
+                            treePubkey={new PublicKey(treeAddress)}
+                            treeAddress={treeAddress}
+                            mint={treeState.mint}
+                            vault={treeState.vault}
+                            vaultAuthority={treeState.vaultAuthority}
+                            mintDecimals={mintDecimals}
+                            paused={treeState.paused}
+                            milestoneReleasedFlags={treeState.milestoneReleasedFlags}
+                            cancelledAt={cancelledAtBigint}
+                            isCreator={treeState.creator && publicKey.equals(treeState.creator)}
+                            onSuccess={() => {
+                              fetchTree(true);
+                              void queryClient.invalidateQueries({ queryKey: ["claimRecord", treeAddress, beneficiaryKey] });
+                            }}
+                            toast={toast}
+                          />
+                        ) : isMultiRecipient && program ? (
+                          <button type="button" disabled className="w-full cursor-not-allowed rounded-xl bg-foreground px-5 py-3.5 text-[15px] font-semibold text-background opacity-50">
+                            {claimFundingDisabledReason}
+                          </button>
+                        ) : (
+                          <button
+                            onClick={handleWithdraw}
+                            disabled={!!withdrawDisabledReason || !!claimFundingDisabledReason}
+                            className="w-full rounded-xl bg-emerald-600 px-5 py-3.5 text-[15px] font-semibold text-white transition hover:bg-emerald-500 disabled:cursor-not-allowed disabled:opacity-50 disabled:bg-foreground disabled:text-background"
+                          >
+                            {txStatus.type === "loading" ? "Claiming..." : claimActionLabel}
+                          </button>
+                        )}
+
+                        {waitCountdown && (
+                          <div className="flex items-center justify-between rounded-lg border border-foreground/[0.05] bg-foreground/[0.02] px-3.5 py-2.5">
+                            <span className="text-[11px] text-muted-foreground/70">Next unlock</span>
+                            <span className="text-[12px] font-medium tabular-nums text-foreground">{waitCountdown}</span>
+                          </div>
+                        )}
+
+                        {txStatus.type === "success" && (
+                          <div className="rounded-lg border border-emerald-500/20 bg-emerald-500/5 px-4 py-3">
+                            <p className="text-[12px] font-medium text-emerald-700 dark:text-emerald-400">Transaction submitted.</p>
+                            <p className="mt-1.5 break-all font-mono text-[10px] text-muted-foreground/70">{txStatus.sig}</p>
+                            {isWrappedSolStream && (
+                              <div className="mt-2.5 flex items-center gap-2 rounded-md border border-amber-500/15 bg-amber-500/5 p-2.5">
+                                <span className="text-[11px] text-amber-700 dark:text-amber-300">Claimed wSOL.</span>
+                                <button type="button" onClick={() => setWrapModalOpen(true)} className="rounded-md bg-amber-500/20 px-2.5 py-1 text-[11px] font-medium text-amber-700 dark:text-amber-300 transition hover:bg-amber-500/30">
+                                  Unwrap to SOL
+                                </button>
+                              </div>
+                            )}
+                          </div>
+                        )}
+
+                        {txStatus.type === "error" && (
+                          <div className="rounded-lg border border-red-500/15 bg-red-500/5 px-4 py-2.5 text-[12px] text-red-600 dark:text-red-400">
+                            {txStatus.msg}
+                          </div>
+                        )}
+                      </div>
+                    </CardContent>
+                  </Card>
+                </div>
+              </div>
+            </div>
+          )}
+        </section>
+      )}
+
+      {/* ═══════════════════════════════════════════════════ */}
+      {/*  Campaign Management                               */}
+      {/* ═══════════════════════════════════════════════════ */}
+      {program && (
+        <section className="space-y-6">
+          <SectionDivider title={hasCampaignControls ? "Campaign Management" : "Account"} />
+          <Card className="rounded-2xl border-foreground/[0.06]">
+            <CardContent className="px-5 py-5 space-y-3">
+              {treeState.pauseAuthority && treeState.creator && !treeState.pauseAuthority.equals(treeState.creator) && (
+                <p className="text-[11px] text-amber-700/80 dark:text-amber-400/80">Pause authority differs from creator. Pausing blocks all claims.</p>
+              )}
+              <PauseToggleButton
+                program={program}
+                publicKey={publicKey}
+                treePubkey={new PublicKey(treeAddress)}
+                paused={treeState.paused}
+                isPauseAuthority={canShowPauseToggle}
+                cancelledAt={cancelledAtBigint}
+                onSuccess={() => {
+                  const newPaused = !treeState.paused;
+                  fetchTree(true);
+                  queryClient.setQueriesData(
+                    { queryKey: ["campaigns"] },
+                    (old: unknown) => {
+                      const data = old as { campaigns?: { treeAddress: string; paused: boolean }[] } | undefined;
+                      if (!data?.campaigns) return old;
+                      return { ...data, campaigns: data.campaigns.map((c) => c.treeAddress === treeAddress ? { ...c, paused: newPaused } : c) };
+                    },
+                  );
+                  fetch(`/api/campaigns/${treeAddress}/status`, {
+                    method: "PATCH",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ paused: newPaused }),
+                  }).catch(() => {});
+                }}
+                toast={toast}
+              />
+              {isSingleLeaf && program && (
+                <TriggerMilestoneButton
+                  program={program}
+                  publicKey={publicKey}
+                  treePubkey={new PublicKey(treeAddress)}
+                  milestoneIdx={Number(milestoneIdx)}
+                  alreadyReleased={milestoneReleased}
+                  canRelease={canShowReleaseMilestone}
+                  onSuccess={() => {
+                    setTreeState((prev) => {
+                      if (!prev) return prev;
+                      const newFlags = new Uint8Array(prev.milestoneReleasedFlags);
+                      newFlags[Number(milestoneIdx)] = 1;
+                      const next = { ...prev, milestoneReleasedFlags: newFlags };
+                      treeStateRef.current = next;
+                      return next;
+                    });
+                    setTimeout(() => fetchTree(true), 2000);
+                  }}
+                  toast={toast}
+                />
+              )}
               {!isSingleLeaf && program && (
                 <MilestoneReleasePanel
                   program={program}
@@ -2211,77 +2288,31 @@ export default function CampaignPage({ params }: { params: Promise<{ id: string 
                   toast={toast}
                 />
               )}
-
-              {program && (
-                <>
-                  {treeState.pauseAuthority && treeState.creator && !treeState.pauseAuthority.equals(treeState.creator) && (
-                    <p className="text-[11px] text-amber-400/80">Pause authority differs from creator. Pausing blocks all claims.</p>
-                  )}
-                  <PauseToggleButton
-                  program={program}
-                  publicKey={publicKey}
-                  treePubkey={new PublicKey(treeAddress)}
-                  paused={treeState.paused}
-                  isPauseAuthority={canShowPauseToggle}
-                  cancelledAt={cancelledAtBigint}
-                  onSuccess={() => {
-                    const newPaused = !treeState.paused;
-                    fetchTree(true);
-                    queryClient.setQueriesData(
-                      { queryKey: ["campaigns"] },
-                      (old: unknown) => {
-                        const data = old as { campaigns?: { treeAddress: string; paused: boolean }[] } | undefined;
-                        if (!data?.campaigns) return old;
-                        return { ...data, campaigns: data.campaigns.map((c) => c.treeAddress === treeAddress ? { ...c, paused: newPaused } : c) };
-                      },
-                    );
-                    fetch(`/api/campaigns/${treeAddress}/status`, {
-                      method: "PATCH",
-                      headers: { "Content-Type": "application/json" },
-                      body: JSON.stringify({ paused: newPaused }),
-                    }).catch(() => {});
-                  }}
-                  toast={toast}
-                />
-                </>
-              )}
-
               {canShowInstantRefund && (
-                <button
-                  onClick={() => setCancelOpen(true)}
-                  className="w-full rounded-xl border border-amber-500/20 px-4 py-3 text-[13px] font-medium text-amber-400 transition hover:border-amber-500/40 hover:bg-amber-500/5"
-                >
+                <button onClick={() => setCancelOpen(true)} className="w-full rounded-lg border border-amber-500/15 px-4 py-2.5 text-[13px] font-medium text-amber-700 dark:text-amber-400 transition hover:border-amber-500/30 hover:bg-amber-500/5">
                   Instant Refund
                 </button>
               )}
-
               {canShowCancel && !canShowInstantRefund && (
-                <button
-                  onClick={() => setCancelOpen(true)}
-                  className="w-full rounded-xl border border-red-500/20 px-4 py-3 text-[13px] font-medium text-red-400 transition hover:border-red-500/40 hover:bg-red-500/5"
-                >
+                <button onClick={() => setCancelOpen(true)} className="w-full rounded-lg border border-red-500/15 px-4 py-2.5 text-[13px] font-medium text-red-700 dark:text-red-400 transition hover:border-red-500/30 hover:bg-red-500/5">
                   {isSingleLeaf ? "Cancel Stream" : "Cancel Campaign"}
                 </button>
               )}
-
-              {program && (
-                <WithdrawUnvestedButton
-                  ref={withdrawButtonRef}
-                  program={program}
-                  publicKey={publicKey}
-                  treePubkey={new PublicKey(treeAddress)}
-                  mint={treeState.mint}
-                  vaultAuthority={treeState.vaultAuthority}
-                  vault={treeState.vault}
-                  cancelledAt={cancelledAtBigint}
-                  isCreator={canShowWithdrawUnvested}
-                  nowTs={nowTs}
-                  onSuccess={() => fetchTree(true)}
-                  toast={toast}
-                />
-              )}
-
-              {program && claimRecordQuery.data && (
+              <WithdrawUnvestedButton
+                ref={withdrawButtonRef}
+                program={program}
+                publicKey={publicKey}
+                treePubkey={new PublicKey(treeAddress)}
+                mint={treeState.mint}
+                vaultAuthority={treeState.vaultAuthority}
+                vault={treeState.vault}
+                cancelledAt={cancelledAtBigint}
+                isCreator={canShowWithdrawUnvested}
+                nowTs={nowTs}
+                onSuccess={() => fetchTree(true)}
+                toast={toast}
+              />
+              {claimRecordQuery.data && (
                 <CloseClaimRecordButton
                   program={program}
                   publicKey={publicKey}
@@ -2294,60 +2325,39 @@ export default function CampaignPage({ params }: { params: Promise<{ id: string 
                   toast={toast}
                 />
               )}
-
-              {canShowRootRotation && (
-                <Card className="rounded-2xl">
-                  <CardContent className="p-5">
-                    <div className="space-y-1">
-                      <p className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">Advanced Admin</p>
-                      <h3 className="text-[15px] font-medium text-foreground">Allocation Editor</h3>
-                      <p className="text-[13px] leading-6 text-muted-foreground">
-                        Update the recipient list for this campaign without creating a new one. Use this only when you need to correct future allocations.
-                      </p>
-                    </div>
-                    <div className="mt-4 grid gap-3 md:grid-cols-2">
-                      <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] px-4 py-3">
-                        <p className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">Current Root</p>
-                        <p className="mt-2 font-mono text-[12px] text-foreground">{currentMerkleRootHex ? `${currentMerkleRootHex.slice(0, 10)}...${currentMerkleRootHex.slice(-8)}` : "—"}</p>
-                      </div>
-                      <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] px-4 py-3">
-                        <p className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">Current Version</p>
-                        <p className="mt-2 text-[13px] text-foreground">v{rootVersions[0]?.version ?? 1} · {treeState.leafCount} leaves</p>
-                      </div>
-                    </div>
-                    <a
-                      href={`/campaign/${treeAddress}/allocations`}
-                      className="mt-4 inline-flex w-full items-center justify-center rounded-xl border border-white/[0.08] bg-white px-4 py-3 text-[13px] font-medium text-[#0d1117] transition hover:opacity-90"
-                    >
-                      Open Allocation Editor
-                    </a>
-                  </CardContent>
-                </Card>
-              )}
-            </div>
-
-            {txStatus.type === "success" && (
-              <div className="mt-5 rounded-xl border border-emerald-500/20 bg-emerald-500/5 p-4">
-                <p className="text-[12px] font-medium text-emerald-400">Transaction submitted.</p>
-                <p className="mt-2 break-all font-mono text-[11px] text-muted-foreground">{txStatus.sig}</p>
-                {isWrappedSolStream && (
-                  <div className="mt-3 flex items-center gap-2 rounded-lg border border-amber-500/20 bg-amber-500/5 p-3">
-                    <span className="text-[12px] text-amber-300">Claimed tokens are in wSOL.</span>
-                    <button
-                      type="button"
-                      onClick={() => setWrapModalOpen(true)}
-                      className="rounded-md bg-amber-500/20 px-3 py-1 text-[11px] font-medium text-amber-300 transition hover:bg-amber-500/30"
-                    >
-                      Unwrap to SOL
-                    </button>
-                  </div>
-                )}
-              </div>
-            )}
-          </CardContent>
+            </CardContent>
           </Card>
-        </div>
-      </div>
+        </section>
+      )}
+
+      {/* Advanced Details */}
+      <AdvancedDetailsPanel
+        treeAddress={treeAddress}
+        creator={treeState.creator.toBase58()}
+        mintLabel={mintLabel ?? treeState.mint.toBase58()}
+        mintIsMono={mintLabel === null || mintLabel === treeState.mint.toBase58()}
+        campaignId={treeState.campaignId.toString()}
+        createdAt={formatDate(treeState.createdAt.toNumber())}
+        isSingleLeaf={isSingleLeaf}
+        scheduleLocked={scheduleLocked}
+        showManualSchedule={showManualSchedule}
+        onShowManual={() => setShowManualSchedule(true)}
+        onHideManual={() => setShowManualSchedule(false)}
+        releaseType={releaseType}
+        setReleaseType={setReleaseType}
+        startTime={startTime}
+        setStartTime={setStartTime}
+        cliffTime={cliffTime}
+        setCliffTime={setCliffTime}
+        endTime={endTime}
+        setEndTime={setEndTime}
+        milestoneIdx={milestoneIdx}
+        setMilestoneIdx={setMilestoneIdx}
+        isCliff={isCliff}
+        isMilestone={isMilestone}
+        showReadOnlySchedule={showReadOnlySchedule}
+        proofQueryLoading={proofQuery.isLoading}
+      />
 
       {/* Cancel confirmation dialog */}
       <CancelConfirmDialog
@@ -2412,8 +2422,8 @@ function SectionHeader({
 }) {
   return (
     <div>
-      <h2 className="text-[14px] font-semibold text-white">{title}</h2>
-      <p className="mt-0.5 text-[11px] text-[#8b92a5]">{caption}</p>
+      <h2 className="text-[14px] font-semibold text-foreground">{title}</h2>
+      <p className="mt-0.5 text-[11px] text-muted-foreground">{caption}</p>
     </div>
   );
 }
@@ -2427,7 +2437,7 @@ function FieldRow({
 }) {
   return (
     <div>
-      <label className="mb-2 block text-[12px] font-medium text-[#8b92a5]">{label}</label>
+      <label className="mb-2 block text-[12px] font-medium text-muted-foreground">{label}</label>
       {input}
     </div>
   );
@@ -2447,7 +2457,7 @@ function MetricCard({
     <Card className="rounded-xl">
       <CardContent className="px-4 py-3">
         <p className="text-[10px] uppercase tracking-[0.12em] text-muted-foreground">{label}</p>
-        <p className={cn("mt-1 text-lg font-semibold tabular-nums sm:text-xl", accent ? "text-violet-400" : "text-foreground")}>
+        <p className={cn("mt-1 text-lg font-semibold tabular-nums sm:text-xl", accent ? "text-violet-700 dark:text-violet-400" : "text-foreground")}>
           {value}
         </p>
       </CardContent>
@@ -2457,26 +2467,26 @@ function MetricCard({
 
 function MetricSkeletonGroup() {
   return (
-    <div className="space-y-4">
-      <div className="grid gap-4 md:grid-cols-2">
-        <MetricCardSkeleton />
-        <MetricCardSkeleton />
+    <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_360px]">
+      <div className="grid grid-cols-3 rounded-xl border border-foreground/[0.06] overflow-hidden bg-foreground/[0.04] gap-px">
+        {[...Array(3)].map((_, i) => (
+          <div key={i} className="bg-background px-5 py-4">
+            <Skeleton className="h-2.5 w-16" />
+            <Skeleton className="mt-3 h-6 w-24" />
+          </div>
+        ))}
       </div>
-      <div className="grid gap-4 md:grid-cols-3">
-        <MetricCardSkeleton />
-        <MetricCardSkeleton />
-        <MetricCardSkeleton />
-      </div>
+      <MetricCardSkeleton tall />
     </div>
   );
 }
 
-function MetricCardSkeleton() {
+function MetricCardSkeleton({ tall }: { tall?: boolean }) {
   return (
-    <Card className="rounded-xl">
-      <CardContent className="px-4 py-3">
+    <Card className="rounded-xl border-foreground/[0.06]">
+      <CardContent className={cn("px-4", tall ? "py-8" : "py-3.5")}>
         <Skeleton className="h-2.5 w-20" />
-        <Skeleton className="mt-2 h-6 w-24" />
+        <Skeleton className="mt-3 h-7 w-24" />
       </CardContent>
     </Card>
   );
@@ -2544,6 +2554,7 @@ function RecipientListModal({
     const fracStr = frac.toString().padStart(mintDecimals, "0").slice(0, 4).replace(/0+$/, "");
     return fracStr ? `${whole.toLocaleString()}.${fracStr}` : whole.toLocaleString();
   };
+
   const filteredRecipients = recipients.filter((recipient) =>
     recipient.beneficiary.toLowerCase().includes(search.trim().toLowerCase()),
   );
@@ -2562,95 +2573,168 @@ function RecipientListModal({
 
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="max-w-2xl gap-0 p-0">
-        <DialogHeader className="p-6 pb-4">
-          <DialogTitle className="text-[20px] font-semibold">Recipients</DialogTitle>
-          <DialogDescription>
-            Latest recipient list from the current campaign root.
-          </DialogDescription>
-        </DialogHeader>
+      <DialogContent className="max-w-2xl gap-0 overflow-hidden p-0">
 
-        <div className="px-6 pb-4">
-          <input
-            type="text"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search recipient wallet"
-            className="w-full rounded-2xl border border-white/[0.08] bg-[#11161f] px-4 py-3 text-[13px] text-white outline-none transition focus:border-white/20"
-          />
+        {/* ── Header ─────────────────────────────────────────── */}
+        <div className="flex items-start justify-between gap-4 border-b border-foreground/[0.05] px-6 py-5">
+          <div>
+            <div className="flex items-center gap-2.5">
+              <DialogTitle className="text-[16px] font-semibold leading-none text-foreground">Recipients</DialogTitle>
+              <span className="rounded-full bg-foreground/[0.06] px-2 py-0.5 text-[11px] tabular-nums text-muted-foreground/70">
+                {recipients.length}
+              </span>
+            </div>
+            <DialogDescription className="mt-1.5 text-[12px] text-muted-foreground/50">
+              Current campaign root — latest allocation snapshot
+            </DialogDescription>
+          </div>
         </div>
 
-        <ScrollArea className="max-h-[60vh] px-6 pb-6">
-          <div className="space-y-3 pr-1">
-            {filteredRecipients.map((recipient) => {
-              const allocation = BigInt(recipient.allocation);
-              const claimedAmount = BigInt(recipient.claimedAmount);
-              const fullyClaimed = claimedAmount >= allocation && allocation > 0n;
-              const partiallyClaimed = claimedAmount > 0n && claimedAmount < allocation;
+        {/* ── Search ─────────────────────────────────────────── */}
+        <div className="border-b border-foreground/[0.04] px-6 py-3">
+          <div className="relative">
+            <svg
+              width="14"
+              height="14"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground/40"
+            >
+              <circle cx="11" cy="11" r="8" /><path d="m21 21-4.35-4.35" />
+            </svg>
+            <input
+              type="text"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Search by wallet address…"
+              className="w-full rounded-xl border border-foreground/[0.07] bg-foreground/[0.02] py-2.5 pl-9 pr-4 text-[13px] text-foreground placeholder:text-muted-foreground/40 outline-none transition focus:border-foreground/[0.15] focus:bg-foreground/[0.03]"
+            />
+          </div>
+        </div>
 
-              return (
-                <Card key={recipient.beneficiary} className="rounded-2xl">
-                  <CardContent className="p-4">
-                    <div className="flex items-start justify-between gap-4">
-                      <div className="min-w-0">
-                        <div className="flex flex-wrap items-center gap-2">
-                          <p className="truncate font-mono text-[13px] text-foreground" title={recipient.beneficiary}>
-                            {recipient.beneficiary}
-                          </p>
-                          {viewer === recipient.beneficiary && (
-                            <Badge variant="outline" className="h-auto rounded-full border-violet-500/20 bg-violet-500/10 px-2 py-0.5 text-[10px] font-medium text-violet-300">
-                              You
-                            </Badge>
-                          )}
-                          <Badge
-                            variant="outline"
+        {/* ── Recipient rows ─────────────────────────────────── */}
+        <ScrollArea className="max-h-[56vh]">
+          {filteredRecipients.length > 0 ? (
+            <div className="divide-y divide-foreground/[0.04]">
+              {filteredRecipients.map((recipient) => {
+                const allocation = BigInt(recipient.allocation);
+                const claimedAmount = BigInt(recipient.claimedAmount);
+                const fullyClaimed = claimedAmount >= allocation && allocation > 0n;
+                const partiallyClaimed = claimedAmount > 0n && claimedAmount < allocation;
+                const isViewer = viewer === recipient.beneficiary;
+                const isCopied = copied === recipient.beneficiary;
+
+                return (
+                  <div
+                    key={recipient.beneficiary}
+                    className={cn(
+                      "group flex items-center gap-4 px-6 py-4 transition-colors hover:bg-foreground/[0.02]",
+                      isViewer && "bg-violet-500/[0.03]",
+                    )}
+                  >
+                    {/* Primary: address + metadata */}
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-2">
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <span className="cursor-default font-mono text-[13px] text-foreground">
+                              {truncateAddress(recipient.beneficiary, 8)}
+                            </span>
+                          </TooltipTrigger>
+                          <TooltipContent side="bottom">
+                            <p className="max-w-xs break-all font-mono text-[11px]">{recipient.beneficiary}</p>
+                          </TooltipContent>
+                        </Tooltip>
+                        {isViewer && (
+                          <Badge variant="outline" className="h-auto rounded-full border-violet-500/20 bg-violet-500/10 px-2 py-0.5 text-[10px] font-medium text-violet-700 dark:text-violet-300">
+                            You
+                          </Badge>
+                        )}
+                      </div>
+                      <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-muted-foreground/60">
+                        <span>{recipient.leafCount} {recipient.leafCount === 1 ? "alloc." : "allocs."}</span>
+                        <span className="text-foreground/[0.08]">·</span>
+                        <span>
+                          <span className="text-muted-foreground/40">Allocated</span>{" "}
+                          <span className="tabular-nums text-foreground/70">{formatAmount(recipient.allocation)}</span>
+                        </span>
+                        <span className="text-foreground/[0.08]">·</span>
+                        <span>
+                          <span className="text-muted-foreground/40">Claimed</span>{" "}
+                          <span className="tabular-nums text-foreground/70">{formatAmount(recipient.claimedAmount)}</span>
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Secondary: status badge + copy icon */}
+                    <div className="flex shrink-0 items-center gap-2">
+                      <Badge
+                        variant="outline"
+                        className={cn(
+                          "h-auto rounded-full px-2 py-0.5 text-[10px] font-medium",
+                          fullyClaimed
+                            ? "border-emerald-500/20 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300"
+                            : partiallyClaimed
+                              ? "border-amber-500/20 bg-amber-500/10 text-amber-700 dark:text-amber-300"
+                              : "border-foreground/[0.08] bg-foreground/[0.03] text-muted-foreground/60",
+                        )}
+                      >
+                        {fullyClaimed ? "Claimed" : partiallyClaimed ? "Partial" : "Pending"}
+                      </Badge>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <button
+                            type="button"
+                            onClick={() => handleCopy(recipient.beneficiary)}
                             className={cn(
-                              "h-auto rounded-full px-2 py-0.5 text-[10px] font-medium",
-                              fullyClaimed
-                                ? "border-emerald-500/20 bg-emerald-500/10 text-emerald-300"
-                                : partiallyClaimed
-                                  ? "border-amber-500/20 bg-amber-500/10 text-amber-300"
-                                  : "border-white/[0.08] bg-white/[0.03] text-muted-foreground",
+                              "flex h-8 w-8 items-center justify-center rounded-lg border transition",
+                              isCopied
+                                ? "border-emerald-500/20 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
+                                : "border-foreground/[0.07] bg-foreground/[0.02] text-muted-foreground/40 hover:bg-foreground/[0.06] hover:text-foreground/70",
                             )}
                           >
-                            {fullyClaimed ? "Fully claimed" : partiallyClaimed ? "Partially claimed" : "Unclaimed"}
-                          </Badge>
-                        </div>
-                        <p className="mt-2 text-[11px] text-muted-foreground">
-                          {recipient.leafCount} {recipient.leafCount === 1 ? "allocation" : "allocations"}
-                        </p>
-                      </div>
-                      <button
-                        type="button"
-                        onClick={() => handleCopy(recipient.beneficiary)}
-                        className="shrink-0 rounded-xl border border-white/[0.08] bg-white/[0.03] px-3 py-2 text-[11px] font-medium text-foreground transition hover:bg-white/[0.06]"
-                      >
-                        {copied === recipient.beneficiary ? "Copied" : "Copy"}
-                      </button>
+                            {isCopied ? (
+                              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                                <path d="M20 6 9 17l-5-5" />
+                              </svg>
+                            ) : (
+                              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                <rect width="14" height="14" x="8" y="8" rx="2" ry="2" /><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2" />
+                              </svg>
+                            )}
+                          </button>
+                        </TooltipTrigger>
+                        <TooltipContent side="left">
+                          <p className="text-[11px]">{isCopied ? "Copied!" : "Copy address"}</p>
+                        </TooltipContent>
+                      </Tooltip>
                     </div>
-
-                    <div className="mt-4 grid gap-3 sm:grid-cols-2">
-                      <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] px-3 py-3">
-                        <p className="text-[10px] uppercase tracking-[0.14em] text-muted-foreground">Allocation</p>
-                        <p className="mt-1.5 text-[14px] font-medium tabular-nums text-foreground">{formatAmount(recipient.allocation)}</p>
-                      </div>
-                      <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] px-3 py-3">
-                        <p className="text-[10px] uppercase tracking-[0.14em] text-muted-foreground">Claimed</p>
-                        <p className="mt-1.5 text-[14px] font-medium tabular-nums text-foreground">{formatAmount(recipient.claimedAmount)}</p>
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
-              );
-            })}
-
-            {filteredRecipients.length === 0 && (
-              <div className="rounded-2xl border border-white/[0.06] bg-white/[0.02] px-4 py-8 text-center text-[13px] text-muted-foreground">
-                No recipient matched that wallet.
+                  </div>
+                );
+              })}
+            </div>
+          ) : (
+            <div className="flex flex-col items-center px-6 py-12 text-center">
+              <div className="flex h-10 w-10 items-center justify-center rounded-full bg-foreground/[0.04] text-muted-foreground/30">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                  <circle cx="11" cy="11" r="8" /><path d="m21 21-4.35-4.35" />
+                </svg>
               </div>
-            )}
-          </div>
+              <p className="mt-3 text-[13px] text-muted-foreground/60">No recipient matched that address</p>
+            </div>
+          )}
         </ScrollArea>
+
+        {/* ── Footer count ───────────────────────────────────── */}
+        {filteredRecipients.length > 0 && filteredRecipients.length < recipients.length && (
+          <div className="border-t border-foreground/[0.04] px-6 py-3 text-[11px] text-muted-foreground/50">
+            Showing {filteredRecipients.length} of {recipients.length} recipients
+          </div>
+        )}
       </DialogContent>
     </Dialog>
   );
@@ -2682,5 +2766,634 @@ function Spinner({ size = 20 }: { size?: number }) {
         strokeLinecap="round"
       />
     </svg>
+  );
+}
+
+/* ─── RecipientClaimBanner ────────────────────────────────────────────── */
+function RecipientClaimBanner({
+  displayClaimable,
+  displayProgress,
+  paused,
+  cancelledAt,
+  claimFundingDisabledReason,
+  withdrawDisabledReason,
+  waitCountdown,
+  formatTokenAmount,
+  mintLabel,
+}: {
+  displayClaimable: bigint;
+  displayProgress: number;
+  paused: boolean;
+  cancelledAt: bigint | null;
+  claimFundingDisabledReason: string | null;
+  withdrawDisabledReason: string | null | undefined;
+  waitCountdown: string | null;
+  formatTokenAmount: (v: bigint) => string;
+  mintLabel: string | null;
+}) {
+  const canClaim =
+    displayClaimable > 0n &&
+    !claimFundingDisabledReason &&
+    !withdrawDisabledReason;
+  const fullyDone =
+    displayProgress >= 100 && displayClaimable === 0n && cancelledAt === null;
+  const notFunded = claimFundingDisabledReason === "Campaign not funded yet";
+
+  let pill: React.ReactNode = null;
+
+  if (cancelledAt !== null && displayClaimable === 0n) {
+    pill = (
+      <span className="inline-flex items-center gap-1.5 rounded-full border border-foreground/[0.07] bg-foreground/[0.03] px-3 py-1 text-[12px] text-muted-foreground/50">
+        <span className="h-1.5 w-1.5 rounded-full bg-muted-foreground/30" />
+        Campaign cancelled — nothing left to claim
+      </span>
+    );
+  } else if (fullyDone) {
+    pill = (
+      <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-500/20 bg-emerald-500/5 px-3 py-1 text-[12px] text-emerald-600 dark:text-emerald-400">
+        <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
+        Fully claimed
+      </span>
+    );
+  } else if (paused) {
+    pill = (
+      <span className="inline-flex items-center gap-1.5 rounded-full border border-amber-500/20 bg-amber-500/5 px-3 py-1 text-[12px] text-amber-600 dark:text-amber-400">
+        <span className="h-1.5 w-1.5 rounded-full bg-amber-500" />
+        Campaign paused — claims temporarily disabled
+      </span>
+    );
+  } else if (notFunded) {
+    pill = (
+      <span className="inline-flex items-center gap-1.5 rounded-full border border-amber-500/20 bg-amber-500/5 px-3 py-1 text-[12px] text-amber-600 dark:text-amber-400">
+        <span className="h-1.5 w-1.5 rounded-full bg-amber-500" />
+        Waiting for funding — claims open once funded
+      </span>
+    );
+  } else if (waitCountdown && !paused) {
+    pill = (
+      <span className="inline-flex items-center gap-1.5 rounded-full border border-violet-500/20 bg-violet-500/5 px-3 py-1 text-[12px] text-violet-600 dark:text-violet-400">
+        <span className="h-1.5 w-1.5 rounded-full bg-violet-500" />
+        Next unlock in {waitCountdown}
+      </span>
+    );
+  } else if (canClaim) {
+    pill = (
+      <a
+        href="#campaign-actions"
+        className="inline-flex items-center gap-1.5 rounded-full border border-emerald-500/25 bg-emerald-500/8 px-3 py-1 text-[12px] font-medium text-emerald-600 transition hover:bg-emerald-500/15 dark:text-emerald-400"
+      >
+        <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
+        {formatTokenAmount(displayClaimable)}{mintLabel ? ` ${mintLabel}` : ""} claimable — claim now
+      </a>
+    );
+  }
+
+  if (!pill) return null;
+
+  return <div className="mt-3">{pill}</div>;
+}
+
+/* ─── SectionDivider ──────────────────────────────────────────────────── */
+function SectionDivider({ title, accent }: { title: string; accent?: boolean }) {
+  return (
+    <div className="flex items-center gap-4">
+      <h2 className={cn("shrink-0 text-[15px] font-semibold tracking-tight", accent ? "text-emerald-600 dark:text-emerald-400" : "text-foreground")}>{title}</h2>
+      <div className={cn("h-px flex-1", accent ? "bg-emerald-500/15" : "bg-foreground/[0.06]")} />
+    </div>
+  );
+}
+
+/* ─── StatGrid ────────────────────────────────────────────────────────── */
+function StatGrid({
+  stats,
+  cols = 4,
+}: {
+  stats: Array<{ label: string; value: string; accent?: boolean; green?: boolean }>;
+  cols?: 2 | 3 | 4;
+}) {
+  const gridClass =
+    cols === 3
+      ? "grid-cols-1 sm:grid-cols-3"
+      : cols === 4
+        ? "grid-cols-2 lg:grid-cols-4"
+        : "grid-cols-2";
+  return (
+    <div className={cn("grid rounded-xl border border-foreground/[0.06] bg-foreground/[0.05] overflow-hidden gap-px", gridClass)}>
+      {stats.map((stat) => (
+        <div key={stat.label} className="bg-background px-5 py-4">
+          <p className="text-[10px] uppercase tracking-[0.13em] text-muted-foreground/60">{stat.label}</p>
+          <p className={cn(
+            "mt-2 text-[20px] font-bold tabular-nums leading-none tracking-tight",
+            stat.green ? "text-emerald-600 dark:text-emerald-400" :
+            stat.accent ? "text-violet-600 dark:text-violet-400" :
+            "text-foreground",
+          )}>
+            {stat.value}
+          </p>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+/* ─── KpiCard ─────────────────────────────────────────────────────────── */
+function KpiCard({
+  label,
+  value,
+  accent,
+  green,
+}: {
+  label: string;
+  value: string;
+  accent?: boolean;
+  green?: boolean;
+}) {
+  return (
+    <Card className={cn("rounded-xl border-foreground/[0.06]", green && "border-emerald-500/15 bg-emerald-500/[0.03]")}>
+      <CardContent className="px-4 py-3.5">
+        <p className="text-[10px] uppercase tracking-[0.14em] text-muted-foreground/80">{label}</p>
+        <p className={cn(
+          "mt-2 text-[22px] font-bold tabular-nums leading-none tracking-tight",
+          green ? "text-emerald-600 dark:text-emerald-400" : accent ? "text-violet-600 dark:text-violet-400" : "text-foreground",
+        )}>
+          {value}
+        </p>
+      </CardContent>
+    </Card>
+  );
+}
+
+/* ─── VestingScheduleTimeline ─────────────────────────────────────────── */
+function VestingScheduleTimeline({
+  isCliff,
+  isLinear,
+  isMilestone,
+  startTime,
+  cliffTime,
+  endTime,
+  nowTs,
+  cancelledAt,
+  aggregateSamples,
+  title,
+  subtitle,
+}: {
+  isCliff: boolean;
+  isLinear: boolean;
+  isMilestone: boolean;
+  startTime: string;
+  cliffTime: string;
+  endTime: string;
+  nowTs: number;
+  cancelledAt: number | null;
+  aggregateSamples?: Array<{ t: number; vested: string }> | null;
+  title?: string;
+  subtitle?: string;
+}) {
+  const startTs = startTime ? datetimeLocalToUnix(startTime) : datetimeLocalToUnix(cliffTime);
+  const cliffTs = datetimeLocalToUnix(cliffTime);
+  const endTs = datetimeLocalToUnix(endTime);
+
+  type TimelineNode = { label: string; ts: number; sub?: string; highlight?: boolean };
+  const nodes: TimelineNode[] = [];
+
+  nodes.push({ label: "Start", ts: startTs });
+
+  if (isCliff || isMilestone) {
+    nodes.push({ label: isMilestone ? "Milestone Unlock" : "Cliff Unlock", ts: cliffTs, highlight: true });
+  } else if (isLinear) {
+    let midTs: number;
+    if (aggregateSamples && aggregateSamples.length >= 2) {
+      // Find the true 50% vested timestamp from aggregate curve samples
+      const finalVested = Number(BigInt(aggregateSamples[aggregateSamples.length - 1].vested));
+      const halfTarget = finalVested / 2;
+      midTs = Math.round((startTs + endTs) / 2); // fallback
+      for (let i = 1; i < aggregateSamples.length; i++) {
+        const v0 = Number(BigInt(aggregateSamples[i - 1].vested));
+        const v1 = Number(BigInt(aggregateSamples[i].vested));
+        if (v1 >= halfTarget) {
+          const frac = v1 === v0 ? 0 : (halfTarget - v0) / (v1 - v0);
+          midTs = Math.round(aggregateSamples[i - 1].t + frac * (aggregateSamples[i].t - aggregateSamples[i - 1].t));
+          break;
+        }
+      }
+    } else {
+      midTs = Math.round((startTs + endTs) / 2);
+    }
+    nodes.push({ label: "50% Vested", ts: midTs });
+  }
+
+  if (cancelledAt !== null) {
+    nodes.push({ label: "Cancelled", ts: cancelledAt, sub: "stream ended", highlight: true });
+  }
+
+  nodes.push({ label: "End", ts: endTs });
+
+  nodes.sort((a, b) => a.ts - b.ts);
+
+  const allPast = nodes.length > 0 && nowTs >= nodes[nodes.length - 1].ts;
+
+  return (
+    <Card className={cn("rounded-2xl border-foreground/[0.06]", allPast && "border-emerald-500/10")}>
+      <CardContent className="px-5 py-4">
+        <div className="mb-4 flex items-center justify-between">
+          <div>
+            <p className="text-[14px] font-semibold text-foreground">{title ?? "Vesting Schedule"}</p>
+            {subtitle && <p className="mt-0.5 text-[11px] text-muted-foreground/60">{subtitle}</p>}
+          </div>
+          {allPast && (
+            <Badge variant="outline" className="h-auto rounded-full border-emerald-500/20 bg-emerald-500/10 px-2.5 py-0.5 text-[10px] font-medium text-emerald-600 dark:text-emerald-400">
+              Completed
+            </Badge>
+          )}
+        </div>
+        <div className="relative flex items-start gap-0">
+          {nodes.map((node, i) => {
+            const isPast = nowTs >= node.ts;
+            const isCurrent = isPast && (i === nodes.length - 1 || nowTs < nodes[i + 1]?.ts);
+            const isLast = i === nodes.length - 1;
+            return (
+              <div key={node.label + i} className="flex flex-1 flex-col items-center">
+                <div className="relative flex w-full items-center">
+                  {i > 0 && (
+                    <div className={cn("h-[2px] flex-1 transition-colors", isPast ? "bg-violet-500/50" : "bg-foreground/[0.06]")} />
+                  )}
+                  <div className={cn(
+                    "relative z-10 flex shrink-0 rounded-full transition-all",
+                    isCurrent ? "h-4 w-4 border-[3px] border-violet-500 bg-violet-500 shadow-[0_0_8px_rgba(139,92,246,0.3)]" :
+                    isPast
+                      ? node.highlight ? "h-3.5 w-3.5 border-2 border-violet-500 bg-violet-500" : "h-3.5 w-3.5 border-2 border-violet-500/50 bg-violet-500/20"
+                      : "h-3.5 w-3.5 border-2 border-foreground/15 bg-background",
+                  )} />
+                  {!isLast && (
+                    <div className={cn("h-[2px] flex-1 transition-colors", nowTs >= nodes[i + 1]?.ts ? "bg-violet-500/50" : "bg-foreground/[0.06]")} />
+                  )}
+                </div>
+                <div className="mt-2.5 px-1 text-center">
+                  <p className={cn("text-[11px] font-semibold", isCurrent ? "text-violet-600 dark:text-violet-400" : isPast ? "text-foreground" : "text-muted-foreground/70")}>{node.label}</p>
+                  <p className="mt-0.5 text-[10px] tabular-nums text-muted-foreground/60">{formatDate(node.ts)}</p>
+                  {node.sub && <p className="text-[9px] text-muted-foreground/50">{node.sub}</p>}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+/* ─── BeneficiariesSection ────────────────────────────────────────────── */
+function BeneficiariesSection({
+  isSingleLeaf,
+  expectedBeneficiary,
+  campaignRecipients,
+  leafCount,
+  viewer,
+  onViewAll,
+}: {
+  isSingleLeaf: boolean;
+  expectedBeneficiary: string | null | undefined;
+  campaignRecipients: Array<{ beneficiary: string; allocation: string; leafCount: number; claimedAmount: string }>;
+  leafCount: number;
+  viewer?: string;
+  onViewAll: () => void;
+}) {
+  if (isSingleLeaf && expectedBeneficiary) {
+    return (
+      <Card className="rounded-2xl border-foreground/[0.06]">
+        <CardContent className="flex items-center gap-4 px-5 py-4">
+          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-violet-500/10 text-violet-700 dark:text-violet-400">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <circle cx="12" cy="8" r="4" /><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7" />
+            </svg>
+          </div>
+          <div className="min-w-0 flex-1">
+            <p className="text-[10px] uppercase tracking-[0.14em] text-muted-foreground/80">Beneficiary</p>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <p className="mt-0.5 cursor-default truncate font-mono text-[13px] text-foreground">
+                  {expectedBeneficiary}
+                </p>
+              </TooltipTrigger>
+              <TooltipContent side="bottom"><p className="font-mono text-[11px]">{expectedBeneficiary}</p></TooltipContent>
+            </Tooltip>
+          </div>
+          {viewer === expectedBeneficiary && (
+            <Badge variant="outline" className="h-auto shrink-0 rounded-full border-violet-500/20 bg-violet-500/10 px-2.5 py-0.5 text-[10px] font-medium text-violet-700 dark:text-violet-300">
+              You
+            </Badge>
+          )}
+        </CardContent>
+      </Card>
+    );
+  }
+
+  if (!isSingleLeaf) {
+    const preview = campaignRecipients.slice(0, 5);
+    return (
+      <Card className="rounded-2xl border-foreground/[0.06]">
+        <CardContent className="px-5 py-4">
+          <div className="flex items-center justify-between gap-3 mb-3">
+            <div>
+              <p className="text-[14px] font-semibold text-foreground">Recipients</p>
+              <p className="mt-0.5 text-[11px] text-muted-foreground/60">{leafCount} wallet{leafCount !== 1 ? "s" : ""} in this campaign</p>
+            </div>
+            <button
+              type="button"
+              onClick={onViewAll}
+              className="shrink-0 rounded-lg border border-foreground/[0.08] bg-foreground/[0.02] px-3 py-1.5 text-[12px] font-medium text-foreground transition hover:bg-foreground/[0.05] hover:border-foreground/[0.12]"
+            >
+              View All
+            </button>
+          </div>
+          <div className="space-y-0.5">
+            {preview.map((r) => {
+              const isViewer = viewer === r.beneficiary;
+              const claimed = BigInt(r.claimedAmount);
+              const alloc = BigInt(r.allocation);
+              const isFullyClaimed = alloc > 0n && claimed >= alloc;
+              return (
+                <div key={r.beneficiary} className={cn("flex items-center gap-3 rounded-lg px-3 py-2 transition-colors hover:bg-foreground/[0.03]", isViewer && "bg-violet-500/[0.04]")}>
+                  <span className="font-mono text-[12px] text-foreground/80 truncate flex-1">{truncateAddress(r.beneficiary)}</span>
+                  {isFullyClaimed ? (
+                    <span className="shrink-0 text-[10px] font-medium text-emerald-600 dark:text-emerald-400">Claimed</span>
+                  ) : claimed > 0n ? (
+                    <span className="shrink-0 text-[10px] font-medium text-amber-600 dark:text-amber-400">Partial</span>
+                  ) : (
+                    <span className="shrink-0 text-[10px] text-muted-foreground/50">Pending</span>
+                  )}
+                  {isViewer && (
+                    <Badge variant="outline" className="h-auto rounded-full border-violet-500/20 bg-violet-500/10 px-1.5 py-0 text-[10px] text-violet-700 dark:text-violet-300">
+                      You
+                    </Badge>
+                  )}
+                </div>
+              );
+            })}
+            {campaignRecipients.length > 5 && (
+              <p className="px-3 pt-1 text-[11px] text-muted-foreground/60">+{campaignRecipients.length - 5} more</p>
+            )}
+            {campaignRecipients.length === 0 && (
+              <div className="flex flex-col items-center py-6 text-center">
+                <div className="flex h-10 w-10 items-center justify-center rounded-full bg-foreground/[0.04] text-muted-foreground/40">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                    <circle cx="12" cy="8" r="4" /><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7" />
+                  </svg>
+                </div>
+                <p className="mt-2 text-[12px] text-muted-foreground/60">No recipients indexed yet</p>
+              </div>
+            )}
+          </div>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  return null;
+}
+
+/* ─── RootVersionSection ──────────────────────────────────────────────── */
+function RootVersionSection({
+  currentRootHex,
+  rootVersions,
+  leafCount,
+  treeAddress,
+  canRotate,
+}: {
+  currentRootHex: string | null;
+  rootVersions: Array<{ id: number; version: number; merkleRoot: string; leafCount: number; createdAt: number; ipfsCid: string | null }>;
+  leafCount: number;
+  treeAddress: string;
+  canRotate: boolean;
+}) {
+  if (!canRotate && rootVersions.length === 0) return null;
+
+  const current = rootVersions[0];
+
+  return (
+    <Card className="rounded-2xl border-foreground/[0.06]">
+      <CardContent className="px-5 py-4">
+        <div className="flex items-center justify-between gap-3 mb-3">
+          <div className="flex items-center gap-2.5">
+            <p className="text-[14px] font-semibold text-foreground">Distribution</p>
+            {currentRootHex && (
+              <Badge variant="outline" className="h-auto rounded-full border-emerald-500/20 bg-emerald-500/10 px-2 py-0.5 text-[10px] font-medium text-emerald-600 dark:text-emerald-400">
+                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" className="mr-1"><path d="M20 6 9 17l-5-5"/></svg>
+                Verified
+              </Badge>
+            )}
+          </div>
+          {canRotate && (
+            <a
+              href={`/campaign/${treeAddress}/allocations`}
+              className="rounded-lg border border-foreground/[0.08] bg-foreground/[0.02] px-3 py-1.5 text-[12px] font-medium text-foreground transition hover:bg-foreground/[0.05] hover:border-foreground/[0.12]"
+            >
+              Edit Allocations
+            </a>
+          )}
+        </div>
+
+        <div className="mt-3 flex items-center justify-between gap-2 border-t border-foreground/[0.04] pt-3">
+          <div className="min-w-0 flex-1">
+            <div className="flex items-center gap-2 mb-0.5">
+              <p className="text-[10px] uppercase tracking-[0.12em] text-muted-foreground/50">Merkle Root</p>
+              {current && (
+                <span className="text-[10px] tabular-nums text-muted-foreground/40">v{current.version}</span>
+              )}
+              {rootVersions.length > 1 && (
+                <span className="text-[10px] text-muted-foreground/40">· {rootVersions.length - 1} prev</span>
+              )}
+            </div>
+            <p className="font-mono text-[12px] text-foreground/60 truncate">
+              {currentRootHex ? `${currentRootHex.slice(0, 16)}…${currentRootHex.slice(-8)}` : "—"}
+            </p>
+          </div>
+          <span className="shrink-0 text-[11px] tabular-nums text-muted-foreground/50">{leafCount} leaves</span>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+/* ─── AdvancedDetailsPanel ────────────────────────────────────────────── */
+function AdvancedDetailsPanel({
+  treeAddress,
+  creator,
+  mintLabel,
+  mintIsMono,
+  campaignId,
+  createdAt,
+  isSingleLeaf,
+  scheduleLocked,
+  showManualSchedule,
+  onShowManual,
+  onHideManual,
+  releaseType,
+  setReleaseType,
+  startTime,
+  setStartTime,
+  cliffTime,
+  setCliffTime,
+  endTime,
+  setEndTime,
+  milestoneIdx,
+  setMilestoneIdx,
+  isCliff,
+  isMilestone,
+  showReadOnlySchedule,
+  proofQueryLoading,
+}: {
+  treeAddress: string;
+  creator: string;
+  mintLabel: string;
+  mintIsMono: boolean;
+  campaignId: string;
+  createdAt: string;
+  isSingleLeaf: boolean;
+  scheduleLocked: boolean;
+  showManualSchedule: boolean;
+  onShowManual: () => void;
+  onHideManual: () => void;
+  releaseType: number;
+  setReleaseType: (v: number) => void;
+  startTime: string;
+  setStartTime: (v: string) => void;
+  cliffTime: string;
+  setCliffTime: (v: string) => void;
+  endTime: string;
+  setEndTime: (v: string) => void;
+  milestoneIdx: string;
+  setMilestoneIdx: (v: string) => void;
+  isCliff: boolean;
+  isMilestone: boolean;
+  showReadOnlySchedule: boolean;
+  proofQueryLoading: boolean;
+}) {
+  const [open, setOpen] = useState(false);
+
+  return (
+    <Card className="rounded-2xl border-foreground/[0.06]">
+      <CardContent className="px-5 py-4">
+        <button
+          type="button"
+          onClick={() => setOpen((o) => !o)}
+          className="flex w-full items-center justify-between gap-3"
+        >
+          <p className="text-[13px] font-medium text-muted-foreground">Advanced Details</p>
+          <svg
+            width="14"
+            height="14"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2.5"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            className={cn("shrink-0 text-muted-foreground transition-transform", open && "rotate-180")}
+          >
+            <path d="M6 9l6 6 6-6" />
+          </svg>
+        </button>
+
+        {open && (
+          <div className="mt-4 divide-y divide-foreground/[0.05]">
+
+            {/* ── Identifiers ─────────────────────────────── */}
+            <div className="pb-4">
+              <p className="mb-2.5 text-[10px] uppercase tracking-[0.13em] text-muted-foreground/40">Identifiers</p>
+              <div className="space-y-2">
+                <DetailRow label="Campaign ID" value={campaignId} />
+                <DetailRow label="Tree Address" value={treeAddress} mono />
+                <DetailRow label="Created" value={createdAt} />
+              </div>
+            </div>
+
+            {/* ── Participants ─────────────────────────────── */}
+            <div className="py-4">
+              <p className="mb-2.5 text-[10px] uppercase tracking-[0.13em] text-muted-foreground/40">Participants</p>
+              <div className="space-y-2">
+                <DetailRow label="Creator" value={creator} mono />
+                <DetailRow label="Mint" value={mintLabel} mono={mintIsMono} />
+              </div>
+            </div>
+
+            {/* ── Schedule (single leaf only) ──────────────── */}
+            {isSingleLeaf && (
+              <div className="pt-4">
+                <div className="flex items-center justify-between gap-2 mb-2.5">
+                  <p className="text-[10px] uppercase tracking-[0.13em] text-muted-foreground/40">On-chain Schedule</p>
+                  {scheduleLocked && !showManualSchedule && (
+                    <button type="button" onClick={onShowManual} className="text-[11px] text-muted-foreground underline underline-offset-4 hover:text-foreground">
+                      Edit manually
+                    </button>
+                  )}
+                  {showManualSchedule && (
+                    <button type="button" onClick={onHideManual} className="text-[11px] text-muted-foreground underline underline-offset-4 hover:text-foreground">
+                      Back
+                    </button>
+                  )}
+                </div>
+
+                {proofQueryLoading && (
+                  <p className="text-[12px] text-muted-foreground/60">Loading schedule…</p>
+                )}
+
+                {!showReadOnlySchedule && (
+                  <div className="mb-3 rounded-xl border border-amber-500/20 bg-amber-500/5 px-3 py-2.5 text-[11px] leading-5 text-amber-700 dark:text-amber-300">
+                    These values are only used locally to reconstruct a claim — they don&apos;t change on-chain state.
+                  </div>
+                )}
+
+                {showReadOnlySchedule ? (
+                  <div className="space-y-2">
+                    <DetailRow label="Vesting Type" value={getVestingTypeLabel(releaseType)} />
+                    <DetailRow label="Start Time" value={startTime ? formatDate(datetimeLocalToUnix(startTime)) : "—"} />
+                    <DetailRow label={isMilestone ? "Unlock Time" : isCliff ? "Unlock Time" : "Cliff Time"} value={cliffTime ? formatDate(datetimeLocalToUnix(cliffTime)) : "—"} />
+                    <DetailRow label="End Time" value={endTime ? formatDate(datetimeLocalToUnix(endTime)) : "—"} />
+                    {isMilestone && <DetailRow label="Milestone Index" value={milestoneIdx} />}
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    <FieldRow
+                      label="Vesting Type"
+                      input={(
+                        <Select value={String(releaseType)} onValueChange={(v) => setReleaseType(Number(v))} disabled={scheduleLocked}>
+                          <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="0">Cliff</SelectItem>
+                            <SelectItem value="1">Linear</SelectItem>
+                            <SelectItem value="2">Milestone</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      )}
+                    />
+                    <div className="grid gap-3 md:grid-cols-3">
+                      <FieldRow label="Start Time" input={(
+                        <input type="datetime-local" value={startTime} onChange={(e) => setStartTime(e.target.value)} disabled={scheduleLocked}
+                          className="w-full rounded-xl border border-foreground/[0.08] bg-muted px-3 py-2.5 text-[13px] text-foreground outline-none transition focus:border-foreground/20 disabled:opacity-50" />
+                      )} />
+                      <FieldRow label={isMilestone ? "Unlock Time" : isCliff ? "Unlock Time" : "Cliff Time"} input={(
+                        <input type="datetime-local" value={cliffTime} onChange={(e) => setCliffTime(e.target.value)} disabled={scheduleLocked}
+                          className="w-full rounded-xl border border-foreground/[0.08] bg-muted px-3 py-2.5 text-[13px] text-foreground outline-none transition focus:border-foreground/20 disabled:opacity-50" />
+                      )} />
+                      <FieldRow label="End Time" input={(
+                        <input type="datetime-local" value={endTime} onChange={(e) => setEndTime(e.target.value)} disabled={scheduleLocked}
+                          className="w-full rounded-xl border border-foreground/[0.08] bg-muted px-3 py-2.5 text-[13px] text-foreground outline-none transition focus:border-foreground/20 disabled:opacity-50" />
+                      )} />
+                    </div>
+                    {isMilestone && (
+                      <FieldRow label="Milestone Index" input={(
+                        <input type="number" min="0" max="255" value={milestoneIdx} onChange={(e) => setMilestoneIdx(e.target.value)} disabled={scheduleLocked}
+                          className="w-full rounded-xl border border-foreground/[0.08] bg-muted px-3 py-2.5 text-[13px] text-foreground outline-none transition focus:border-foreground/20 disabled:opacity-50" />
+                      )} />
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        )}
+      </CardContent>
+    </Card>
   );
 }

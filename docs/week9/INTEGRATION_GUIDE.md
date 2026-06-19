@@ -1,11 +1,42 @@
 # Integration Guide — Vesting Program
 
+> **Looking for the repo-wide code map or the REST API reference?** Start at the hub:
+> [`docs/INTEGRATION.md`](../INTEGRATION.md). This file is the deep on-chain + Merkle walkthrough.
+
 **Audience:** a developer integrating the vesting program who has never seen this codebase.
 **Goal:** go from zero to a funded campaign with a claiming beneficiary, using only this
 guide + the [Instruction Reference](INSTRUCTION_REFERENCE.md).
 
+## What you're building
+
+This program lets a **creator** lock up SPL tokens (or native SOL) and release them to one or
+more **beneficiaries** on a schedule — all at once after a cliff, continuously over time, or on
+discrete milestones. Recipients are committed via a single 32-byte **Merkle root**, so you can
+onboard thousands of wallets in one on-chain transaction instead of one account per recipient.
+
+By the end of this guide you will have: created a campaign, funded its vault, (optionally)
+registered it with the backend, and seen a beneficiary claim vested tokens.
+
 This guide walks the **creator** flow (prepare → create → fund → register) and the
 **beneficiary** flow (fetch proof → claim), for both SPL-token and native-SOL campaigns.
+
+## Concepts
+
+| Term | Meaning |
+|------|---------|
+| **Campaign** | One vesting distribution: a token, a recipient set, and a schedule. On-chain account = `VestingTree`. |
+| **Creator** | The wallet that funds and controls the campaign (cancel / pause / rotate authority). |
+| **Beneficiary** | A recipient wallet entitled to a portion of the funds. |
+| **Leaf** | One beneficiary's entitlement: `{ amount, releaseType, start/cliff/end, milestoneIdx }`. Hashed into the tree. |
+| **Merkle root** | A 32-byte commitment to ALL leaves, stored on-chain. Lets any recipient prove membership cheaply without the creator revealing the full list. |
+| **Release type** | How a leaf unlocks: `Cliff` (all at `cliffTime`), `Linear` (continuously `start→end`), or `Milestone` (all once the creator flips a flag). See the table in §1. |
+| **Vault** | Where funds sit until claimed: a token account (SPL) or the `VestingTree` PDA itself (native SOL). |
+| **PDA** | Program-Derived Address — a deterministic address the program controls and signs on behalf of. Every campaign and claim record is a PDA. |
+| **Stream** | A single-recipient campaign (`leaf_count == 1`) — the simplest, most common case. |
+
+> **Most integrators have ONE recipient.** Jump to the [Quickstart](#quickstart-single-recipient-stream)
+> for the one-transaction `create_stream` path. The full multi-recipient Merkle flow (§1–§7) is
+> for distributing to many wallets at once.
 
 ---
 
@@ -26,8 +57,13 @@ pnpm install
 
 ```ts
 import * as anchor from "@coral-xyz/anchor";
-import { PublicKey, SystemProgram, Keypair } from "@solana/web3.js";
-import { TOKEN_PROGRAM_ID, ASSOCIATED_TOKEN_PROGRAM_ID, getOrCreateAssociatedTokenAccount } from "@solana/spl-token";
+import {
+  PublicKey, SystemProgram, SYSVAR_RENT_PUBKEY, Keypair, ComputeBudgetProgram,
+} from "@solana/web3.js";
+import {
+  TOKEN_PROGRAM_ID, ASSOCIATED_TOKEN_PROGRAM_ID,
+  getAssociatedTokenAddressSync, getOrCreateAssociatedTokenAccount,
+} from "@solana/spl-token";
 import BN from "bn.js";
 import idl from "./vesting.json";
 import {
@@ -35,10 +71,23 @@ import {
 } from "@velthoryn/client";
 
 const PROGRAM_ID = new PublicKey("G6iaigUdi2btFwUc2N65twfxwA8Ew5uKKhKJ5RJa8wvu");
-const program    = new anchor.Program(idl as any, provider);
-const creator    = provider.wallet;                 // the campaign creator
-const u64le      = (n: BN) => n.toArrayLike(Buffer, "le", 8);
-const treePda    = (mint: PublicKey, campaignId: BN) =>
+
+// Anchor provider. Either set env (ANCHOR_PROVIDER_URL = RPC, ANCHOR_WALLET = keypair path)
+// or build one from a Connection + your wallet adapter.
+const provider = anchor.AnchorProvider.env();
+const program  = new anchor.Program(idl as any, provider);
+const creator  = provider.wallet as anchor.Wallet;   // the campaign creator
+
+// Test identities used in the snippets below — in production these are your real wallets:
+const alicePubkey = Keypair.generate().publicKey;    // beneficiary
+const bobPubkey   = Keypair.generate().publicKey;    // beneficiary
+const carolPubkey = Keypair.generate().publicKey;    // beneficiary
+const usdcMint    = Keypair.generate().publicKey;    // the SPL mint being vested
+
+// PDA helpers — these seeds are authoritative (same as INSTRUCTION_REFERENCE §Setup;
+// `creator.publicKey` is closed over here for brevity).
+const u64le = (n: BN) => n.toArrayLike(Buffer, "le", 8);
+const treePda = (mint: PublicKey, campaignId: BN) =>
   PublicKey.findProgramAddressSync(
     [Buffer.from("tree"), creator.publicKey.toBuffer(), mint.toBuffer(), u64le(campaignId)],
     PROGRAM_ID)[0];
@@ -51,13 +100,77 @@ const vaultAuthorityPda = (tree: PublicKey) =>
 
 ---
 
+## Quickstart: single-recipient stream (most common)
+
+If you have **one** recipient (e.g. paying a single contractor or grantee), you do not need a
+Merkle tree at all. `create_stream` builds a 1-leaf campaign **and** funds it in a single
+transaction; the recipient then claims via `withdraw` (no proof array). This covers the
+majority of real usage.
+
+```ts
+const now   = Math.floor(Date.now() / 1000);
+const start = new BN(now);
+const cliff = new BN(now);                       // unlock begins immediately
+const end   = new BN(now + 365 * 86_400);        // 1-year linear vest
+
+const vestingTree = treePda(usdcMint, new BN(1));
+const vaultAuthority = vaultAuthorityPda(vestingTree);
+const vault = getAssociatedTokenAddressSync(usdcMint, vaultAuthority, true);
+const sourceAta = getAssociatedTokenAddressSync(usdcMint, creator.publicKey);
+
+// 1. create + fund in one tx (SPL)
+await program.methods
+  .createStream({
+    campaignId: new BN(1), beneficiary: alicePubkey, amount: new BN(1_000_000),
+    releaseType: ReleaseType.Linear, startTime: start, cliffTime: cliff, endTime: end,
+    milestoneIdx: 0, cancellable: true,
+    cancelAuthority: creator.publicKey, pauseAuthority: creator.publicKey,
+  })
+  .accounts({
+    creator: creator.publicKey, mint: usdcMint, vestingTree, vaultAuthority, vault, sourceAta,
+    tokenProgram: TOKEN_PROGRAM_ID, associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID,
+    systemProgram: SystemProgram.programId, rent: SYSVAR_RENT_PUBKEY,
+  })
+  .rpc();
+
+// 2. beneficiary claims whatever has vested so far (re-call periodically for a linear stream)
+await program.methods
+  .withdraw({
+    releaseType: ReleaseType.Linear, startTime: start, cliffTime: cliff,
+    endTime: end, milestoneIdx: 0,
+  })
+  .accounts({
+    beneficiary: alicePubkey, vestingTree, claimRecord: claimPda(vestingTree, alicePubkey),
+    vaultAuthority, vault, mint: usdcMint,
+    beneficiaryAta: getAssociatedTokenAddressSync(usdcMint, alicePubkey),
+    tokenProgram: TOKEN_PROGRAM_ID, associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID,
+    systemProgram: SystemProgram.programId,
+  })
+  .rpc();
+```
+
+> **Native SOL:** use `createStreamNative({...})` — drop `mint`/`vault`/`sourceAta`/token
+> programs and add `systemProgram`. For **many** recipients, continue to §1.
+
+---
+
 ## 1. Prepare the Merkle tree (off-chain)
 
 `prepareCampaign` builds the tree, computes the root, and pre-computes every beneficiary's
 proof. **All leaf fields are `BN`/numbers, not strings.**
 
+**Release types** (the `ReleaseType` enum):
+
+| Value | Name | When the amount unlocks |
+|-------|------|-------------------------|
+| `Cliff` (0) | Cliff | The full amount at `cliffTime` (nothing before). |
+| `Linear` (1) | Linear | Continuously from `startTime` → `endTime` (vesting effectively begins at `cliffTime`). |
+| `Milestone` (2) | Milestone | The full amount, but only after the creator calls `set_milestone_released(milestoneIdx)`. |
+
 ```ts
 const CAMPAIGN_ID = new BN(1);
+// BASE_TS is a Unix timestamp in SECONDS. For a real campaign pick a value in the FUTURE;
+// claiming before a leaf's cliffTime returns NothingToClaim (6015).
 const BASE_TS = 1_700_000_000;
 
 const recipients: CampaignRecipient[] = [
@@ -75,13 +188,18 @@ const recipients: CampaignRecipient[] = [
 const prepared = prepareCampaign(recipients);
 // prepared.root          → Buffer (32 bytes)
 // prepared.rootHex       → "cf21…"  (send this to the BE)
-// prepared.leafCount, prepared.totalSupply, prepared.minCliffTime
+// prepared.leafCount, prepared.totalSupply
+// prepared.minCliffTime  → the earliest cliff across all leaves; the campaign cannot be
+//                          instant-refunded after this timestamp (BN).
 // prepared.leaves[i]     → VestingLeaf  (70-byte Borsh layout)
 // prepared.proofs[i]     → number[][]   (sibling hashes, leaf→root order)
 ```
 
-> **Issue #29 rule:** at most **one** cliff/linear leaf per beneficiary. The BE enforces
-> this at ingest (see ADR-003). Multiple milestone leaves per beneficiary are allowed.
+> **Issue #29 — fixed on-chain (2026-06-16; ADR-003 superseded).** The program now supports
+> **multiple cliff/linear leaves per beneficiary** (paid each in full via a per-leaf ledger). The
+> BE `prepare`/`import` routes still reject this shape until a follow-up PR removes those guards, so
+> **via the API today: at most one cliff/linear leaf per beneficiary**; direct on-chain
+> construction has no such limit. Multiple milestone leaves per beneficiary are allowed.
 
 ---
 
@@ -96,13 +214,16 @@ const vaultAuthority = vaultAuthorityPda(vestingTree);
 const vault = getAssociatedTokenAddressSync(mint, vaultAuthority, true);
 
 await program.methods
-  .createCampaign(
-    CAMPAIGN_ID, Array.from(prepared.root), prepared.leafCount,
-    prepared.totalSupply, prepared.minCliffTime,
-    true,                                              // cancellable
-    creator.publicKey,                                 // cancel_authority
-    creator.publicKey,                                 // pause_authority
-  )
+  .createCampaign({
+    campaignId: CAMPAIGN_ID,                           // BN (u64)
+    merkleRoot: Array.from(prepared.root),             // number[32]
+    leafCount: prepared.leafCount,                     // u32
+    totalSupply: prepared.totalSupply,                 // BN (u64)
+    minCliffTime: prepared.minCliffTime,               // BN (i64)
+    cancellable: true,
+    cancelAuthority: creator.publicKey,                // Option<Pubkey>
+    pauseAuthority: creator.publicKey,                 // Option<Pubkey>
+  })
   .accounts({
     creator: creator.publicKey, mint, vestingTree, vaultAuthority, vault,
     tokenProgram: TOKEN_PROGRAM_ID, associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID,
@@ -123,6 +244,11 @@ await program.methods
     tokenProgram: TOKEN_PROGRAM_ID,
   })
   .rpc();
+
+// Verify the vault holds the full supply, and the create+fund tx logs show
+// the CampaignCreated + CampaignFunded events:
+//   const bal = await provider.connection.getTokenAccountBalance(vault);
+//   console.log(bal.value.amount);            // → prepared.totalSupply.toString()
 ```
 
 > **Shortcut for a single recipient:** use `create_stream` / `create_stream_native` to create
@@ -136,9 +262,16 @@ variants. The tree PDA holds the lamports directly:
 
 ```ts
 await program.methods
-  .createCampaignNative(CAMPAIGN_ID, Array.from(prepared.root), prepared.leafCount,
-                        prepared.totalSupply, prepared.minCliffTime, true,
-                        creator.publicKey, creator.publicKey)
+  .createCampaignNative({
+    campaignId: CAMPAIGN_ID,                           // BN (u64)
+    merkleRoot: Array.from(prepared.root),             // number[32]
+    leafCount: prepared.leafCount,                     // u32
+    totalSupply: prepared.totalSupply,                 // BN (u64)
+    minCliffTime: prepared.minCliffTime,               // BN (i64)
+    cancellable: true,
+    cancelAuthority: creator.publicKey,                // Option<Pubkey>
+    pauseAuthority: creator.publicKey,                 // Option<Pubkey>
+  })
   .accounts({ creator: creator.publicKey, vestingTree, systemProgram: SystemProgram.programId,
               rent: SYSVAR_RENT_PUBKEY })
   .rpc();
@@ -155,8 +288,8 @@ await program.methods
 ## 3. Register the campaign with the backend (recommended)
 
 The BE indexes events and **serves proofs** so beneficiaries don't need the raw leaves. The
-`POST /api/campaigns` route is **Wallet Auth** — the signer must equal `creator` in the body
-(`docs/API_TRUST_BOUNDARIES.md`).
+`POST /api/campaigns` route is **Wallet Auth** — the request body is signed by the creator's
+keypair, and the signer must equal `creator` in the body (`docs/API_TRUST_BOUNDARIES.md`).
 
 ```ts
 // 1. nonce → sign → bearer token (see docs/API_TRUST_BOUNDARIES.md §Wallet auth flow)
@@ -224,7 +357,13 @@ await program.methods
 
 ### 6a. Fetch the proof (from the BE)
 
+> Assumes you completed §3 (BE registration). If you skipped it, build the proof client-side
+> instead — `const proof = prepared.proofs[i]` (the leaf's index from §1) — and skip this fetch.
+
 ```ts
+const API_BASE = "https://velthoryn.site";    // or your own BE origin
+const ben = alicePubkey;                            // the claiming beneficiary's wallet
+
 const r = await fetch(`${API_BASE}/api/campaigns/${vestingTree.toBase58()}/proof?beneficiary=${ben.toBase58()}`);
 const { leaf, proof } = await r.json();               // leaf = {leafIndex, beneficiary, …}, proof = number[][]
 ```
@@ -258,11 +397,18 @@ The program re-derives the root from the leaf + proof and compares it to the sto
 the `ClaimRecord` PDA is created on the beneficiary's first claim and tracks cumulative
 `claimed_amount` (+ milestone bitmap).
 
+**How often to call:** `claim` pays `vested(leaf) − already_claimed` in one shot. For a
+**linear** stream the beneficiary re-calls periodically (e.g. weekly) as more vests; it's
+idempotent, so calling again before more vests returns `NothingToClaim` (6015). For a **cliff**
+or **milestone** leaf, one call after the unlock suffices.
+
 ---
 
 ## 7. Cancellation + unvested withdrawal
 
 ```ts
+const creatorAta = getAssociatedTokenAddressSync(usdcMint, creator.publicKey);  // SPL only
+
 // creator cancels → starts 7-day grace (beneficiaries may still claim during grace)
 await program.methods.cancelCampaign()
   .accounts({ cancelAuthority: creator.publicKey, vestingTree }).rpc();
@@ -277,14 +423,21 @@ await program.methods.withdrawUnvested()
 
 ## Compute budget & errors
 
-- **Always set a CU limit + priority fee** before `.rpc()`:
+- **Always set a CU limit + priority fee** — build the tx, prepend the compute-budget instructions, then send:
   ```ts
-  .prepend([{ // ComputeBudgetProgram.setComputeUnitLimit({ units: 15_000 })
-              ...ComputeBudgetProgram.setComputeUnitPrice({ microLamports: 100 }) }])
+  const tx = await program.methods
+    .claim(leaf, proof)
+    .accounts({ /* … */ })
+    .transaction();                                 // build, don't send yet
+  tx.instructions.unshift(
+    ComputeBudgetProgram.setComputeUnitLimit({ units: 15_000 }),
+    ComputeBudgetProgram.setComputeUnitPrice({ microLamports: 100 }),
+  );
+  await provider.sendAndConfirm(tx);
   ```
-  Per-instruction numbers: `docs/CU_BUDGET.md`.
-- **Decode errors** by code 6000–6040 → see the [Instruction Reference error table](INSTRUCTION_REFERENCE.md#error-codes-vestingerror-anchor-codes-60006040).
-  Common ones: `InvalidProof` (6013, wrong/forged proof), `NothingToClaim` (6015, too early or fully claimed), `CampaignPaused` (6009), `MilestoneNotReleased` (6033).
+  Per-instruction CU numbers: `docs/CU_BUDGET.md`.
+- **Decode errors** by code 6000–6041 → see the [Instruction Reference error table](INSTRUCTION_REFERENCE.md#error-codes-vestingerror-anchor-codes-60006041).
+  Common ones: `InvalidProof` (6013, wrong/forged proof), `NothingToClaim` (6015, too early or fully claimed), `CampaignPaused` (6009), `MilestoneNotReleased` (6033), `PerLeafCapExceeded` (6041, Issue #29).
 
 ## Native-SOL specifics
 - `mint = PublicKey.default`; no vault ATA — the tree PDA holds lamports.

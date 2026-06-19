@@ -15,9 +15,11 @@
 import { test, expect, type Page } from "@playwright/test";
 import { Keypair, Connection, LAMPORTS_PER_SOL } from "@solana/web3.js";
 import bs58 from "bs58";
+import { datetimeLocalFromNow, expectCampaignLinkReady, selectNativeSol } from "./helpers";
 
 const LOCALNET_RPC = "http://127.0.0.1:8899";
 const keypair = Keypair.generate();
+let createdTreeAddress = "";
 
 async function fundKeypair() {
   const connection = new Connection(LOCALNET_RPC, "confirmed");
@@ -73,13 +75,7 @@ test.describe.serial("Real signing E2E — full vesting lifecycle", () => {
     await injectSigningWallet(page);
     await page.goto("/campaign/create/cliff", { waitUntil: "load" });
 
-    // Wait for form to be ready
-    const tokenBtn = page.getByRole("button", { name: /select token/i });
-    await tokenBtn.waitFor({ state: "visible", timeout: 15_000 });
-
-    // Select SOL
-    await tokenBtn.click();
-    await page.getByRole("button", { name: /SOL.*Native/i }).first().click();
+    await selectNativeSol(page);
 
     // Fill recipient (use a random address)
     const recipient = Keypair.generate().publicKey.toBase58();
@@ -88,19 +84,14 @@ test.describe.serial("Real signing E2E — full vesting lifecycle", () => {
     // Fill amount (small)
     await page.getByPlaceholder(/e\.g\. 1000/i).first().fill("0.01");
 
-    // Fill cliff date (10 seconds from now for quick test)
-    const cliff = new Date(Date.now() + 10_000);
-    await page.locator("input[type='datetime-local']").first().fill(cliff.toISOString().slice(0, 16));
+    await page.locator("input[type='datetime-local']").first().fill(datetimeLocalFromNow(120));
 
     // Submit
     const submitBtn = page.getByRole("button", { name: /create.*stream/i });
     await expect(submitBtn).toBeEnabled({ timeout: 5_000 });
     await submitBtn.click();
 
-    // Wait for transaction to complete — should show success or redirect
-    await expect(
-      page.getByText(/success|created|campaign/i).first()
-    ).toBeVisible({ timeout: 30_000 });
+    createdTreeAddress = await expectCampaignLinkReady(page.getByRole("link", { name: /open stream/i }));
   });
 
   test("dashboard shows the created stream", async ({ page }) => {
@@ -111,10 +102,14 @@ test.describe.serial("Real signing E2E — full vesting lifecycle", () => {
     await expect(page.getByText(/total streams/i)).toBeVisible({ timeout: 15_000 });
   });
 
-  test("balance decreased after creating stream", async () => {
-    const balance = await getBalance();
-    // Should have spent some SOL (0.01 + fees)
-    expect(balance).toBeLessThan(10 * LAMPORTS_PER_SOL);
-    expect(balance).toBeGreaterThan(9 * LAMPORTS_PER_SOL);
+  test("created stream detail page is available", async ({ page }) => {
+    expect(createdTreeAddress).toBeTruthy();
+
+    await injectSigningWallet(page);
+    await page.goto(`/campaign/${createdTreeAddress}`, { waitUntil: "load" });
+
+    await expect(page.getByText(/total allocation|vested/i).first()).toBeVisible({
+      timeout: 30_000,
+    });
   });
 });

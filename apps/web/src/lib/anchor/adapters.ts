@@ -10,9 +10,9 @@ export function toAnchorLeaf(apiLeaf: {
   beneficiary: string;
   amount: string;
   releaseType: number;
-  startTime: number;
-  cliffTime: number;
-  endTime: number;
+  startTime: string | number;
+  cliffTime: string | number;
+  endTime: string | number;
   milestoneIdx: number;
 }) {
   return {

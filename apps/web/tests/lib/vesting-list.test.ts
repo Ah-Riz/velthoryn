@@ -28,7 +28,7 @@ describe("getSenderStreamStatus", () => {
     ).toBe("Paused");
   });
 
-  it("returns Cancelled when cancelled", () => {
+  it("returns Cancelled when cancelledAt is set but no event table record", () => {
     expect(
       getSenderStreamStatus({
         totalSupply: "1000",
@@ -37,6 +37,42 @@ describe("getSenderStreamStatus", () => {
         cancelledAt: 1700000000,
       }),
     ).toBe("Cancelled");
+  });
+
+  it("returns Grace Period when hasCancelEvent is true", () => {
+    expect(
+      getSenderStreamStatus({
+        totalSupply: "1000",
+        totalClaimed: "250",
+        paused: false,
+        cancelledAt: 1700000000,
+        hasCancelEvent: true,
+      }),
+    ).toBe("Grace Period");
+  });
+
+  it("returns Settled when streamSettled is true", () => {
+    expect(
+      getSenderStreamStatus({
+        totalSupply: "1000",
+        totalClaimed: "250",
+        paused: false,
+        cancelledAt: 1700000000,
+        streamSettled: true,
+      }),
+    ).toBe("Settled");
+  });
+
+  it("returns Settled when instantRefunded is true", () => {
+    expect(
+      getSenderStreamStatus({
+        totalSupply: "1000",
+        totalClaimed: "250",
+        paused: false,
+        cancelledAt: 1700000000,
+        instantRefunded: true,
+      }),
+    ).toBe("Settled");
   });
 
   it("returns Claimed when fully claimed", () => {

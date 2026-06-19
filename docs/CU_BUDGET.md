@@ -1,6 +1,6 @@
 # Compute Unit Budget — Velthoryn Vesting Program
 
-> Last updated: 2026-06-11 | Program: `G6iaigUdi2btFwUc2N65twfxwA8Ew5uKKhKJ5RJa8wvu`
+> Last updated: 2026-06-15 | Program: `G6iaigUdi2btFwUc2N65twfxwA8Ew5uKKhKJ5RJa8wvu`
 > Measured with: Mollusk 0.13.1 + Solana CLI 3.1.12 (Agave)
 
 ## Summary
@@ -17,7 +17,7 @@
 | `pause_campaign` | 5,380 | 7,000 | Toggle paused flag |
 | `unpause_campaign` | 5,383 | 7,000 | Toggle paused flag |
 | `close_claim_record` | 5,131 | 7,000 | Drains ClaimRecord rent |
-| `claim` (native) | ~11,500* | 15,000 | *Estimated from bankrun; Mollusk blocked by init_if_needed |
+| `claim` (native) | ~13,200* | 15,000 | *Issue #29 per-leaf ledger adds ~1,700 CU over pre-fix (~11,500). Measured two-leaf second-claim = 13,214 (Mollusk). Mollusk blocked from bench mode by init_if_needed. |
 | `withdraw` (SPL) | — | 20,000 | SPL path, raised from 15K to allow headroom for CPI variance |
 | `cancel_stream` | ~12,000* | 15,000 | *Estimated; Mollusk blocked by init_if_needed |
 | `instant_refund_campaign` | — | 12,000 | Mollusk blocked by Optional<T> |
@@ -129,7 +129,7 @@ const tx = new Transaction()
 | Account | Space (bytes) | Rent (SOL) |
 |---------|--------------|------------|
 | VestingTree | 8 + 315 = 323 | ~0.00224 |
-| ClaimRecord | 8 + 105 = 113 | ~0.00078 |
+| ClaimRecord | 8 + 224 = 232 | ~0.00161 | Iss29 per-leaf ledger (version + 8×u32 idx + 8×u64 amt + pad). zero_copy; legacy 121-byte accounts grown lazily. |
 
 ## Notes
 

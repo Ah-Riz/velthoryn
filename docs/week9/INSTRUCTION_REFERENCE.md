@@ -43,7 +43,7 @@ const treePda = (creator: PublicKey, mint: PublicKey, campaignId: bigint) =>
 | Account | Seeds | Created by | Holds |
 |---------|-------|-----------|-------|
 | `VestingTree` | `[b"tree", creator, mint, campaign_id]` | `create_campaign` / `create_stream` | Campaign config + `merkle_root` + counters |
-| `ClaimRecord` | `[b"claim", vesting_tree, beneficiary]` | lazily by `claim` / `withdraw` / `cancel_stream` | per-beneficiary `claimed_amount`, `milestone_bitmap` |
+| `ClaimRecord` | `[b"claim", vesting_tree, beneficiary]` | lazily by `claim` / `withdraw` / `cancel_stream` | `#[account(zero_copy)]`; `claimed_amount` (sum), `total_entitled`, `milestone_bitmap`, per-leaf ledger (`leaf_claimed_idx`/`leaf_claimed_amt`, `PER_LEAF_CAP=8`) |
 | `vault_authority` | `[b"vault_authority", vesting_tree]` | derived (signer PDA for SPL CPI) | — |
 | `vault` (ATA) | associated to `vault_authority`, mint = campaign mint | `create_campaign` / `create_stream` | the SPL tokens |
 
@@ -74,9 +74,16 @@ const [vestingTree] = PublicKey.findProgramAddressSync(
   [Buffer.from("tree"), creator.toBuffer(), mint.toBuffer(), new BN(campaignId).toArrayLike(Buffer, "le", 8)],
   PROGRAM_ID);
 await program.methods
-  .createCampaign(new BN(campaignId), [...prepared.root], prepared.leafCount,
-                  new BN(prepared.totalSupply), new BN(prepared.minCliffTime),
-                  cancellable, cancelAuthority ?? null, pauseAuthority ?? null)
+  .createCampaign({                               // CreateCampaignArgs — single struct, not positional
+    campaignId: new BN(campaignId),
+    merkleRoot: [...prepared.root],               // number[32]
+    leafCount: prepared.leafCount,                // u32
+    totalSupply: new BN(prepared.totalSupply),    // u64
+    minCliffTime: new BN(prepared.minCliffTime),  // i64
+    cancellable,
+    cancelAuthority: cancelAuthority ?? null,     // Option<Pubkey>
+    pauseAuthority: pauseAuthority ?? null,       // Option<Pubkey>
+  })
   .accounts({ creator, mint, vestingTree /* + vault_authority, vault, token_program, … */ })
   .rpc();
 ```
@@ -89,6 +96,13 @@ Deposit tokens (SPL) or lamports (native) into the campaign vault. Fails if the 
 - **Guards:** `ZeroAmount` (6002), `CampaignCancelled` (6023), `Overflow` (6008), `OverFunded` (6006). `Unauthorized` (6005) if `has_one=creator` fails.
 - **Emits:** `CampaignFunded { tree, amount, vault_balance_after }`.
 
+```ts
+await program.methods
+  .fundCampaign(new BN(amount))                    // u64; fails with OverFunded (6006) past total_supply
+  .accounts({ creator, vestingTree, vault, sourceAta, tokenProgram: TOKEN_PROGRAM_ID })
+  .rpc();
+```
+
 ### `update_root(new_root, new_leaf_count, new_min_cliff_time)`
 Rotate the Merkle root (replace the entire recipient set). Signed by `cancel_authority`.
 
@@ -97,12 +111,29 @@ Rotate the Merkle root (replace the entire recipient set). Signed by `cancel_aut
 - **Emits:** `RootUpdated { tree, old_root, new_root, new_leaf_count }`.
 - **Note:** allowed while `paused` (trusted admin op). See ADR-001 / SC-FIND-05.
 
+```ts
+const rotated = prepareCampaign(newRecipients);    // @velthoryn/client — recompute root + counts
+await program.methods
+  .updateRoot([...rotated.root], rotated.leafCount, new BN(rotated.minCliffTime))
+  .accounts({ cancelAuthority, vestingTree })
+  .signers([cancelAuthority])
+  .rpc();
+```
+
 ### `cancel_campaign()`
 Cancel a campaign; starts the 7-day grace period. Does **not** move funds — beneficiaries may still claim during grace; the creator withdraws the remainder afterward via `withdraw_unvested`.
 
 - **Accounts:** `cancel_authority` (signer), `vesting_tree` (mut).
 - **Guards:** `NotCancellable` (6019), `AlreadyCancelled` (6020), `Unauthorized` (6005), `FullyVested` (6031).
 - **Emits:** `CampaignCancelled { tree, cancelled_at, claimed_at_cancel }`.
+
+```ts
+await program.methods
+  .cancelCampaign()                                // no args; starts the 7-day grace period
+  .accounts({ cancelAuthority, vestingTree })
+  .signers([cancelAuthority])
+  .rpc();
+```
 
 ### `withdraw_unvested()`
 **After** the grace period, the creator withdraws the entire remaining vault balance (all unvested tokens).
@@ -111,12 +142,31 @@ Cancel a campaign; starts the 7-day grace period. Does **not** move funds — be
 - **Guards:** `NotCancelled` (6026), `GracePeriodActive` (6027), `NothingToClaim` (6015).
 - **Native behavior:** transfers `balance − rent_min` (preserves rent-exempt so the PDA stays queryable — SC-FIND-02 fix). Emits `UnvestedWithdrawn { tree, amount }`.
 
+```ts
+// ONLY after the 7-day grace has elapsed (GracePeriodActive = 6027 until then)
+await program.methods
+  .withdrawUnvested()
+  .accounts({ creator, vestingTree, vaultAuthority, vault, creatorAta,
+              tokenProgram: TOKEN_PROGRAM_ID, systemProgram: SystemProgram.programId })
+  .rpc();
+```
+
 ### `instant_refund_campaign()`
 Multi-leaf campaigns only, **before** `min_cliff_time`: refund the entire vault to the creator immediately (cancels + sets `instant_refunded`).
 
-- **Guards:** `NotMultiLeafCampaign` (6040), `CampaignAlreadyStarted` (6036, `now < min_cliff_time`), `MilestoneAlreadyReleased` (6034, if any flag set), `NothingToClaim` (6015). Plus `NotCancellable`/`AlreadyCancelled`/`Unauthorized`/`FullyVested`.
+- **Accounts:** `creator` (signer, mut), `vesting_tree` (mut). Native-SOL adds `system_program`; SPL adds `vault_authority`, `vault`, `creator_ata`, `token_program`.
+- **Guards:** `NotMultiLeafCampaign` (6040), `CampaignAlreadyStarted` (6036, fires when `now >= min_cliff_time` — campaign has already started; instant refund is only allowed before `min_cliff_time`), `MilestoneAlreadyReleased` (6034, if any flag set), `NothingToClaim` (6015). Plus `NotCancellable`/`AlreadyCancelled`/`Unauthorized`/`FullyVested`.
 - **Emits:** `InstantRefunded { tree, cancelled_at, refunded_to, amount }`.
 - **After instant refund:** `claim`/`withdraw` are blocked (`InstantRefundedCampaign` 6035).
+
+```ts
+// multi-leaf only, before min_cliff_time, no milestone released yet
+await program.methods
+  .instantRefundCampaign()                         // no args; drains vault/PDA back to creator
+  .accounts({ creator, vestingTree, vaultAuthority, vault, creatorAta,
+              tokenProgram: TOKEN_PROGRAM_ID, systemProgram: SystemProgram.programId })
+  .rpc();
+```
 
 ### `pause_campaign()` / `unpause_campaign()`
 Toggle `paused`. Signed by `pause_authority`.
@@ -124,6 +174,15 @@ Toggle `paused`. Signed by `pause_authority`.
 - **Guards (pause):** `NotPausable` (6021), `Unauthorized` (6005), `CampaignCancelled` (6023), `CampaignCompleted` (6025), `AlreadyPaused` (6022).
 - **Guards (unpause):** `CampaignCompleted` (6025), `NotPaused` (6024).
 - **Emits:** `CampaignPaused` / `CampaignUnpaused`. While paused, `claim`/`withdraw` are blocked (`CampaignPaused` 6009) unless the campaign is also cancelled (grace claims allowed).
+
+```ts
+await program.methods
+  .pauseCampaign()                                 // no args
+  .accounts({ pauseAuthority, vestingTree })
+  .signers([pauseAuthority])
+  .rpc();
+// resume with the same accounts: program.methods.unpauseCampaign()
+```
 
 ---
 
@@ -149,10 +208,11 @@ await program.methods
   .rpc();
 ```
 
-> **Known limitation — Issue #29 (ADR-003):** a beneficiary must not appear in more than one
-> cliff/linear leaf of the same campaign. The BE rejects this at ingest (`prepare`/`import`);
-> the on-chain program under-counts (never over-pays) if it ever occurs. Multiple milestone
-> leaves per beneficiary are fine (guarded by the milestone bitmap).
+> **Issue #29 — FIXED on-chain (2026-06-16; ADR-003 superseded).** `ClaimRecord` now tracks
+> `claimable` per leaf (`vested(leaf) − leaf_claimed_amt[leaf_index]`), so a beneficiary may hold
+> multiple cliff/linear leaves and be paid each in full (never over-pays). The BE `prepare`/`import`
+> guards that rejected this shape remain until a follow-up PR removes them. Multiple milestone
+> leaves per beneficiary were always fine (guarded by the milestone bitmap).
 
 ### `withdraw(args)`
 Single-stream claim (`leaf_count == 1` only). The beneficiary supplies the schedule args
@@ -162,6 +222,18 @@ directly; `leaf_hash` is checked against `tree.merkle_root` (no proof array).
 - **Guards:** same family as `claim` (`InstantRefundedCampaign`, `CampaignPaused`, `UnauthorizedClaimer`, `InvalidSchedule`, `InvalidProof`, milestone, `NothingToClaim`, `InsufficientVault`, `OverClaim`, `NativeSolRentViolation`) + `NotSingleStream` (6029). Includes the `instant_refunded` guard added in Week 9 (SC-FIND-03).
 - **Emits:** `Claimed { …, leaf_index: 0 }`.
 
+```ts
+await program.methods
+  .withdraw({                                      // WithdrawArgs — single struct
+    releaseType, startTime, cliffTime, endTime, milestoneIdx,
+  })
+  .accounts({ beneficiary: wallet.publicKey, vestingTree, claimRecord, vaultAuthority,
+              vault, mint, beneficiaryAta, tokenProgram: TOKEN_PROGRAM_ID,
+              associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID,
+              systemProgram: SystemProgram.programId })
+  .rpc();
+```
+
 ### `cancel_stream(args)`
 Creator cancels a single-recipient stream: sends the vested portion to the beneficiary and the remainder back to the creator in one tx.
 
@@ -170,6 +242,14 @@ Creator cancels a single-recipient stream: sends the vested portion to the benef
 - **Guards:** `NotSingleStream` (6029), `NotCancellable` (6019), `AlreadyCancelled` (6020), `FullyVested` (6031), `Unauthorized` (6005), `InvalidProof` (6013), `InsufficientVault` (6016), `NothingToClaim` (6015), `OverClaim` (6017).
 - **Emits:** `StreamCancelled { tree, cancelled_at, amount_to_beneficiary, amount_to_creator }`.
 
+```ts
+await program.methods
+  .cancelStream({ releaseType, startTime, cliffTime, endTime, milestoneIdx }) // WithdrawArgs
+  .accounts({ creator, beneficiary, vestingTree, claimRecord, systemProgram: SystemProgram.programId,
+              vaultAuthority, vault, beneficiaryAta, creatorAta, tokenProgram: TOKEN_PROGRAM_ID })
+  .rpc();
+```
+
 ### `set_milestone_released(milestone_idx)`
 Creator releases a milestone (sets a bit in `milestone_released_flags`), enabling beneficiaries to claim that milestone leaf.
 
@@ -177,12 +257,26 @@ Creator releases a milestone (sets a bit in `milestone_released_flags`), enablin
 - **Guards:** `InstantRefundedCampaign` (6035), `Unauthorized` (6005), `MilestoneAlreadyReleased` (6034).
 - **Emits:** `MilestoneReleased { tree, milestone_idx, released_by }`.
 
+```ts
+await program.methods
+  .setMilestoneReleased(milestoneIdx)              // u8 (0–255)
+  .accounts({ creator, vestingTree })
+  .rpc();
+```
+
 ### `close_claim_record()`
 Reclaim the rent of a `ClaimRecord` PDA. Allowed only when fully claimed **or** after the grace period.
 
 - **Accounts:** `beneficiary` (signer, mut), `vesting_tree` (read), `claim_record` (mut, `close=beneficiary`, `has_one=beneficiary`, `seeds=[claim, tree, beneficiary]`).
 - **Guards:** `Unauthorized` (6005), `WrongVault` (6018), `CannotClose` (6028).
 - **Emits:** `ClaimRecordClosed { tree, beneficiary }`.
+
+```ts
+await program.methods
+  .closeClaimRecord()                              // rent refunded to beneficiary; fully claimed or post-grace
+  .accounts({ beneficiary: wallet.publicKey, vestingTree, claimRecord })
+  .rpc();
+```
 
 ---
 
@@ -195,6 +289,21 @@ Create a 1-recipient campaign **and** fund it in one transaction (root = `leaf_h
 - **Guards:** `ZeroAmount`, `InvalidSchedule`, `InvalidScheduleType`, `MissingCancelAuthority`.
 - **Emits:** `CampaignCreated` then `CampaignFunded`. Beneficiary later claims via `withdraw` (not `claim`).
 
+```ts
+await program.methods
+  .createStream({                                  // CreateStreamArgs — single struct; create + fund in one tx
+    campaignId: new BN(campaignId), beneficiary, amount: new BN(amount),
+    releaseType, startTime: new BN(startTime), cliffTime: new BN(cliffTime),
+    endTime: new BN(endTime), milestoneIdx, cancellable,
+    cancelAuthority: cancelAuthority ?? null, pauseAuthority: pauseAuthority ?? null,
+  })
+  .accounts({ creator, mint, vestingTree, vaultAuthority, vault, sourceAta,
+              tokenProgram: TOKEN_PROGRAM_ID, associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID,
+              systemProgram: SystemProgram.programId, rent: SYSVAR_RENT_PUBKEY })
+  .rpc();
+// createStreamNative({...}) drops mint/vault/source_ata/token_program/ata_program; uses system_program.
+```
+
 ---
 
 ## 4. View function
@@ -204,9 +313,16 @@ Read-only computation (no accounts). Returns the vested amount for a leaf at tim
 clamping to `cancelled_at` if supplied. For milestone leaves, returns `leaf.amount` only if
 the corresponding flag is set. Use this to preview a claim before submitting.
 
+```ts
+// view fn: no accounts; args = leaf, Option<cancelled_at>, now, Option<[u8;32] flags>
+const vestedNow = await program.methods
+  .getVestedAmount(leafStruct, cancelledAt ?? null, new BN(now), milestoneReleasedFlags ?? null)
+  .view();                                         // returns u64 as BN
+```
+
 ---
 
-## Error codes (`VestingError`, Anchor codes 6000–6040)
+## Error codes (`VestingError`, Anchor codes 6000–6041)
 
 | Code | Variant | Meaning |
 |------|---------|---------|
@@ -251,6 +367,7 @@ the corresponding flag is set. Use this to preview a claim before submitting.
 | 6038 | `NativeSolRentViolation` | Native transfer would break rent-exempt |
 | 6039 | `UnsupportedMint` | Token-2022 not supported |
 | 6040 | `NotMultiLeafCampaign` | Instant refund needs `leaf_count > 1` |
+| 6041 | `PerLeafCapExceeded` | Beneficiary exceeds the per-leaf claim slot capacity (`PER_LEAF_CAP`) — Issue #29 fix |
 
 ---
 

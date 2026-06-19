@@ -2,7 +2,7 @@
 
 import { CARD, INPUT_ERR, Input, Field, SectionHeader, formatDuration } from "./shared";
 
-const DT_INPUT_CLS = "h-auto rounded-xl bg-[#11161f] px-4 py-3 text-[13px] text-white border-white/[0.08] focus-visible:border-white/20 focus-visible:ring-0";
+const DT_INPUT_CLS = "h-auto rounded-xl bg-muted px-4 py-3 text-[13px] text-foreground border-foreground/[0.08] focus-visible:border-foreground/20 focus-visible:ring-0";
 
 export function ScheduleMilestone({
   startTime,
@@ -55,11 +55,11 @@ export function ScheduleMilestone({
         />
       </div>
       {startTime && unlockTime ? (
-        <p className="text-[12px] text-[#6f7c95]">
+        <p className="text-[12px] text-muted-foreground">
           Duration until unlock: {formatDuration(startTime, unlockTime) || "—"}
         </p>
       ) : null}
-      {scheduleError ? <p className="text-[12px] text-red-400">{scheduleError}</p> : null}
+      {scheduleError ? <p className="text-[12px] text-red-700 dark:text-red-400">{scheduleError}</p> : null}
       <Field
         label="Milestone Index"
         inputId="milestone-idx"
@@ -72,7 +72,7 @@ export function ScheduleMilestone({
             value={milestoneIdx}
             onChange={(e) => onMilestoneIdxChange(e.target.value)}
             aria-invalid={!!milestoneError}
-            className={`h-auto max-w-[160px] rounded-xl bg-[#11161f] px-4 py-3 text-[13px] text-white border-white/[0.08] focus-visible:border-white/20 focus-visible:ring-0 ${milestoneError ? INPUT_ERR : ""}`}
+            className={`h-auto max-w-[160px] rounded-xl bg-muted px-4 py-3 text-[13px] text-foreground border-foreground/[0.08] focus-visible:border-foreground/20 focus-visible:ring-0 ${milestoneError ? INPUT_ERR : ""}`}
           />
         }
         error={milestoneError}

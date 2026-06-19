@@ -27,6 +27,8 @@ async function getBeneficiaryCampaignsHandler(
     cancelled_at: number | null;
     created_at: number;
     metadata: { name?: string; description?: string; logoUri?: string } | null;
+    instant_refunded: boolean;
+    stream_settled: boolean;
     leaf_index: number;
     amount: number;
     release_type: number;
@@ -58,6 +60,11 @@ async function getBeneficiaryCampaignsHandler(
         c.id, c.tree_address, c.creator, c.mint, c.campaign_id,
         c.total_supply, c.leaf_count, c.paused, c.cancelled_at,
         c.created_at, c.metadata,
+        c.instant_refunded,
+        EXISTS (
+          SELECT 1 FROM stream_cancel_events sce
+          WHERE sce.campaign_id = c.id
+        ) AS stream_settled,
         l.leaf_index, l.amount, l.release_type,
         l.start_time, l.cliff_time, l.end_time, l.milestone_idx,
         coalesce(mc.claimed_amount, 0)::bigint AS my_claimed
@@ -83,6 +90,8 @@ async function getBeneficiaryCampaignsHandler(
     cancelledAt: row.cancelled_at,
     createdAt: row.created_at,
     metadata: row.metadata,
+    instantRefunded: row.instant_refunded,
+    streamSettled: row.stream_settled,
     myClaimed: row.my_claimed,
     myLeaf: {
       leafIndex: row.leaf_index,

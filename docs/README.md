@@ -12,7 +12,7 @@ Scripts: `apps/web/tests/load/` (`api-load.js`, `prepare-load.js`, `proof-load.j
 |-----|----------|----------|
 | [`LOCAL_DEV.md`](LOCAL_DEV.md) | All | Keypair, validator, first green test |
 | [`TESTING.md`](TESTING.md) | All | SC + web + E2E commands, **k6 load tests**, SC benchmarks, CI matrix |
-| [`INTEGRATION.md`](INTEGRATION.md) | FE/BE | Program ID, PDAs, Merkle, sample calls |
+| [`INTEGRATION.md`](INTEGRATION.md) | All | **Hub:** code map (BE/DB/SC/Merkle) + API quick-reference |
 | [`FE_INTEGRATION.md`](FE_INTEGRATION.md) | FE | Full frontend guide, file map, flows |
 
 ## Program & on-chain

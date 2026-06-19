@@ -2,7 +2,7 @@
 
 import { CARD, Input, Field, SectionHeader, formatDuration } from "./shared";
 
-const DT_INPUT_CLS = "h-auto rounded-xl bg-[#11161f] px-4 py-3 text-[13px] text-white border-white/[0.08] focus-visible:border-white/20 focus-visible:ring-0";
+const DT_INPUT_CLS = "h-auto rounded-xl bg-muted px-4 py-3 text-[13px] text-foreground border-foreground/[0.08] focus-visible:border-foreground/20 focus-visible:ring-0";
 
 export function ScheduleLinear({
   startTime,
@@ -66,12 +66,12 @@ export function ScheduleLinear({
         />
       </div>
       {startTime && endTime ? (
-        <p className="text-[12px] text-[#6f7c95]">
+        <p className="text-[12px] text-muted-foreground">
           Total vesting duration: {formatDuration(startTime, endTime) || "—"}
           {cliffTime && startTime ? ` · Cliff after ${formatDuration(startTime, cliffTime) || "—"}` : ""}
         </p>
       ) : null}
-      {scheduleError ? <p className="text-[12px] text-red-400">{scheduleError}</p> : null}
+      {scheduleError ? <p className="text-[12px] text-red-700 dark:text-red-400">{scheduleError}</p> : null}
     </div>
   );
 }

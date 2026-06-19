@@ -47,6 +47,7 @@ export const VESTING_ERROR_CODES = {
   NativeSolRentViolation: 6038,
   UnsupportedMint: 6039,
   NotMultiLeafCampaign: 6040,
+  PerLeafCapExceeded: 6041,
 } as const;
 
 type ErrorKey = keyof typeof VESTING_ERROR_CODES;
@@ -100,6 +101,7 @@ const USER_MESSAGES: Record<ErrorKey, string> = {
     "Native SOL transfer would drop PDA below rent-exempt minimum.",
   UnsupportedMint: "Token-2022 mints are not supported; use classic SPL Token.",
   NotMultiLeafCampaign: "Instant refund is only allowed on multi-leaf campaigns.",
+  PerLeafCapExceeded: "Beneficiary has reached the maximum number of vesting streams (8) for this campaign.",
 };
 
 function codeToHex(code: number): string {
@@ -201,4 +203,105 @@ const RETRYABLE_PATTERNS = [
 export function isRetryableError(err: unknown): boolean {
   const raw = err instanceof Error ? err.message : String(err);
   return RETRYABLE_PATTERNS.some((p) => raw.includes(p));
+}
+
+// ── Error extraction utilities ───────────────────────────────────────────────
+
+/** Recursive traversal to extract transaction logs and the program error from any error object. */
+export function extractSimulationDetails(err: unknown): {
+  logs: string[];
+  programErr: unknown;
+  message: string;
+} {
+  const logs: string[] = [];
+  const seen = new Set<unknown>();
+  let programErr: unknown;
+
+  function visit(value: unknown): void {
+    if (!value || (typeof value !== "object" && !Array.isArray(value))) return;
+    if (seen.has(value)) return;
+    seen.add(value);
+
+    if (Array.isArray(value)) {
+      if (value.every((entry) => typeof entry === "string")) {
+        logs.push(...(value as string[]));
+        return;
+      }
+      for (const entry of value) visit(entry);
+      return;
+    }
+
+    for (const [key, nested] of Object.entries(value as Record<string, unknown>)) {
+      if ((key === "logs" || key === "transactionLogs") && Array.isArray(nested)) {
+        for (const entry of nested) {
+          if (typeof entry === "string") logs.push(entry);
+        }
+      }
+      if (programErr === undefined && key === "err" && nested !== undefined) {
+        programErr = nested;
+      }
+      visit(nested);
+    }
+  }
+
+  visit(err);
+  return { logs, programErr, message: err instanceof Error ? err.message : String(err) };
+}
+
+/** Find the most relevant program log line for surfacing to users. */
+export function getRelevantProgramLog(logs: string[]): string | null {
+  const interesting = logs.filter((log) =>
+    log.includes("Program log:") ||
+    log.includes("AnchorError") ||
+    log.includes("custom program error") ||
+    log.includes("failed:") ||
+    log.includes("Error"),
+  );
+  return interesting.at(-1) ?? null;
+}
+
+/** Detect wallet rejection / user cancellation across all major wallet adapters. */
+export function isWalletCancellation(err: unknown): boolean {
+  const raw = err instanceof Error ? err.message : String(err);
+  return /User rejected|Connection rejected|Transaction cancelled|rejected by user|denied/i.test(raw);
+}
+
+/**
+ * Format a vesting error with extracted log context.
+ * Tries known error patterns against combined logs first, then falls back to
+ * the last relevant program log line.
+ */
+export function formatVestingErrorWithLogs(
+  err: unknown,
+  logs: string[],
+  programErr?: unknown,
+): string {
+  const message = err instanceof Error ? err.message : String(err);
+  const fullStr = [
+    logs.join("\n"),
+    programErr !== undefined ? String(programErr) : "",
+    message,
+  ]
+    .filter(Boolean)
+    .join("\n");
+
+  if (fullStr) {
+    const fromFull = formatVestingError({ message: fullStr });
+    if (fromFull !== "Transaction failed. Please try again.") return fromFull;
+  }
+
+  const lastLog = getRelevantProgramLog(logs);
+  if (lastLog) {
+    const fromLog = formatVestingError({ message: lastLog });
+    if (fromLog !== "Transaction failed. Please try again.") return fromLog;
+    const logBody = lastLog
+      .replace(/^Program log:\s*/i, "")
+      .replace(/^AnchorError[^:]*:\s*/i, "")
+      .trim();
+    if (logBody && logBody.length < 200 && !logBody.includes("http") && !logBody.includes("at ")) {
+      return `Transaction failed: ${logBody}`;
+    }
+  }
+
+  return formatVestingError(err);
 }

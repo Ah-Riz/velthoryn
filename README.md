@@ -32,7 +32,7 @@ velthoryn/
 
 ## Current status
 
-**Fully implemented and deployed to devnet.** All **18** instruction handlers (14 SPL + 3 native SOL + `instant_refund_campaign`), schedule math (`vested`, `get_vested_amount`), and Merkle proof verification (`verify_merkle_proof`) are live with real logic. State structs, error codes (**41** variants), and events (**10** types, including `InstantRefunded`) are fully defined. `leaf_hash()` is byte-verified against the TS encoder. Native SOL vesting supports campaigns in raw SOL without wrapping to wSOL — see [`docs/NATIVE_SOL_VESTING.md`](docs/NATIVE_SOL_VESTING.md).
+**Fully implemented and deployed to devnet.** All **18** instruction handlers (14 SPL + 3 native SOL + `instant_refund_campaign`), schedule math (`vested`, `get_vested_amount`), and Merkle proof verification (`verify_merkle_proof`) are live with real logic. State structs, error codes (**42** variants), and events (**12** types, including `InstantRefunded`) are fully defined. `leaf_hash()` is byte-verified against the TS encoder. Native SOL vesting supports campaigns in raw SOL without wrapping to wSOL — see [`docs/NATIVE_SOL_VESTING.md`](docs/NATIVE_SOL_VESTING.md).
 
 **Instant refund (B1):** Creator-only immediate refund for **unstarted multi-leaf** campaigns (`now < min_cliff_time`, no milestones released). Single-leaf campaigns still use `cancel_stream`; started campaigns use `cancel_campaign` (7-day grace). BE exposes `instantRefundEligible` and `POST .../instant-refund` tx builder — see [`docs/BACKEND_API.md`](docs/BACKEND_API.md).
 
@@ -40,22 +40,24 @@ velthoryn/
 
 **F1–F4 roadmap complete and implemented:** F1 Bulk Send (server-side Merkle build, CSV import), F2 Transparency Dashboard (dashboard rewrite with 6 stat cards + claimable banner + vesting progress + activity feed, portfolio page with per-campaign breakdown + sort, `/api/activity/[address]` cross-campaign feed, `useMintDecimals` for real token amounts), F3 Clawback (cancel campaign/stream, withdraw unvested, milestone release + `CampaignStatusBanner` 7-state banner, `GracePeriodCountdown`, sidebar amber dot badge, "Needs Action" tab, dashboard "Needs Attention" section), F4 Production Hardening (Sentry monitoring, API versioning, vesting simulation, schedule templates). 12 new API routes, 6 event tables, 15 bug fixes from code review.
 
-**Week 8 gap closure (BE/infra):** k6 load scripts (`apps/web/tests/load/` — prepare, proof, spike + `run-load-test.sh`); rate-limit baselines in [`docs/TESTING.md`](docs/TESTING.md) §k6; CU budget re-audit in [`docs/CU_BUDGET.md`](docs/CU_BUDGET.md); **Known Issue #29** mitigated at API layer (prepare + import reject multiple cliff/linear leaves per beneficiary — see [`docs/KNOWN_ISSUE_29_DESIGN.md`](docs/KNOWN_ISSUE_29_DESIGN.md) §6).
+**Week 8 gap closure (BE/infra):** k6 load scripts (`apps/web/tests/load/` — prepare, proof, spike + `run-load-test.sh`); rate-limit baselines in [`docs/TESTING.md`](docs/TESTING.md) §k6; CU budget re-audit in [`docs/CU_BUDGET.md`](docs/CU_BUDGET.md); **Known Issue #29 — fixed on-chain** (2026-06-16): `ClaimRecord` is now `#[account(zero_copy)]` with a per-leaf ledger (`leaf_claimed_idx`/`leaf_claimed_amt`, `PER_LEAF_CAP = 8`) so a beneficiary with multiple cliff/linear leaves is paid each in full. The BE guards (prepare + import reject multi cliff/linear per beneficiary) remain until a follow-up post-deploy PR removes them — see [`docs/KNOWN_ISSUE_29_DESIGN.md`](docs/KNOWN_ISSUE_29_DESIGN.md) + ADR-003 (superseded).
 
 **Week 8 FE cleanup:** Shared UI primitives extracted (`StatCard`, `ProgressBar`, `CampaignCard`, `SectionHeader`, `FieldRow`, `DetailRow`, `Spinner`, `RecipientListModal`). Centralized `lib/api/serialize.ts` for BigInt-safe JSON. Numbered migrations `0002`–`0005` backfill event-table history. Post-tx indexing uses public `POST /api/events/sync`; operator backfill uses admin-only `POST /api/claims/sync`. E2E helpers support mock wallet + mock send-tx for cancel flows without devnet RPC.
 
-**Week 9 detection + hardening:** a systematic detect → triage → fix → docs pass across SC / MERKLE / BE / DB. **5 code fixes applied + verified** (`BE-SEC-01` campaign-POST wallet auth, `BE-SEC-06` cron timing-safe compare, `BE-SEC-05` rate-limit resilience, `SC-FIND-02` native-SOL rent preservation, `SC-FIND-03` withdraw guard); 7 findings documented with rationale; Merkle surface independently audited (**sound**). New integrator docs in [`docs/week9/`](docs/week9/) — see "deeper reads" below. Regression: SC **125/0/19**, BE **565/565** + typecheck BE-clean. Full finding list: [`docs/week9/BUG_LIST.md`](docs/week9/BUG_LIST.md).
+**Week 9 detection + hardening:** a systematic detect → triage → fix → docs pass across SC / MERKLE / BE / DB. **5 code fixes applied + verified** (`BE-SEC-01` campaign-POST wallet auth, `BE-SEC-06` cron timing-safe compare, `BE-SEC-05` rate-limit resilience, `SC-FIND-02` native-SOL rent preservation, `SC-FIND-03` withdraw guard); 7 findings documented with rationale; Merkle surface independently audited (**sound**). New integrator docs in [`docs/week9/`](docs/week9/) — see "deeper reads" below. Regression: SC **126/0/19** (was 125/0/19; +1 Issue #29 two-leaf regression test), BE **565/565** + typecheck BE-clean. Full finding list: [`docs/week9/BUG_LIST.md`](docs/week9/BUG_LIST.md).
 
-**Test results: 127+ SC tests PASS** (`pnpm test:localnet`); **563 web Vitest PASS** (API routes use Postgres in CI)
+**Campaign-level schedule (cliff/linear):** recipients with different amounts (e.g. 0.5 SOL vs 1 SOL) now unlock at the same instant. The schedule (Start/Cliff/End for linear, Start/Cliff for cliff) is **campaign-level** — one shared schedule stamped on every leaf — instead of per-recipient. The on-chain schedule math was already correct; the fix is FE-only: the create flow (Manual + CSV) and the linear/cliff CSV templates now carry wallet + amount per recipient and one schedule per campaign. Milestone leaves keep their per-row unlock times. **No on-chain, prepare-route, or client-SDK changes.** Regression tests in `apps/web/tests/lib/bulk-campaign.test.ts` cover the 0.5-vs-1-SOL identical-schedule guarantee and milestone isolation.
+
+**Test results: 127+ SC tests PASS** (`pnpm test:localnet`); **572 web Vitest PASS** (API routes use Postgres in CI)
 **BE–SC Merkle pipeline verified end-to-end**: 3-leaf campaigns (Cliff/Linear/Milestone) through prepare → POST (all leaves verified) → GET proof → verify. RLS on all Supabase tables. **Bootcamp acceptance: 8/8** — see [`docs/BE-SC-MERKLE-ACCEPTANCE-STATUS.md`](docs/BE-SC-MERKLE-ACCEPTANCE-STATUS.md).
 - Devnet + bankrun (`pnpm test:devnet`): **98 passing, 1 pending** — live breakdown in [`docs/DEVNET_TEST_RESULTS.md`](docs/DEVNET_TEST_RESULTS.md) (devnet RPC 75 + bankrun 24; T68 pending on RPC, covered by clock suite)
 - Native SOL tests: `tests/vesting-native-sol.spec.ts` via **solana-bankrun** (12 tests covering full SOL lifecycle)
 - Clock-dependent cases: `tests/vesting.clock.spec.ts` via **solana-bankrun** (T17–T20, T25, T47, T55–T64, EXPLOIT 4)
 - Sealevel-attacks gap tests: `tests/sealevel-attacks-gap.spec.ts` via **solana-bankrun** (4 tests: duplicate accounts #6, PDA sharing #8, close-reinit #9)
 - LiteSVM PoC: `tests/vesting-litesvm.spec.ts` via **LiteSVM** (5 tests: boot, mint, time-travel, program loading, simulation)
-- Mollusk instruction tests: 7 domain-specific test files via **Mollusk** (72 active + 18 ignored): `instructions.rs` (14), `stream.rs` (7), `admin.rs` (18+6), `cancel.rs` (5+9), `claim.rs` (16), `cleanup.rs` (2+3), `lifecycle.rs` (8)
-- Mollusk CU benchmarks: `programs/vesting/tests/benchmarks.rs` via **Mollusk** (9 active + 1 ignored; see [`docs/CU_BUDGET.md`](docs/CU_BUDGET.md))
-- proptest property tests: `programs/vesting/src/math/` via **proptest** (20 tests: schedule 11 invariants, merkle 7 invariants + 10 unit tests)
+- Mollusk instruction tests: 8 domain-specific test files via **Mollusk** (73 active + 18 ignored): `instructions.rs` (14), `stream.rs` (7), `admin.rs` (18+6), `cancel.rs` (5+9), `claim.rs` (17), `cleanup.rs` (2+3), `lifecycle.rs` (8), `withdraw_unvested.rs` (3)
+- Mollusk CU benchmarks: `programs/vesting/tests/benchmarks.rs` via **Mollusk** (10 active + 1 ignored; see [`docs/CU_BUDGET.md`](docs/CU_BUDGET.md))
+- proptest property tests: `programs/vesting/src/math/{schedule,merkle}.rs` via **proptest** (18 property invariants: schedule 10 + merkle 8; plus 24 standalone unit tests)
 
 See [`docs/STREAM_MODEL.md`](docs/STREAM_MODEL.md) (tutorial `Stream` PDA vs campaign model) and [`docs/ERROR_MAP.md`](docs/ERROR_MAP.md).
 
@@ -91,11 +93,22 @@ For deeper reads:
 - [`docs/DEVNET_TEST_RESULTS.md`](docs/DEVNET_TEST_RESULTS.md) — full test results matrix with acceptance criteria.
 - [`docs/API_TRUST_BOUNDARIES.md`](docs/API_TRUST_BOUNDARIES.md) — every API route: public / wallet-auth / admin classification.
 - [`docs/PENDING_WORK.md`](docs/PENDING_WORK.md) — prioritized backlog from spec audit (updated as items land).
-- [`docs/KNOWN_ISSUE_29_DESIGN.md`](docs/KNOWN_ISSUE_29_DESIGN.md) — design note for multi-leaf `claimed_amount` undercount (breaking SC change).
-- [`docs/week9/INSTRUCTION_REFERENCE.md`](docs/week9/INSTRUCTION_REFERENCE.md) — **every instruction**: accounts + constraints, args, behavior, full error-code table (6000–6040), events, TS examples.
+- [`docs/KNOWN_ISSUE_29_DESIGN.md`](docs/KNOWN_ISSUE_29_DESIGN.md) — multi-leaf `claimed_amount` undercount — ✅ **fixed on-chain** 2026-06-16 (per-leaf ledger; ADR-003 superseded).
+- [`docs/week9/INSTRUCTION_REFERENCE.md`](docs/week9/INSTRUCTION_REFERENCE.md) — **every instruction**: accounts + constraints, args, behavior, full error-code table (6000–6041), events, TS examples.
 - [`docs/week9/INTEGRATION_GUIDE.md`](docs/week9/INTEGRATION_GUIDE.md) — end-to-end creator + beneficiary walkthrough (prepare → create → fund → register → claim) with runnable TS snippets; SPL + native SOL.
-- [`docs/week9/ADRs/`](docs/week9/ADRs/) — Merkle-compressed vesting, keccak-256 + domain separation, Issue #29 deferred on-chain fix.
+- [`docs/week9/ADRs/`](docs/week9/ADRs/) — Merkle-compressed vesting, keccak-256 + domain separation, Issue #29 on-chain fix (ADR-003, superseded — shipped).
 - [`docs/week9/BUG_LIST.md`](docs/week9/BUG_LIST.md) — Week 9 detection findings, fixes applied, and documented limitations.
+- [`docs/week9/FE_DOCUMENTATION_REVIEW.md`](docs/week9/FE_DOCUMENTATION_REVIEW.md) — FE-perspective review of instruction reference + integration guide; 4 FE ADRs; FE-SC interface matrix; error code coverage (6000–6041).
+- [`docs/week9/FE_TESTING_STATUS.md`](docs/week9/FE_TESTING_STATUS.md) — FE test suite status: Vitest 572/572, E2E 23 chromium specs + 10 signing specs, CI pipeline status.
+- [`docs/week9/FE_ARCHITECTURE.md`](docs/week9/FE_ARCHITECTURE.md) — FE tech stack, directory structure, data flow, state management, wallet integration, 8-state lifecycle, env vars.
+- [`docs/week9/FE_INTEGRATION_GUIDE.md`](docs/week9/FE_INTEGRATION_GUIDE.md) — **FE developer integration guide**: hooks + tx-builder walkthrough (create → claim → admin ops); code-first, abstraction-layer focused (vs raw Anchor SDK in INTEGRATION_GUIDE.md).
+- [`docs/week9/FE_HOOKS_REFERENCE.md`](docs/week9/FE_HOOKS_REFERENCE.md) — complete reference for all 21 hooks + tx-builder functions: params, return types, TanStack Query keys, usage snippets.
+- [`docs/week9/FE_COMPONENT_REFERENCE.md`](docs/week9/FE_COMPONENT_REFERENCE.md) — all 68 FE components with props, purpose, and usage examples.
+- [`docs/week9/FE_BUG_LOG.md`](docs/week9/FE_BUG_LOG.md) — 15 FE bugs (FE-BUG-01 to FE-BUG-15): root cause, fix status, prevention.
+- [`docs/week9/FE_E2E_GUIDE.md`](docs/week9/FE_E2E_GUIDE.md) — E2E quick start, mock wallet architecture, env setup, writing tests, debugging, CI.
+
+> **E2E setup note:** Set `NEXT_PUBLIC_E2E_MOCK_WALLET=1` in `.env.test.local` to run the Playwright chromium suite without a browser wallet extension. See [`docs/week9/FE_E2E_GUIDE.md`](docs/week9/FE_E2E_GUIDE.md) for full setup.
+- [`docs/FE_CHANGELOG.md`](docs/FE_CHANGELOG.md) — per-week FE changelog (Week 3–9) based on actual commit diffs.
 
 ## Prerequisites
 
@@ -135,7 +148,7 @@ Clock-dependent tests (11) use `solana-bankrun` inside the full suite; they are 
 For Rust-level CU benchmarks via Mollusk:
 ```bash
 BPF_OUT_DIR=target/deploy cargo test --manifest-path programs/vesting/Cargo.toml --test benchmarks -- --show-output
-# Expected: 9 passed, 1 ignored (bench_claim_native)
+# Expected: 10 passed, 1 ignored (bench_claim_native)
 ```
 
 k6 load tests (from `apps/web/`):
@@ -214,20 +227,20 @@ Auth tiers: **Public** (read + stateless helpers), **Wallet** (ed25519 signature
 | `/api/simulate-vesting` | POST | Vesting simulation — linear/cliff/milestone (F4) | Public |
 | `/api/schedule-templates` | GET | Schedule presets — common vesting templates (F4) | Public |
 
-All routes deployed at [velthoryn.vercel.app](https://velthoryn.vercel.app/). Supabase tables have Row Level Security enabled (read-public, write-service-role).
+All routes deployed at [velthoryn.site](https://velthoryn.site/). Supabase tables have Row Level Security enabled (read-public, write-service-role).
 
 See [`docs/BACKEND_API.md`](docs/BACKEND_API.md) for request/response shapes and data flows.
 
 ### Vercel Deployment
 
-Deployed at [velthoryn.vercel.app](https://velthoryn.vercel.app/). The Vercel project imports this repo
+Deployed at [velthoryn.site](https://velthoryn.site/). The Vercel project imports this repo
 (`Ah-Riz/mancerxsuperteam-token-vesting`) via the native GitHub integration, with **Root Directory
 `apps/web/`** and Framework Preset **Next.js**. Production Branch: `main`. Required env vars: see
 `apps/web/.env.example` — these must be set on the Vercel project for the app to *function* (not just build).
 
 **Quick redeploy (dashboard):** If the site returns `404: NOT_FOUND / DEPLOYMENT_NOT_FOUND`, the
 production deployment is missing. In vercel.com → the `velthoryn` project → confirm Root Directory
-`apps/web/`, Git integration connected to this repo, and `velthoryn.vercel.app` assigned under
+`apps/web/`, Git integration connected to this repo, and `velthoryn.site` assigned under
 Domains → then Deployments → most recent **Ready** → ⋯ → **Redeploy**. (Equivalent trigger: push an
 empty commit to `main`.) If the project itself is gone, recreate it: New Project → import this repo →
 Root Directory `apps/web/` → add the env vars → Deploy → assign the domain.

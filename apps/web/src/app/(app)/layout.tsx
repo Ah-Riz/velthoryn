@@ -29,7 +29,7 @@ export default function AppShellLayout({ children }: { children: React.ReactNode
     <>
       <Toaster position="bottom-right" />
       <PendingCampaignIndexer />
-      <div className="flex min-h-screen bg-[#0b0d12]">
+      <div className="flex min-h-screen bg-background">
         <Sidebar
           mobileOpen={mobileMenuOpen}
           onMobileClose={() => setMobileMenuOpen(false)}

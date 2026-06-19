@@ -9,8 +9,8 @@ interface SectionHeaderProps {
 export function SectionHeader({ title, caption }: SectionHeaderProps) {
   return (
     <div>
-      <h2 className="text-[16px] font-semibold text-white">{title}</h2>
-      <p className="mt-1 text-[13px] text-[#8b92a5]">{caption}</p>
+      <h2 className="text-[16px] font-semibold text-foreground">{title}</h2>
+      <p className="mt-1 text-[13px] text-muted-foreground">{caption}</p>
     </div>
   );
 }

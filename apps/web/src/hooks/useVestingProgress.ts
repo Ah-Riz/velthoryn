@@ -26,12 +26,21 @@ export interface VestingProgressCampaign {
   };
   cancelledAt: string | null;
   paused: boolean;
+  instantRefunded: boolean;
+  streamSettled: boolean;
   milestoneReleased: boolean;
 }
 
 export interface VestingProgressResponse {
   address: string;
   campaigns: VestingProgressCampaign[];
+}
+
+export interface MintSum {
+  entitled: bigint;
+  vested: bigint;
+  claimed: bigint;
+  claimable: bigint;
 }
 
 export interface VestingProgressSummary {
@@ -41,8 +50,11 @@ export interface VestingProgressSummary {
   totalClaimable: bigint;
   claimableCampaigns: number;
   campaignCount: number;
+  /** Per-mint subtotals, populated when campaigns span multiple mints. */
+  mintSums: Map<string, MintSum>;
 }
 
+/** Fetches all active vesting streams for a beneficiary wallet with per-leaf progress data. Refetches every 30s. */
 export function useVestingProgress(address: string | undefined) {
   return useQuery<VestingProgressResponse>({
     queryKey: ["vestingProgress", address],
@@ -59,6 +71,7 @@ export function useVestingProgress(address: string | undefined) {
   });
 }
 
+/** Aggregates vesting progress into totals (entitled/vested/claimed/claimable) across all campaigns. */
 export function useVestingProgressSummary(address: string | undefined) {
   const { data, isLoading, error } = useVestingProgress(address);
 
@@ -80,6 +93,17 @@ export function useVestingProgressSummary(address: string | undefined) {
       if (claimable > 0n) claimableCampaigns += 1;
     }
 
+    const mintSums = new Map<string, MintSum>();
+    for (const campaign of data.campaigns) {
+      const existing = mintSums.get(campaign.mint) ?? { entitled: 0n, vested: 0n, claimed: 0n, claimable: 0n };
+      mintSums.set(campaign.mint, {
+        entitled: existing.entitled + BigInt(campaign.progress.totalEntitled),
+        vested: existing.vested + BigInt(campaign.progress.vestedSoFar),
+        claimed: existing.claimed + BigInt(campaign.progress.claimedSoFar),
+        claimable: existing.claimable + BigInt(campaign.progress.claimable),
+      });
+    }
+
     return {
       totalEntitled,
       totalVested,
@@ -87,6 +111,7 @@ export function useVestingProgressSummary(address: string | undefined) {
       totalClaimable,
       claimableCampaigns,
       campaignCount: data.campaigns.length,
+      mintSums,
     };
   }, [data]);
 

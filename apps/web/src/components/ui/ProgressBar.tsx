@@ -21,7 +21,7 @@ export function ProgressBar({
   showLabel = false,
   size = "md",
   colorClass = "bg-violet-500",
-  trackClassName = "bg-white/[0.06]",
+  trackClassName = "bg-foreground/[0.06]",
 }: ProgressBarProps) {
   const clampedPercent = Math.min(100, percentage);
   const heightClass = sizeClasses[size];
@@ -36,7 +36,7 @@ export function ProgressBar({
   if (showLabel) {
     return (
       <div className={className}>
-        <div className="flex items-center justify-between text-[11px] text-[#555d73]">
+        <div className="flex items-center justify-between text-[11px] text-muted-foreground">
           <span>Progress</span>
           <span>{percentage.toFixed(1)}%</span>
         </div>
