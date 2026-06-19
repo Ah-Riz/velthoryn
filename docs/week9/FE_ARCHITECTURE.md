@@ -246,7 +246,7 @@ Using `next-themes` with `ThemeProvider` at the root. Design tokens are in `glob
 | `CRON_SECRET` | Yes | Cron job auth (`/api/cron/sync`) |
 | `UPSTASH_REDIS_REST_URL` | Optional | Rate limiting (Upstash) |
 | `UPSTASH_REDIS_REST_TOKEN` | Optional | Rate limiting token |
-| `ALLOWED_ORIGIN` | Optional | CORS origin (default: velthoryn.vercel.app) |
+| `ALLOWED_ORIGIN` | Optional | CORS origin (default: velthoryn.site) |
 | `COINGECKO_API_KEY` | Optional | Price feed API key |
 | `NEXT_PUBLIC_SENTRY_DSN` | Optional | Sentry error monitoring |
 | `NEXT_PUBLIC_ENABLE_VERCEL_ANALYTICS` | Optional | Vercel Analytics toggle |
