@@ -1,5 +1,8 @@
 # Integration Guide — Vesting Program
 
+> **Looking for the repo-wide code map or the REST API reference?** Start at the hub:
+> [`docs/INTEGRATION.md`](../INTEGRATION.md). This file is the deep on-chain + Merkle walkthrough.
+
 **Audience:** a developer integrating the vesting program who has never seen this codebase.
 **Goal:** go from zero to a funded campaign with a claiming beneficiary, using only this
 guide + the [Instruction Reference](INSTRUCTION_REFERENCE.md).
