@@ -1,314 +1,220 @@
-# Integration Guide — for the frontend track
+# Integration Guide — start here
 
-Audience: Geral and anyone building against the on-chain program from TypeScript.
+**Audience:** a developer new to this repo who wants to **read the code** across any layer
+(Smart Contract / Merkle / Backend / Database) or **call the REST API**. This page is the hub: it
+orients you, maps the code by layer, and gives a quick API reference. For deep, runnable end-to-end
+walkthroughs it links out to companion docs — it deliberately does not duplicate them.
 
-> **Status:** All **18** instruction handlers (14 SPL + 3 native SOL + `instant_refund_campaign`) are fully implemented. The program is deployed on devnet (latest upgrade slot **464782646**). **118** localnet integration tests pass (2 pending). Merkle leaf hashing is byte-verified against the TS encoder. Native SOL vesting allows campaigns in raw SOL without wrapping — see [`docs/NATIVE_SOL_VESTING.md`](NATIVE_SOL_VESTING.md). Instant refund for unstarted multi-leaf campaigns: see [`docs/BACKEND_API.md`](BACKEND_API.md).
+> **What this system is:** a **creator** locks SPL tokens (or native SOL) in an on-chain program and
+> releases them to one or more **beneficiaries** on a schedule (cliff / linear / milestone).
+> Recipients are committed via a single 32-byte **Merkle root**, so thousands of wallets onboard in
+> one transaction. A **backend** (Next.js + Postgres) indexes on-chain events and **serves Merkle
+> proofs** so beneficiaries don't need the raw leaf list.
 
-## What you need
+| | |
+|---|---|
+| **Program ID** | `G6iaigUdi2btFwUc2N65twfxwA8Ew5uKKhKJ5RJa8wvu` (immutable — see [`docs/PROGRAM.md`](PROGRAM.md)) |
+| **Network** | devnet — verify with `solana program show G6iaigUdi2btFwUc2N65twfxwA8Ew5uKKhKJ5RJa8wvu` |
+| **IDL** | `target/idl/vesting.json` after `anchor build`; FE copy at `apps/web/src/lib/anchor/idl.json` |
+| **First-run setup** | [`LOCAL_DEV.md`](LOCAL_DEV.md) (keypair, validator, first green test) |
 
-| Thing                    | Where                                                                          |
-| ------------------------ | ------------------------------------------------------------------------------ |
-| Program ID               | `G6iaigUdi2btFwUc2N65twfxwA8Ew5uKKhKJ5RJa8wvu`                                |
-| IDL (after `anchor build`) | `target/idl/vesting.json`                                                    |
-| Generated TS types       | `target/types/vesting.ts` (Anchor 1.0 emits this alongside the IDL)           |
-| Merkle helpers (live)    | `apps/web/src/lib/merkle/builder.ts` — `encodeLeaf`, `hashLeaf`, `buildTree`, `getRoot`, `getProof` |
-| Frontend scaffold        | `apps/web/` — Next.js 15 App Router, routes: `/`, `/campaign/create`, `/campaign/[id]` |
-| Thing                    | Where                                                                          |
-| ------------------------ | ------------------------------------------------------------------------------ |
-| Program ID               | `G6iaigUdi2btFwUc2N65twfxwA8Ew5uKKhKJ5RJa8wvu`                                |
-| IDL (after `anchor build`) | `target/idl/vesting.json`                                                    |
-| Generated TS types       | `target/types/vesting.ts` (Anchor 1.0 emits this alongside the IDL)           |
-| Merkle helpers (live)    | `apps/web/src/lib/merkle/builder.ts` — `encodeLeaf`, `hashLeaf`, `buildTree`, `getRoot`, `getProof` |
-| Frontend scaffold        | `apps/web/` — Next.js 15 App Router, routes: `/`, `/campaign/create`, `/campaign/[id]` |
+---
 
-## Setup
+## What do you want to do?
+
+| Goal | Read this | Then the deep dive |
+|------|-----------|--------------------|
+| Read / call the **on-chain program** (SC) | [§A](#a-smart-contract-sc) | [`week9/INTEGRATION_GUIDE.md`](week9/INTEGRATION_GUIDE.md), [`week9/INSTRUCTION_REFERENCE.md`](week9/INSTRUCTION_REFERENCE.md), [`PROGRAM.md`](PROGRAM.md) |
+| Read / use the **Merkle client** (MERKLE) | [§B](#b-merkle-merkle) | [`week9/INTEGRATION_GUIDE.md` §1](week9/INTEGRATION_GUIDE.md), [`week9/ADRs/`](week9/ADRs/) |
+| Read the **backend** (BE) | [§C](#c-backend-be) | [`BACKEND_API.md`](BACKEND_API.md), [`API_TRUST_BOUNDARIES.md`](API_TRUST_BOUNDARIES.md) |
+| Read the **database** (DB) | [§D](#d-database-db) | [`BACKEND_API.md` §2](BACKEND_API.md) |
+| **Call the REST API** | [§E](#e-use-the-api) | [`BACKEND_API.md` §3](BACKEND_API.md), [`API_TRUST_BOUNDARIES.md`](API_TRUST_BOUNDARIES.md) |
+
+> **Single-recipient case (most common):** one beneficiary needs no Merkle tree at all — `create_stream`
+> creates + funds in one tx and the recipient claims via `withdraw` (no proof). See the Quickstart in
+> [`week9/INTEGRATION_GUIDE.md`](week9/INTEGRATION_GUIDE.md).
+
+---
+
+## A. Smart contract (SC)
+
+**Where the code lives:** `programs/vesting/`
+
+```
+programs/vesting/src/
+  instructions/   # one file per instruction handler (15 files)
+  math/           # schedule.rs (vesting curve) + merkle.rs (leaf_hash / verify)
+  state/          # account structs: VestingTree, ClaimRecord (#[zero_copy]), etc.
+  events.rs       # CampaignCreated / Funded / Claimed / Cancelled / RootUpdated / …
+  lib.rs          # instruction dispatch (#[program])
+```
+
+**Instructions** (15 files): `create_campaign`, `create_stream`, `fund_campaign`, `claim`, `withdraw`,
+`cancel_campaign`, `cancel_stream`, `instant_refund_campaign`, `set_milestone_released`, `update_root`,
+`withdraw_unvested`, `pause_campaign`, `close_claim_record`, `get_vested_amount`. Most have `*_native`
+variants for SOL. Every account the program touches is a **PDA** (`tree`, `vault_authority`, `claim`).
+
+**Read next:**
+- Runnable create → fund → claim → cancel snippets (SPL **and** native SOL): [`week9/INTEGRATION_GUIDE.md`](week9/INTEGRATION_GUIDE.md)
+- Every instruction's accounts, args, and error codes (6000–6041): [`week9/INSTRUCTION_REFERENCE.md`](week9/INSTRUCTION_REFERENCE.md)
+- State layouts + program ID: [`PROGRAM.md`](PROGRAM.md) · Error reference: [`ERROR_MAP.md`](ERROR_MAP.md)
+
+---
+
+## B. Merkle (MERKLE)
+
+**Canonical client:** `clients/ts/src/` (published as `@velthoryn/client`)
+
+| File | Exports you'll use |
+|------|--------------------|
+| `index.ts` | package barrel |
+| `prepare.ts` | `prepareCampaign(recipients) → { root, rootHex, leafCount, totalSupply, minCliffTime, leaves, proofs }`; `prepareRootRotation(recipients)` |
+| `leaf.ts` | `encodeLeaf`, `leafHash`, `VestingLeaf` (70-byte Borsh layout) |
+| `merkle.ts` | `buildTree`, `getRoot`, `getProof`, `nodeHash`, `verifyProof`, `proofAsArrays`, `MAX_TREE_DEPTH` (= 20) |
+
+The leaf hash is **byte-identical** to `math::merkle::leaf_hash()` on-chain (keccak-256, domain-separated — golden-vector tested).
+
+**FE wrapper** (re-exports + dApp conveniences): `apps/web/src/lib/merkle/{builder,verify}.ts`
+
+**Read next:** tree-building walk-through [`week9/INTEGRATION_GUIDE.md` §1](week9/INTEGRATION_GUIDE.md) ·
+design decisions [`week9/ADRs/ADR-001-merkle-compressed-vesting.md`](week9/ADRs/ADR-001-merkle-compressed-vesting.md),
+[`ADR-002-keccak-256-domain-separation.md`](week9/ADRs/ADR-002-keccak-256-domain-separation.md).
+
+---
+
+## C. Backend (BE)
+
+**Stack:** Next.js 15 (App Router) Route Handlers + Drizzle ORM + Postgres (Supabase) + Redis (nonce store).
+**Where the code lives:** `apps/web/src/app/api/` (26 route files) + `apps/web/src/lib/api/` (route wrapper,
+auth middleware, serialization) + `apps/web/src/lib/db/` (schema + queries).
+
+Route handlers grouped by purpose:
+
+| Group | Routes (`apps/web/src/app/api/`) |
+|-------|----------------------------------|
+| Campaign write/lookup | `campaigns/` (GET list, POST create), `campaigns/[treeAddress]/` (GET detail), `campaigns/prepare`, `campaigns/import` |
+| Beneficiary | `beneficiary/[address]/campaigns`, `beneficiary/[address]/vesting-progress` |
+| Creator actions | `campaigns/[treeAddress]/{cancel,cancel-stream,instant-refund,withdraw-unvested,milestones/[idx],root-versions}` |
+| Read analytics | `campaigns/[treeAddress]/{proof,claims,timeline}`, `activity/[address]` |
+| Indexing / sync | `events/sync` (public), `claims/sync` + `admin/sync` (admin), `cron/sync` (Vercel cron) |
+| Auth + ops | `auth/nonce`, `health`, `simulate-vesting`, `schedule-templates`, `waitlist` |
+
+The BE never holds funds — it indexes events and **serves proofs**. Wallet-state (`paused`, `cancelledAt`)
+flows only from indexed on-chain events (the old `PATCH …/status` route is **Removed** — do not use).
+
+**Read next:** data flows + file structure [`BACKEND_API.md` §4–§5](BACKEND_API.md) · auth tier per route
+[`API_TRUST_BOUNDARIES.md`](API_TRUST_BOUNDARIES.md) · route wrapper `apps/web/src/lib/api/route-wrapper.ts`.
+
+---
+
+## D. Database (DB)
+
+**Schema (source of truth):** `apps/web/src/lib/db/schema.ts` (Drizzle, Postgres).
+**Migrations / config:** `apps/web/drizzle.config.ts`. u64/i64 use native Postgres `bigint`; proofs + metadata are JSONB.
+
+**4 core tables:**
+
+| Table | Purpose |
+|-------|---------|
+| `campaigns` | On-chain campaign index — `tree_address`, `creator`, `mint`, `merkle_root`, `total_supply`, `total_claimed`, authorities, flags, `min_cliff_time`. |
+| `root_versions` | Merkle root history per campaign — `version`, `merkle_root`, `leaf_count`, `ipfs_cid`. |
+| `leaves` | Per-recipient leaf + proof — `beneficiary`, `amount`, schedule fields, `proof` (JSONB `number[][]`). |
+| `claim_events` | `Claimed` event log — per-claim `amount` + cumulative totals, `signature` (idempotency key), `slot`, `block_time`. |
+
+**7 event-log tables** (each indexed from its on-chain event, `signature`-unique): `cancel_events`,
+`pause_events`, `root_update_events`, `withdraw_events`, `milestone_events`, `stream_cancel_events`,
+`instant_refund_events`. **2 operational tables:** `waitlist`, `sync_state` (indexer checkpoint).
+
+> `BACKEND_API.md §2` documents the 4 core tables in full column detail; the event-log + operational
+> tables live in `schema.ts` and were added by the indexer (F2/F3 phases).
+
+**Read next:** [`BACKEND_API.md §2`](BACKEND_API.md) for full DDL.
+
+---
+
+## E. Use the API
+
+Base URL: `https://velthoryn.vercel.app` (or your own BE origin). All routes return `X-API-Version: 1`.
+u64/i64 values serialize as **decimal strings** (`serializeBigInt()` in `apps/web/src/lib/api/serialize.ts`).
+
+### Auth tiers (3)
+
+| Tier | How it's enforced | Used by |
+|------|-------------------|---------|
+| **Public** | rate-limited per IP (default 60/min); no auth | reads: lists, detail, proof, claims, timeline |
+| **Wallet Auth** | `Authorization: Bearer <b64(sig)>.<b64(msg)>` — ed25519 over a nonce; signer must match the on-chain authority | writes: create, cancel, refund, root-rotation, milestones |
+| **Admin** | `x-admin-key` or cron `Bearer` secret (timing-safe) | indexing: `admin/sync`, `claims/sync`, `cron/sync` |
+
+### Core routes (the ones integrators call)
+
+| Method | Path | Auth | Purpose |
+|--------|------|------|---------|
+| `POST` | `/api/campaigns/prepare` | Public | Build the Merkle tree server-side; returns `merkleRoot`, `leafCount`, `minCliffTime`, proofs |
+| `POST` | `/api/campaigns` | Wallet Auth | Register a campaign + leaves after the on-chain `create_campaign`/`create_stream` tx |
+| `GET`  | `/api/campaigns/:treeAddress/proof?beneficiary=<b58>` | Public | Fetch a beneficiary's leaf + Merkle proof (sub-ms) |
+| `GET`  | `/api/campaigns/:treeAddress` | Public | Campaign detail + analytics + grace-period state |
+| `GET`  | `/api/campaigns` | Public | Paginated list (`?creator=&mint=&status=&page=&limit=`) |
+| `GET`  | `/api/campaigns/:treeAddress/claims` | Public | Claim history (`?beneficiary=&fromSlot=&limit=`) |
+| `GET`  | `/api/beneficiary/:address/campaigns` | Public | All campaigns where `:address` is a beneficiary (+ their leaf) |
+| `POST` | `/api/campaigns/:treeAddress/root-versions` | Wallet Auth | Record a new root version after on-chain `update_root` |
+| `POST` | `/api/campaigns/:treeAddress/instant-refund` | Wallet Auth | Build instant-refund tx for an unstarted multi-leaf campaign |
+
+**Full table (all 26 routes incl. admin/sync/cron):** [`API_TRUST_BOUNDARIES.md`](API_TRUST_BOUNDARIES.md).
+**Full request/response shapes:** [`BACKEND_API.md §3`](BACKEND_API.md).
+
+### Example 1 — fetch a proof (Public read)
 
 ```bash
-git clone https://github.com/Ah-Riz/mancerxsuperteam-token-vesting.git
-cd mancerxsuperteam-token-vesting  # repo retains original name
-git checkout dev_lana      # Active development branch
-pnpm install
-anchor build               # produces target/idl/vesting.json + target/types/vesting.ts
-anchor build               # produces target/idl/vesting.json + target/types/vesting.ts
+curl "https://velthoryn.vercel.app/api/campaigns/<treeAddress>/proof?beneficiary=<base58>"
+# → { leaf: { leafIndex, beneficiary, amount, releaseType, startTime, cliffTime, endTime, milestoneIdx },
+#     proof: number[][], merkleRoot, treeAddress }
 ```
 
-## Connecting from the dApp
+### Example 2 — register a campaign after the on-chain tx (Wallet Auth write)
 
 ```ts
-import * as anchor from "@coral-xyz/anchor";
-import { Connection, PublicKey } from "@solana/web3.js";
-import idl from "../../target/idl/vesting.json";
-import type { Vesting } from "../../target/types/vesting";
-import idl from "../../target/idl/vesting.json";
-import type { Vesting } from "../../target/types/vesting";
+// 1. nonce → sign → bearer header  (GET /api/auth/nonce, then ed25519-sign {nonce,timestamp,wallet})
+const auth = await buildSolanaAuthHeader(creator);   // see API_TRUST_BOUNDARIES.md §Wallet auth flow
 
-const PROGRAM_ID = new PublicKey("G6iaigUdi2btFwUc2N65twfxwA8Ew5uKKhKJ5RJa8wvu");
-
-function getProgram(provider: anchor.AnchorProvider) {
-  return new anchor.Program<Vesting>(idl as Vesting, provider);
-}
+// 2. POST the campaign (full leaves + proofs so the BE can serve them)
+await fetch(`${API_BASE}/api/campaigns`, {
+  method: "POST",
+  headers: { "content-type": "application/json", authorization: auth },
+  body: JSON.stringify({
+    treeAddress, creator, mint, campaignId, merkleRoot: prepared.rootHex,
+    leafCount: prepared.leafCount, totalSupply: prepared.totalSupply.toString(),
+    cancellable: true, cancelAuthority, pauseAuthority, createdAt: Math.floor(Date.now()/1000),
+    leaves: prepared.leaves.map((l, i) => ({ /* leafIndex…milestoneIdx */ proof: prepared.proofs[i] })),
+  }),
+});
+// → 201 { ok: true, campaignId }
 ```
 
-The IDL exposes camelCase instruction names: `createCampaign`, `createStream`, `fundCampaign`, `claim`, `withdraw`, `cancelCampaign`, `cancelStream`, `instantRefundCampaign`, `setMilestoneReleased`, `updateRoot`, `withdrawUnvested`, `pauseCampaign`, `unpauseCampaign`, `closeClaimRecord`, `getVestedAmount`.
-
-`createCampaign` and `updateRoot` require `minCliffTime` / `newMinCliffTime` — use `prepareCampaign()` from `@velthoryn/client` (returns `minCliffTime`) or `POST /api/campaigns/prepare`.
-
-## PDA derivations
-
-Every account the program reads/writes is a PDA. Compute them with `PublicKey.findProgramAddressSync`:
-Every account the program reads/writes is a PDA. Compute them with `PublicKey.findProgramAddressSync`:
+### Example 3 — beneficiary claim flow (API serves the proof; the claim itself is an on-chain tx)
 
 ```ts
-import { derivePda, PROGRAM_ID } from "@/lib/anchor/client";
-import { derivePda, PROGRAM_ID } from "@/lib/anchor/client";
-
-// VestingTree (one per campaign)
-const [vestingTree] = derivePda([
-  "tree",
-  creator.toBuffer(),
-  mint.toBuffer(),
-  new anchor.BN(campaignId).toArrayLike(Buffer, "le", 8),
-]);
-const [vestingTree] = derivePda([
-  "tree",
-  creator.toBuffer(),
-  mint.toBuffer(),
-  new anchor.BN(campaignId).toArrayLike(Buffer, "le", 8),
-]);
-
-// Vault authority (signs token transfers out of the vault)
-const [vaultAuthority] = derivePda(["vault_authority", vestingTree.toBuffer()]);
-const [vaultAuthority] = derivePda(["vault_authority", vestingTree.toBuffer()]);
-
-// ClaimRecord (one per (campaign, beneficiary))
-const [claimRecord] = derivePda(["claim", vestingTree.toBuffer(), beneficiary.toBuffer()]);
-const [claimRecord] = derivePda(["claim", vestingTree.toBuffer(), beneficiary.toBuffer()]);
+// 1. fetch proof from the API (Example 1)
+// 2. submit the on-chain claim with that leaf + proof (see week9/INTEGRATION_GUIDE.md §6b)
+await program.methods.claim(leaf, proof).accounts({ beneficiary, vestingTree, /* … */ }).rpc();
+// 3. the BE indexer picks up the Claimed event and updates claim_events + analytics
 ```
 
-The vault itself is the ATA of `(mint, vaultAuthority)`. Use `getAssociatedTokenAddressSync` from `@solana/spl-token`.
-The vault itself is the ATA of `(mint, vaultAuthority)`. Use `getAssociatedTokenAddressSync` from `@solana/spl-token`.
+**Wallet-auth header format + server checks:** [`API_TRUST_BOUNDARIES.md` §Wallet auth flow](API_TRUST_BOUNDARIES.md).
 
-## Calling instructions
-## Calling instructions
+---
 
-All instructions are fully implemented and write state on-chain. The constraint blocks and account lists are final — see `programs/vesting/src/instructions/<name>.rs` for the full details.
+## Compute budget & errors
 
-### Create a campaign (project authority)
+- **Always prepend CU limit + priority fee** to mutating txs — per-instruction CU numbers in [`CU_BUDGET.md`](CU_BUDGET.md).
+- **Decode errors** by code 6000–6041 — table in [`week9/INSTRUCTION_REFERENCE.md`](week9/INSTRUCTION_REFERENCE.md);
+  common ones: `InvalidProof` (6013), `NothingToClaim` (6015), `CampaignPaused` (6009),
+  `MilestoneNotReleased` (6033), `PerLeafCapExceeded` (6041).
 
-```ts
-await program.methods
-  .createCampaign({
-    campaignId: new anchor.BN(1),
-    merkleRoot: Array.from(root),           // Buffer from buildTree → getRoot
-    merkleRoot: Array.from(root),           // Buffer from buildTree → getRoot
-    leafCount: recipients.length,
-    totalSupply: new anchor.BN(amountTotal),
-    cancellable: true,
-    cancelAuthority: cancelAuthorityKey,    // PublicKey | null
-    pauseAuthority: pauseAuthorityKey,      // PublicKey | null
-  })
-  .accounts({ creator: provider.wallet.publicKey, mint })
-  .accounts({ creator: provider.wallet.publicKey, mint })
-  .rpc();
-```
+---
 
-### Claim (recipient)
+## Further reading
 
-```ts
-await program.methods
-  .claim(leaf, proof)   // VestingLeaf object + [[u8; 32], …]
-  .accounts({ beneficiary: wallet.publicKey, mint })
-  .claim(leaf, proof)   // VestingLeaf object + [[u8; 32], …]
-  .accounts({ beneficiary: wallet.publicKey, mint })
-  .rpc();
-```
-
-### Cancel a campaign (cancel authority)
-
-```ts
-await program.methods
-  .cancelCampaign()
-  .accounts({ authority: cancelAuthorityWallet.publicKey })
-  .rpc();
-await program.methods
-  .cancelCampaign()
-  .accounts({ authority: cancelAuthorityWallet.publicKey })
-  .rpc();
-```
-
-### Create a stream (single-recipient atomic campaign + fund)
-
-Combines `createCampaign` + `fundCampaign` in one transaction. No off-chain Merkle tree or IPFS proof hosting needed -- the program computes the root on-chain.
-
-```ts
-await program.methods
-  .createStream({
-    campaignId: new anchor.BN(1),
-    beneficiary: recipientWallet.publicKey,
-    amount: new anchor.BN(amount),
-    releaseType: 1,                  // 0=Cliff 1=Linear 2=Milestone
-    startTime: new anchor.BN(startTs),
-    cliffTime: new anchor.BN(cliffTs),
-    endTime: new anchor.BN(endTs),
-    milestoneIdx: 0,
-    cancellable: true,
-    cancelAuthority: cancelAuthorityKey,
-    pauseAuthority: pauseAuthorityKey,
-  })
-  .accounts({
-    creator: provider.wallet.publicKey,
-    mint,
-    sourceAta: creatorAta,
-  })
-  .rpc();
-```
-
-### Withdraw from a stream (proof-less claim)
-
-For single-recipient campaigns (`leaf_count == 1`). The recipient passes schedule params directly -- no Merkle proof needed.
-
-```ts
-await program.methods
-  .withdraw({
-    releaseType: 1,                  // must match the stream's release_type
-    startTime: new anchor.BN(startTs),
-    cliffTime: new anchor.BN(cliffTs),
-    endTime: new anchor.BN(endTs),
-    milestoneIdx: 0,
-  })
-  .accounts({ beneficiary: wallet.publicKey, mint })
-  .rpc();
-```
-
-Account lists for other instructions follow the same pattern -- see `programs/vesting/src/instructions/<name>.rs` for the full constraint blocks.
-
-## Building Merkle proofs
-
-The Merkle helpers are live in `apps/web/src/lib/merkle/builder.ts`. They are byte-identical to `math::merkle::leaf_hash()` on the Rust side (golden-vector test passes).
-
-```ts
-import {
-  buildTree, getRoot, getProof, encodeLeaf,
-  type VestingLeaf,
-} from "@/lib/merkle/builder";
-
-const leaves: VestingLeaf[] = recipients.map((r) => ({
-  leafIndex:    r.index,
-  beneficiary:  r.wallet,           // base58 string
-  amount:       BigInt(r.amount),
-  releaseType:  1,                  // 0=Cliff 1=Linear 2=Milestone
-  startTs:      BigInt(r.startTs),
-  cliffTs:      BigInt(r.cliffTs),
-  endTs:        BigInt(r.endTs),
-  milestoneIdx: 0,
-}));
-
-const tree  = buildTree(leaves);
-const root  = getRoot(tree);        // Buffer — pass as merkleRoot in createCampaign
-const proof = getProof(tree, leaves[i]); // Buffer[] — pass to claim
-```
-
-`clients/ts/src/index.ts` exports `encodeLeaf`, `leafHash`, `nodeHash`, `VestingLeaf`, `VestingMerkleTree`, `MAX_TREE_DEPTH`, `verifyProof`, `proofAsArrays`, `CampaignRecipient`, `PreparedCampaign`, and related types. The Merkle builder in `apps/web/src/lib/merkle/builder.ts` wraps these for the frontend.
-
-### `prepareCampaign()` — recommended way to prepare campaign data
-
-```ts
-import { prepareCampaign, type CampaignRecipient, type PreparedCampaign } from "@/lib/merkle/builder";
-
-const recipients: CampaignRecipient[] = [
-  { index: 0, wallet: "recipient_pubkey_base58", amount: BigInt(1_000_000), releaseType: 1, startTs: BigInt(startTs), cliffTs: BigInt(cliffTs), endTs: BigInt(endTs), milestoneIdx: 0 },
-  // ... more recipients
-];
-
-const prepared: PreparedCampaign = prepareCampaign(recipients);
-// prepared.root       — Buffer, pass as merkleRoot in createCampaign
-// prepared.proofs     — Map<number, Buffer[]>, proof for each leaf index
-// prepared.leafCount  — number, pass as leafCount in createCampaign
-// prepared.totalSupply — BigInt, pass as totalSupply in createCampaign
-```
-
-### `verifyProof()` — off-chain pre-verification
-
-Before submitting a `claim` transaction, verify the proof locally to avoid wasted fees on invalid proofs:
-
-```ts
-import { encodeLeaf, leafHash, verifyProof } from "@/lib/merkle/builder";
-
-const leafHashBuf = leafHash(leaf);
-const isValid = verifyProof(leafHashBuf, proof, leaf.leafIndex, onChainRoot);
-if (!isValid) {
-  // Proof is stale or invalid — refresh from IPFS before submitting
-}
-```
-
-### `proofAsArrays()` — Anchor IDL compatibility
-
-Anchor's IDL expects proofs as `number[][]` (arrays of 32-element number arrays), not `Buffer[]`. Use `proofAsArrays` to convert:
-
-```ts
-import { proofAsArrays } from "@/lib/merkle/builder";
-
-const proofBuffers: Buffer[] = getProof(tree, leaf); // from builder
-const proofForAnchor = proofAsArrays(proofBuffers);   // number[][]
-// Pass proofForAnchor to program.methods.claim(leaf, proofForAnchor)
-```
-
-### `MAX_TREE_DEPTH` — tree size limit
-
-`MAX_TREE_DEPTH = 20`. Trees deeper than 20 levels (more than 1,048,576 recipients) risk exceeding Solana's 1,232-byte transaction size limit. The SDK enforces this limit in the tree builder.
-
-Subscribe via `program.addEventListener("Claimed", (event, slot) => …)`. Available events:
-
-`CampaignCreated`, `CampaignFunded`, `Claimed`, `CampaignCancelled`, `RootUpdated`, `UnvestedWithdrawn`, `CampaignPaused`, `CampaignUnpaused`, `ClaimRecordClosed`.
-
-Field shapes in `programs/vesting/src/events.rs`.
-Subscribe via `program.addEventListener("Claimed", (event, slot) => …)`. Available events:
-
-`CampaignCreated`, `CampaignFunded`, `Claimed`, `CampaignCancelled`, `RootUpdated`, `UnvestedWithdrawn`, `CampaignPaused`, `CampaignUnpaused`, `ClaimRecordClosed`.
-
-Field shapes in `programs/vesting/src/events.rs`.
-
-## Devnet
-
-Program is deployed on devnet at `G6iaigUdi2btFwUc2N65twfxwA8Ew5uKKhKJ5RJa8wvu` (latest upgrade slot **463223253**, ~447KB allocation).
-
-```bash
-solana config set --url devnet
-solana program show G6iaigUdi2btFwUc2N65twfxwA8Ew5uKKhKJ5RJa8wvu
-```
-
-For local dev, `anchor test` boots an embedded validator (Anchor 1.0 LiteSVM) with the program preloaded. Point your frontend at `http://127.0.0.1:8899`.
-
-## Frontend Pages (Week 4)
-
-Two functional UI pages now exist for devnet-ready interaction:
-
-### Create Stream — `/campaign/create`
-
-Full form for creating single-beneficiary vesting streams. Fields: campaign ID, token mint, beneficiary wallet, amount, release type (cliff/linear/milestone), start/cliff/end times, cancellable toggle. Derives all PDAs client-side and submits `createStream` instruction.
-
-### Withdraw — `/campaign/[treeAddress]`
-
-Recipient dashboard for claiming vested tokens. Fetches `VestingTree` account on-chain, computes vested amount client-side using the same math as `schedule.rs`, shows progress bar and claimable amount. Submits `withdraw` instruction.
-
-### Web Tests (Vitest)
-
-~200 tests in `apps/web/` — see [`TESTING.md`](TESTING.md). Highlights:
-- **API routes** (`tests/api/*`) — real Postgres; campaign CRUD, proofs, claims, beneficiary, admin sync
-- Vesting math, PDA derivation, Merkle builder (golden vector gate)
-- React hooks (mocked `fetch`, no DB)
-
-Requires `DATABASE_URL` for the full suite. CI provides Postgres in `web-ci.yml` and `lint.yml`.
-
-```bash
-export DATABASE_URL=postgresql://ci:ci@127.0.0.1:5432/ci
-cd apps/web && pnpm db:push && pnpm test
-```
-
-## Where to ask
-
-- On-chain bugs / instruction questions → Lana (`programs/vesting/`).
-- Merkle / leaf encoding → Lana (`apps/web/src/lib/merkle/builder.ts`).
-- Backend API / DB / tests → Lana (`apps/web/src/app/api/`, `docs/BACKEND_API.md`).
-- Frontend / UI questions → Geral (`apps/web/`).
-- IDL / TS types regen → re-run `anchor build`.
+- [`week9/INTEGRATION_GUIDE.md`](week9/INTEGRATION_GUIDE.md) — full end-to-end walkthrough (prepare → create → fund → register → claim → cancel), SPL + native SOL.
+- [`week9/INSTRUCTION_REFERENCE.md`](week9/INSTRUCTION_REFERENCE.md) — every instruction, account, error code.
+- [`BACKEND_API.md`](BACKEND_API.md) — schema, routes, data flows. · [`API_TRUST_BOUNDARIES.md`](API_TRUST_BOUNDARIES.md) — auth tier per route.
+- [`PROGRAM.md`](PROGRAM.md) · [`STREAM_MODEL.md`](STREAM_MODEL.md) · [`ERROR_MAP.md`](ERROR_MAP.md) · [`CU_BUDGET.md`](CU_BUDGET.md) · [`week9/ADRs/`](week9/ADRs/).
