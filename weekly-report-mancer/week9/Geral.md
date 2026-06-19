@@ -66,12 +66,25 @@ Commit `30e1f26`:
 
 ### 10. Documentation (Week 9 KPI Deliverables)
 
-The Week 9 KPI is that an unfamiliar developer can integrate Velthoryn from docs alone. My contribution is the FE half: verifying Lana's docs are accurate from a frontend implementation standpoint, and writing the supplementary FE-specific docs an integrator needs.
+The Week 9 KPI is that an unfamiliar developer can integrate Velthoryn from docs alone. My contribution is the FE half: writing the FE-specific reference docs an integrator needs, verifying Lana's docs are accurate from a frontend implementation standpoint, and extracting real architectural decisions as formal ADRs.
 
-- **`docs/week9/FE_DOCUMENTATION_REVIEW.md`** (343 lines) — FE-perspective review of `INSTRUCTION_REFERENCE.md` and `INTEGRATION_GUIDE.md`. Contains: integration guide accuracy review (6 key FE file paths verified against actual codebase), instruction reference FE verification (41/42 error codes confirmed, `6041` missing flagged), 4 FE ADRs (each with problem statement, decision, rationale, commit reference), FE-SC interface matrix (all 18 instructions + view functions mapped to FE call site), error code coverage table (6000–6041), and 7 documentation gaps with actionable recommendations.
-- **`docs/week9/FE_TESTING_STATUS.md`** (354 lines) — FE test coverage report. Contains: test suite summary with actual test counts (Vitest 572, E2E 23 chromium + 10 signing specs, Bankrun 15 specs), test categories breakdown, CI pipeline status for all 3 active workflows, known testing gaps (signing localnet, BE Postgres, devnet RPC), Week 9 test changes documented commit by commit, and local run commands for each suite.
+**New docs in `docs/week9/` (6 files):**
 
-Total FE documentation output this week: **697 lines across 2 files**. Does not count the integration guide and instruction reference accuracy reviews, which were annotation-based (no new files).
+- **`docs/week9/FE_ARCHITECTURE.md`** (333 lines) — FE tech stack, directory structure, data flow, provider hierarchy, state management, wallet integration, 8-state `CampaignLifecycle` model, env vars, and security headers. The architecture reference an integrator needs to understand the FE codebase before reading component-level docs. Commit `7c282bb`.
+- **`docs/week9/FE_COMPONENT_REFERENCE.md`** (402 lines) — All 68 FE components documented with purpose, props summary, and usage context. Covers `components/campaign/detail/` (16 components), `components/campaign/create/` (12), `components/ui/` (8 shared primitives), dashboard, portfolio, and wallet components. Commit `7c282bb`.
+- **`docs/week9/FE_BUG_LOG.md`** (311 lines) — 15 FE bugs (FE-BUG-01 to FE-BUG-15) with root cause, fix status, prevention strategy, and commit reference. Covers lifecycle state bugs, E2E infrastructure issues, CSV parser edge cases, and error code coverage gaps. Commit `7c282bb`.
+- **`docs/week9/FE_E2E_GUIDE.md`** (258 lines) — E2E quick start, mock wallet architecture (`NEXT_PUBLIC_E2E_MOCK_WALLET` + `velthoryn:e2e-mock-send-tx` localStorage flag), overview of all 23 chromium + 10 signing specs, writing new tests, debugging failures, and CI integration. Commit `7c282bb`.
+- **`docs/week9/FE_DOCUMENTATION_REVIEW.md`** (270 lines) — FE-perspective review of `INSTRUCTION_REFERENCE.md` and `INTEGRATION_GUIDE.md`. Contains: integration guide accuracy review (6 key FE file paths verified against actual codebase), instruction reference FE verification (all 42/42 error codes confirmed after `5a3a277`), FE-SC interface matrix (all 18 instructions + view functions mapped to FE call site), error code coverage table (6000–6041), and 7 documentation gaps with actionable recommendations. Commit `7c282bb`.
+- **`docs/week9/FE_TESTING_STATUS.md`** (354 lines) — FE test coverage report. Contains: test suite summary with actual test counts (Vitest 572, E2E 23 chromium + 10 signing specs, Bankrun 15 specs), test categories breakdown, CI pipeline status for all 3 active workflows, known testing gaps (signing localnet, BE Postgres, devnet RPC), Week 9 test changes documented commit by commit, and local run commands for each suite. Commit `7c282bb`.
+
+**New FE ADRs in `docs/week9/ADRs/` (4 files, 186 lines total):** `ADR-FE-001` (shadcn/ui adoption, 45 lines), `ADR-FE-002` (E2E mock wallet via localStorage, 46 lines), `ADR-FE-003` (8-state CampaignLifecycle, 48 lines), `ADR-FE-004` (bankrun warpToSlot before setClock, 47 lines). Commit `e38f727`.
+
+**New doc in `docs/` (1 file):**
+- **`docs/FE_CHANGELOG.md`** (266 lines) — Per-week FE changelog Week 3–9 based on actual commit diffs. Every major feature, component, hook, and fix traced to its commit. Commit `7c282bb`.
+
+**Updated existing docs (4 files):** `docs/FE_INTEGRATION.md` (added 6041 error), `docs/TDD_GERAL.md` (updated test counts to actuals), `docs/PDD_GERAL.md` (Zustand clarification + 8-state lifecycle + shadcn migration), `docs/README.md` (7 new FE doc links in "deeper reads"). Commit `7c282bb`.
+
+Total FE documentation output this week: **11 new files, 2,380 lines** + 4 existing docs updated.
 
 ---
 
@@ -84,8 +97,14 @@ Total FE documentation output this week: **697 lines across 2 files**. Does not 
 | ADRs (SC/BE) | ✅ 3 ADRs (merkle, keccak, Issue #29) | — |
 | ADRs (FE) | — | ✅ 4 FE ADRs (shadcn, mock wallet, lifecycle, bankrun) |
 | BUG_LIST.md (cross-cutting findings) | ✅ Author | ✅ Contributor |
-| FE_DOCUMENTATION_REVIEW.md | — | ✅ Author (343 lines) |
+| FE_ARCHITECTURE.md | — | ✅ Author (333 lines) |
+| FE_COMPONENT_REFERENCE.md (68 components) | — | ✅ Author (402 lines) |
+| FE_BUG_LOG.md (15 bugs) | — | ✅ Author (311 lines) |
+| FE_E2E_GUIDE.md | — | ✅ Author (258 lines) |
+| FE_DOCUMENTATION_REVIEW.md | — | ✅ Author (270 lines) |
 | FE_TESTING_STATUS.md | — | ✅ Author (354 lines) |
+| FE_CHANGELOG.md (Week 3–9) | — | ✅ Author (266 lines) |
+| FE ADRs (ADR-FE-001 to 004) | — | ✅ Author (186 lines, 4 files) |
 | SC fixes (SC-FIND-02, SC-FIND-03) | ✅ 91fefa1 | — |
 | BE security fixes (BE-SEC-01/05/06) | ✅ 81e93f9 | — |
 | Issue #29 on-chain fix (zero-copy ClaimRecord) | ✅ fd6163d | — |
@@ -101,7 +120,7 @@ Total FE documentation output this week: **697 lines across 2 files**. Does not 
 | Weekly reports | ✅ Lana.md | ✅ Geral.md |
 
 **How we split:**
-Lana owns everything that touches the Solana program, the Postgres indexer, and the Merkle client SDK. I own everything in `apps/web/src/` UI layer, the Playwright E2E suite, and FE-specific documentation. When a SC/BE change lands (e.g., campaign-level schedule `09e49a8`), I sync the E2E tests and TS types to match. The documentation split this week was clean: Lana wrote the instruction reference and integration guide; I reviewed them from the FE perspective and wrote supplementary FE docs (4 ADRs, testing status, gap analysis).
+Lana owns everything that touches the Solana program, the Postgres indexer, and the Merkle client SDK. I own everything in `apps/web/src/` UI layer, the Playwright E2E suite, and FE-specific documentation. When a SC/BE change lands (e.g., campaign-level schedule `09e49a8`), I sync the E2E tests and TS types to match. The documentation split this week was clean: Lana wrote the instruction reference and integration guide; I wrote the FE-specific docs suite (FE_ARCHITECTURE, FE_COMPONENT_REFERENCE, FE_BUG_LOG, FE_E2E_GUIDE, FE_DOCUMENTATION_REVIEW, FE_TESTING_STATUS, FE_CHANGELOG, and 4 FE ADRs — 11 files, 2,380 lines) and reviewed Lana's docs from the FE implementation perspective.
 
 The one notable cross-boundary task was the `StreamEntry` type fix (`30e1f26`): the fields (`instantRefunded`, `streamSettled`) are defined by the BE API response, but the TS type lives in the FE-side `clients/ts/` package. When Lana added the fields to the API in Week 8, the type was never updated. I caught it when the TypeScript build failed during a CI run and fixed it in Week 9.
 
@@ -109,20 +128,31 @@ The one notable cross-boundary task was the `StreamEntry` type fix (`30e1f26`): 
 
 ## §3: Documentation Contributions (Week 9 Focus)
 
-The Week 9 KPI is: an unfamiliar developer can integrate from docs alone. My contribution is the FE half of that goal — verifying that the docs Lana wrote are accurate from a frontend implementation perspective, and writing the supplementary FE docs that aren't covered in the SC/BE reference.
+The Week 9 KPI is: an unfamiliar developer can integrate from docs alone. My contribution is the FE half of that goal — writing the FE-specific reference docs an integrator needs, verifying Lana's docs are accurate from a frontend implementation perspective, and extracting real architectural decisions as formal ADRs.
 
-**`docs/week9/FE_DOCUMENTATION_REVIEW.md`** (343 lines):
+**`docs/week9/FE_ARCHITECTURE.md`** (333 lines):
+Complete FE architecture reference. Sections: tech stack (Next.js 15, Anchor, wallet-adapter), directory structure with file-by-file purpose, data flow diagram (wallet → hooks → tx-builder → program), provider hierarchy (WalletContextProvider → CampaignProvider → component), state management strategy (React Query for server state, minimal local state for UI), wallet integration (wallet-standard auto-detect, Phantom/Solflare/Backpack), 8-state `CampaignLifecycle` model with transition table, env vars reference (all `NEXT_PUBLIC_*` vars + purpose), and security headers config.
+
+**`docs/week9/FE_COMPONENT_REFERENCE.md`** (402 lines):
+All 68 FE components documented with purpose, props summary, and usage context. Organized by directory:
+- `components/campaign/detail/` — 16 components (CampaignStatusBanner, ClaimWithProofButton, GracePeriodCountdown, MilestoneCarouselCard, MilestoneReleasePanel, etc.)
+- `components/campaign/create/` — 12 components (CSV import flow, allocation editor, schedule template pickers)
+- `components/ui/` — 8 shared primitives (StatCard, ProgressBar, SectionHeader, FieldRow, DetailRow, Spinner, CampaignCard, RecipientListModal)
+- Dashboard, portfolio, wallet, and layout components
+
+**`docs/week9/FE_BUG_LOG.md`** (311 lines):
+15 FE bugs (FE-BUG-01 to FE-BUG-15) with root cause, fix status, prevention strategy, and commit reference. Covers: lifecycle state miscalculation (milestoneBitmap vs claimedAmount), E2E selector brittleness, CSV parser quoted-value edge cases, BigInt precision at 9 decimals, error code coverage gaps (6041), StreamEntry type staleness, signing E2E CI incompatibility, and dark mode ThemeProvider wiring.
+
+**`docs/week9/FE_E2E_GUIDE.md`** (258 lines):
+E2E quick start, mock wallet architecture (`NEXT_PUBLIC_E2E_MOCK_WALLET` + `velthoryn:e2e-mock-send-tx` localStorage flag), overview of all 23 chromium + 10 signing specs, guide to writing new tests, debugging failure modes, and CI integration. The mock wallet design is documented in detail because it is non-obvious — it bypasses browser extension dependency by intercepting `sendTransaction` at the localStorage flag, making signing flows runnable in headless CI without a Phantom extension.
+
+**`docs/week9/FE_DOCUMENTATION_REVIEW.md`** (270 lines):
 1. Integration guide accuracy review — verified 6 key FE file paths (`apps/web/src/lib/client.ts`, `apps/web/src/app/api/campaigns/prepare/route.ts`, etc.) against actual codebase. All paths accurate. Noted the server-side `tx-builder.ts` vs client-side `client.ts` distinction that was implicit in the guide.
-2. Instruction reference FE verification — confirmed 41/42 error codes have corresponding FE user messages. Flagged missing `6041 PerLeafCapExceeded` — added by Lana in `fd6163d` after my last `errors.ts` sync.
-3. 4 FE ADRs — each with problem statement, decision, rationale, and commit reference:
-   - ADR-FE-01: Use shadcn/ui over custom Radix primitives
-   - ADR-FE-02: Mock wallet via localStorage flag (not browser extension stub)
-   - ADR-FE-03: 8-state `CampaignLifecycle` type over boolean flags
-   - ADR-FE-04: `warpToSlot()` before `setClock()` in Bankrun test utilities
-   All 4 ADRs extracted to standalone files in `docs/week9/ADRs/` (ADR-FE-001 through ADR-FE-004) for direct reviewer discoverability.
+2. Instruction reference FE verification — confirmed all 42/42 error codes have corresponding FE user messages after `5a3a277` added `6041 PerLeafCapExceeded` to `errors.ts`.
+3. 4 FE ADRs — each with problem statement, decision, rationale, and commit reference. All 4 extracted to standalone files in `docs/week9/ADRs/` (ADR-FE-001 through ADR-FE-004).
 4. FE-SC interface matrix — maps all 18 instructions + view functions to their FE call site, params, and error handling path.
 5. Error code coverage table (6000–6041) — which codes have FE user messages, which fall through to generic error handler.
-6. 7 documentation gaps with recommendations (e.g., missing `6041`, no FE wallet adapter version pinned in integration guide, no mention of `NEXT_PUBLIC_E2E_MOCK_WALLET` env var).
+6. 7 documentation gaps with recommendations.
 
 **`docs/week9/FE_TESTING_STATUS.md`** (354 lines):
 1. Test suite summary with actual counts: Vitest 572 unit tests across 32 files, 23 chromium E2E specs, 10 signing E2E specs, 15 Bankrun integration specs.
@@ -134,11 +164,16 @@ The Week 9 KPI is: an unfamiliar developer can integrate from docs alone. My con
 
 The testing status document is useful because the test suite has 4 distinct runners with different setup requirements. Without it, an integrator following the README would run `pnpm test` and see 572 passing, not know the E2E suite exists, and not know that signing tests require localnet setup.
 
+**`docs/FE_CHANGELOG.md`** (266 lines):
+Per-week FE changelog Week 3–9 based on actual commit diffs. Every major feature, component, hook, and fix traced to its commit. Useful for a new FE developer who wants to understand how the codebase evolved — what existed at each week, what was refactored, and why.
+
 **Reviewed `docs/week9/INTEGRATION_GUIDE.md`:**
 Verified all FE-relevant code snippets against the actual codebase. Every import path and function signature accurate. Noted one gap: the guide describes `tx-builder.ts` (server-side, Next.js API route) and `client.ts` (browser-side, wallet adapter) without explicitly calling out which context each runs in — added to gap list.
 
-**Verified `docs/FE_INTEGRATION.md`:**
-Confirmed all file paths still valid as of Week 9. Error table stops at `6040` — flagged as needing update to include `6041`.
+**Updated `docs/FE_INTEGRATION.md`:**
+Added `6041 PerLeafCapExceeded` to the error table (was stopping at 6040). Updated `docs/TDD_GERAL.md` (actual test counts), `docs/PDD_GERAL.md` (Zustand clarification, 8-state lifecycle section), and `docs/README.md` (7 new FE doc links in "deeper reads").
+
+**Total: 11 new files (2,380 lines) + 4 existing docs updated.**
 
 ---
 
@@ -243,12 +278,12 @@ Up from 569 (Week 8) — 3 new tests added for BigInt arithmetic edge cases in `
 | Metric | Value | Notes |
 |--------|-------|-------|
 | Total Geral commits (all time) | **50** | `git log --author="geral" --oneline \| wc -l` |
-| Week 9 commits (Geral) | **16** | `07213ca` through `3e6e0bc` |
+| Week 9 commits (Geral) | **25** | `07213ca` through `382f284` |
 | Vitest unit tests | **572 / 572** | Up from 569 (Week 8); 32 test files |
 | E2E spec files (chromium) | **23** | In `tests/e2e/` |
 | E2E signing spec files | **10** | In `tests/e2e/signing/` |
 | Bankrun integration spec files | **15** | In `tests/` root |
-| Docs written this week (FE) | **2 files, 697 lines** | FE_DOCUMENTATION_REVIEW.md (343) + FE_TESTING_STATUS.md (354) |
+| Docs written this week (FE) | **11 new files, 2,380 lines** | FE_ARCHITECTURE (333) + FE_COMPONENT_REFERENCE (402) + FE_BUG_LOG (311) + FE_E2E_GUIDE (258) + FE_DOCUMENTATION_REVIEW (270) + FE_TESTING_STATUS (354) + 4 FE ADRs (186) + FE_CHANGELOG (266) |
 | FE ADRs authored | **4** | ADR-FE-01 through ADR-FE-04 |
 | Documentation gaps identified | **7** | Documented in FE_DOCUMENTATION_REVIEW.md §6 |
 | Bug fix tasks completed (cumulative) | **4 / 10** | Tasks 1, 2, 7, 10 fully done |
