@@ -27,6 +27,33 @@ File upload + preview panel for bulk CSV beneficiary upload. Handles RFC 4180 qu
 
 **Props**: `releaseType`, `onValidRows(rows)`, `onError(message)`, `mintDecimals`
 
+#### Usage
+
+```tsx
+import { BulkCsvSection } from "@/components/campaign/create/BulkCsvSection";
+import type { PreparedRecipientRow } from "@/lib/campaign/bulk";
+
+function CreateLinearPage() {
+  const [recipients, setRecipients] = useState<PreparedRecipientRow[]>([]);
+
+  return (
+    <BulkCsvSection
+      releaseType={1}                       // 0=Cliff, 1=Linear, 2=Milestone
+      mintDecimals={6}                      // used to validate amount precision
+      onValidRows={(rows) => setRecipients(rows)}
+      onError={(message) => toast.error(message)}
+    />
+  );
+}
+```
+
+CSV column format for `releaseType=1` (linear):
+```
+wallet,amount
+7xKX...abcd,1000.00
+9mPQ...efgh,500.00
+```
+
 ---
 
 ### `CommonFields`
@@ -125,6 +152,32 @@ Landing card for the create flow: three cards for Cliff, Linear, Milestone. Rout
 
 Modal for wrapping/unwrapping native SOL to wSOL (and back). Toggle between wrap/unwrap, amount input, balance display, Solscan link. Success state: green checkmark + auto-close after 2s.
 
+#### Usage
+
+```tsx
+import { WrapSolModal } from "@/components/campaign/create/WrapSolModal";
+
+function TokenPickerPage() {
+  const [showWrap, setShowWrap] = useState(false);
+
+  return (
+    <>
+      <button onClick={() => setShowWrap(true)}>Wrap SOL</button>
+      {showWrap && (
+        <WrapSolModal
+          open={showWrap}
+          onOpenChange={setShowWrap}
+          onSuccess={() => {
+            setShowWrap(false);
+            // re-fetch wallet balance
+          }}
+        />
+      )}
+    </>
+  );
+}
+```
+
 ---
 
 ## Campaign Detail
@@ -134,12 +187,96 @@ Modal for wrapping/unwrapping native SOL to wSOL (and back). Toggle between wrap
 
 Root rotation UI: edit beneficiary allocations and submit an `updateRoot` transaction. Shows lock states: cancelled, claims-exist, not-cancel-authority, fully-vested.
 
+#### Usage
+
+```tsx
+import { AllocationEditor, type RecipientRow } from "@/components/campaign/detail/AllocationEditor";
+import { useUpdateRoot } from "@/hooks/useUpdateRoot";
+import { prepareCampaign, ReleaseType } from "@velthoryn/client";
+import BN from "bn.js";
+import { PublicKey } from "@solana/web3.js";
+
+function AllocationsPage({ campaign }: { campaign: CampaignDetail }) {
+  const { updateRoot } = useUpdateRoot();
+  const [saving, setSaving] = useState(false);
+
+  async function handleSubmit(rows: RecipientRow[]) {
+    setSaving(true);
+    const now = Math.floor(Date.now() / 1000);
+    const prepared = prepareCampaign(rows.map((r) => ({
+      beneficiary: new PublicKey(r.beneficiary),
+      amount: new BN(r.amount),
+      releaseType: ReleaseType.Linear,
+      startTime: new BN(r.startTime),
+      cliffTime: new BN(r.cliffTime),
+      endTime: new BN(r.endTime),
+      milestoneIdx: r.milestoneIdx,
+    })));
+    await updateRoot({
+      treeAddress: campaign.treeAddress,
+      payload: {
+        merkleRoot: prepared.rootHex,
+        leafCount: prepared.leafCount,
+        minCliffTime: prepared.minCliffTime.toString(),
+        leaves: prepared.leaves.map((l, i) => ({
+          ...l, beneficiary: l.beneficiary.toBase58(),
+          amount: l.amount.toString(), startTime: l.startTime.toString(),
+          cliffTime: l.cliffTime.toString(), endTime: l.endTime.toString(),
+          proof: prepared.proofs[i],
+        })),
+      },
+    });
+    setSaving(false);
+  }
+
+  return (
+    <AllocationEditor
+      initialRecipients={campaign.recipients.map((r) => ({ ...r, id: r.beneficiary }))}
+      loading={saving}
+      onSubmit={handleSubmit}
+      canRotate={campaign.cancellable && !campaign.cancelledAt}
+      lockedReason={campaign.cancelledAt ? "Campaign is cancelled" : null}
+      claimedAmounts={Object.fromEntries(campaign.recipients.map((r) => [r.beneficiary, r.claimedAmount]))}
+      mintDecimals={6}
+    />
+  );
+}
+```
+
 ---
 
 ### `CampaignStatusBanner`
 **Path**: `campaign/detail/CampaignStatusBanner.tsx`
 
 Full-width banner at the top of the campaign detail page. Renders different content based on `CampaignLifecycle` state: grace-period countdown, instant-refund notice, settled banner.
+
+#### Usage
+
+```tsx
+import { CampaignStatusBanner } from "@/components/campaign/detail/CampaignStatusBanner";
+import { useCampaignDetail } from "@/hooks/useCampaignDetail";
+import { useWallet } from "@solana/wallet-adapter-react";
+
+function CampaignDetailPage({ treeAddress }: { treeAddress: string }) {
+  const { data: campaign } = useCampaignDetail(treeAddress);
+  const { publicKey } = useWallet();
+
+  if (!campaign) return null;
+
+  return (
+    <CampaignStatusBanner
+      cancelledAtBigint={campaign.cancelledAt ? BigInt(campaign.cancelledAt) : null}
+      isCreator={campaign.creator === publicKey?.toBase58()}
+      isInstantRefunded={campaign.instantRefunded}
+      isFunded={campaign.totalSupply > 0}
+      nowTs={BigInt(Math.floor(Date.now() / 1000))}
+      onWithdrawClick={() => {/* trigger withdraw_unvested flow */}}
+      unvestedAmount={BigInt(campaign.totalSupply - campaign.totalClaimed)}
+      mintDecimals={6}
+    />
+  );
+}
+```
 
 ---
 
@@ -268,6 +405,35 @@ Shows whether the connected wallet is `Creator`, `Recipient`, or `Both` for a gi
 **Path**: `campaign/list/StatusBadge.tsx`
 
 Campaign lifecycle status badge. Maps `CampaignLifecycle` to a colored badge: Active (green), Paused (yellow), Cancelled (red), Settled (gray), Instant Refunded (orange), Claimed (blue).
+
+#### Usage
+
+```tsx
+import { StatusBadge } from "@/components/campaign/list/StatusBadge";
+import type { StreamStatus } from "@/lib/vesting/list";
+
+// StreamStatus: "Active" | "Claimable" | "Claimed" | "Paused" |
+//               "Grace Period" | "Cancelled" | "Settled" | "Instant Refunded" | "Scheduled"
+
+function CampaignRow({ campaign }: { campaign: CampaignDetail }) {
+  const status: StreamStatus = campaign.paused
+    ? "Paused"
+    : campaign.instantRefunded
+    ? "Instant Refunded"
+    : campaign.cancelledAt
+    ? "Grace Period"
+    : campaign.totalClaimed >= campaign.totalSupply
+    ? "Claimed"
+    : "Active";
+
+  return (
+    <div>
+      <span>{campaign.treeAddress.slice(0, 8)}…</span>
+      <StatusBadge status={status} />
+    </div>
+  );
+}
+```
 
 ---
 

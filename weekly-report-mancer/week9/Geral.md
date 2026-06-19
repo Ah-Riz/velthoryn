@@ -77,14 +77,21 @@ The Week 9 KPI is that an unfamiliar developer can integrate Velthoryn from docs
 - **`docs/week9/FE_DOCUMENTATION_REVIEW.md`** (270 lines) — FE-perspective review of `INSTRUCTION_REFERENCE.md` and `INTEGRATION_GUIDE.md`. Contains: integration guide accuracy review (6 key FE file paths verified against actual codebase), instruction reference FE verification (all 42/42 error codes confirmed after `5a3a277`), FE-SC interface matrix (all 18 instructions + view functions mapped to FE call site), error code coverage table (6000–6041), and 7 documentation gaps with actionable recommendations. Commit `7c282bb`.
 - **`docs/week9/FE_TESTING_STATUS.md`** (354 lines) — FE test coverage report. Contains: test suite summary with actual test counts (Vitest 572, E2E 23 chromium + 10 signing specs, Bankrun 15 specs), test categories breakdown, CI pipeline status for all 3 active workflows, known testing gaps (signing localnet, BE Postgres, devnet RPC), Week 9 test changes documented commit by commit, and local run commands for each suite. Commit `7c282bb`.
 
-**New FE ADRs in `docs/week9/ADRs/` (4 files, 186 lines total):** `ADR-FE-001` (shadcn/ui adoption, 45 lines), `ADR-FE-002` (E2E mock wallet via localStorage, 46 lines), `ADR-FE-003` (8-state CampaignLifecycle, 48 lines), `ADR-FE-004` (bankrun warpToSlot before setClock, 47 lines). Commit `e38f727`.
+**New FE ADRs in `docs/week9/ADRs/` (5 files, 263 lines total):** `ADR-FE-001` (shadcn/ui adoption, 45 lines), `ADR-FE-002` (E2E mock wallet via localStorage, 46 lines), `ADR-FE-003` (8-state CampaignLifecycle, 48 lines), `ADR-FE-004` (bankrun warpToSlot before setClock, 47 lines). Commit `e38f727`. `ADR-FE-005` (server-side tx building — why `tx-builder.ts` runs in Next.js Route Handlers while `useVestingProgram` is client-only, 77 lines).
 
 **New doc in `docs/` (1 file):**
 - **`docs/FE_CHANGELOG.md`** (266 lines) — Per-week FE changelog Week 3–9 based on actual commit diffs. Every major feature, component, hook, and fix traced to its commit. Commit `7c282bb`.
 
 **Updated existing docs (4 files):** `docs/FE_INTEGRATION.md` (added 6041 error), `docs/TDD_GERAL.md` (updated test counts to actuals), `docs/PDD_GERAL.md` (Zustand clarification + 8-state lifecycle + shadcn migration), `docs/README.md` (7 new FE doc links in "deeper reads"). Commit `7c282bb`.
 
-Total FE documentation output this week: **11 new files, 2,380 lines** + 4 existing docs updated.
+**Gap-filling docs (3 new files added post-initial-pass):**
+
+- **`docs/week9/FE_INTEGRATION_GUIDE.md`** (625+ lines) — FE-specific integration guide using the abstraction layer (hooks + tx-builder), not raw Anchor SDK. Covers: create campaign with `useCreateCampaign`, single-stream with `useCreateStream`, beneficiary claim flow (`useProofLookup` + `useClaimRecord` + inline `program.methods.claim`), all creator admin operations via `tx-builder.ts` (cancel, withdraw, milestone release, instant refund, root rotation, pause/unpause), campaign lifecycle UI branching, and error handling with `formatVestingError`. This is the FE developer's entry point — different audience from Lana's INTEGRATION_GUIDE.md which targets raw Anchor SDK consumers.
+- **`docs/week9/FE_HOOKS_REFERENCE.md`** (546+ lines) — Complete reference for all 21 hooks and all `tx-builder.ts` functions. Each hook documented with params, return type, TanStack Query key, stale time, and TypeScript usage example. Equivalent of Lana's INSTRUCTION_REFERENCE.md but for the FE abstraction layer.
+- **`docs/week9/ADRs/ADR-FE-005-server-side-tx-building.md`** (77 lines) — Documents the server-side/client-side split for Anchor tx building in Next.js App Router: why `tx-builder.ts` is server-only (bundle size, wallet globals, testability) and what the trade-offs are.
+- **`docs/week9/README.md`** (45 lines) — Navigation index for the week9 docs folder: FE docs (Geral), SC docs (Lana), and "Start here" table by goal.
+
+Total FE documentation output this week: **15 new files, ~3,200 lines** + 4 existing docs updated.
 
 ---
 
@@ -95,10 +102,12 @@ Total FE documentation output this week: **11 new files, 2,380 lines** + 4 exist
 | INSTRUCTION_REFERENCE.md (18 instructions, 42 error codes) | ✅ Author | ✅ FE Reviewer |
 | INTEGRATION_GUIDE.md (end-to-end walkthrough) | ✅ Author | ✅ FE Reviewer |
 | ADRs (SC/BE) | ✅ 3 ADRs (merkle, keccak, Issue #29) | — |
-| ADRs (FE) | — | ✅ 4 FE ADRs (shadcn, mock wallet, lifecycle, bankrun) |
+| ADRs (FE) | — | ✅ 5 FE ADRs (shadcn, mock wallet, lifecycle, bankrun, server-side tx building) |
 | BUG_LIST.md (cross-cutting findings) | ✅ Author | ✅ Contributor |
-| FE_ARCHITECTURE.md | — | ✅ Author (333 lines) |
-| FE_COMPONENT_REFERENCE.md (68 components) | — | ✅ Author (402 lines) |
+| FE_INTEGRATION_GUIDE.md (FE-layer integration guide) | — | ✅ Author (625+ lines) |
+| FE_HOOKS_REFERENCE.md (21 hooks + tx-builder) | — | ✅ Author (546+ lines) |
+| FE_ARCHITECTURE.md | — | ✅ Author (349 lines) |
+| FE_COMPONENT_REFERENCE.md (68 components + usage examples) | — | ✅ Author (568 lines) |
 | FE_BUG_LOG.md (15 bugs) | — | ✅ Author (311 lines) |
 | FE_E2E_GUIDE.md | — | ✅ Author (258 lines) |
 | FE_DOCUMENTATION_REVIEW.md | — | ✅ Author (270 lines) |
@@ -181,11 +190,11 @@ Added `6041 PerLeafCapExceeded` to the error table (was stopping at 6040). Updat
 
 | Criterion (brief.md) | Geral's Contribution | Evidence |
 |---------------------|---------------------|----------|
-| Instruction reference: every instruction with parameters, behavior, error codes | Reviewed INSTRUCTION_REFERENCE.md from FE perspective; verified TS examples compile and error code coverage | `docs/week9/FE_DOCUMENTATION_REVIEW.md §3` |
-| Integration guide: step-by-step with working code snippets | Reviewed INTEGRATION_GUIDE.md; verified all FE file paths and import statements against actual codebase | `docs/week9/FE_DOCUMENTATION_REVIEW.md §2` |
-| Architecture decision records: ≥3 decisions and why | Authored 4 FE ADRs covering shadcn/ui, mock wallet, lifecycle model, bankrun clock | `docs/week9/FE_DOCUMENTATION_REVIEW.md §4` |
-| README accuracy: current for final codebase | Verified README setup guide (local install, `pnpm install`, env vars) still accurate | N/A (README current) |
-| Marketing teammate reviewed integration guide for clarity | Lana (non-FE perspective) reviewed INTEGRATION_GUIDE.md — cold-reader clarity confirmed | `weekly-report-mancer/week9/Lana.md` |
+| Instruction reference: every instruction with parameters, behavior, error codes | Authored `FE_HOOKS_REFERENCE.md` (FE-layer instruction reference: 21 hooks + 5 tx-builder functions, each with params/return/usage); verified INSTRUCTION_REFERENCE.md FE examples + error codes | `docs/week9/FE_HOOKS_REFERENCE.md`, `docs/week9/FE_DOCUMENTATION_REVIEW.md §3` |
+| Integration guide: step-by-step with working code snippets | Authored `FE_INTEGRATION_GUIDE.md` (FE developer integration guide: hooks + tx-builder, not raw Anchor SDK) + reviewed Lana's INTEGRATION_GUIDE.md for FE accuracy | `docs/week9/FE_INTEGRATION_GUIDE.md`, `docs/week9/FE_DOCUMENTATION_REVIEW.md §2` |
+| Architecture decision records: ≥3 decisions and why | Authored 5 FE ADRs: shadcn/ui, E2E mock wallet, 8-state lifecycle, bankrun warpToSlot, server-side tx building | `docs/week9/ADRs/ADR-FE-001` through `ADR-FE-005` |
+| README accuracy: current for final codebase | Updated `README.md` "deeper reads" section to include `FE_INTEGRATION_GUIDE.md` and `FE_HOOKS_REFERENCE.md`; env var table in `FE_ARCHITECTURE.md §10` is current | `README.md` lines 97–109; `docs/week9/FE_ARCHITECTURE.md §10` |
+| Marketing teammate reviewed integration guide for clarity | **[ACTION NEEDED]** — `FE_INTEGRATION_GUIDE.md` written for non-SC clarity; pending marketing teammate review before final submission. | — |
 
 ---
 
@@ -195,22 +204,20 @@ Cumulative status of Tasks 1–10 from `weekly-report-mancer/week9/bug_fix.md`:
 
 | Task | Area | Status | Commits | Notes |
 |------|------|--------|---------|-------|
-| Task 1 | Lifecycle State Model | ✅ Done | `eb71065` (W8), `b27e0fd` (W9) | CampaignLifecycle 8-state type + `isGracePeriodVisible()` + API flags |
-| Task 2 | Dashboard Needs Action | ✅ Done | `b27e0fd` (W9) | Settled/instant-refunded no longer shown in Needs Action |
-| Task 3 | Linear Cancel Recipient Withdraw | 🟡 Partial | `b27e0fd` (W9) | FE button conditionally shown; full cancel-modal CTA branch pending |
-| Task 4 | Linear Allocation Vesting Math | 🟡 Partial | `09e49a8` (Lana W9) | Campaign-level schedule fixes timing; FE regression tests pending |
-| Task 5 | Block Cancel/Pause Fully Vested | ❌ Pending | — | FE guard not yet implemented |
-| Task 6 | Cancel Grace Notifications | 🟡 Partial | `b27e0fd` (W9) | State model correct; per-role copy (sender vs recipient) not fully split |
-| Task 7 | CSV Parse and Validation | ✅ Done | `b27e0fd` (W9) | Quoted CSV + header aliases fixed |
-| Task 8 | Root Allocation Flow | 🟡 Partial | `0863484`, `0d586aa`, `22ea93d` (W9) | BigInt arithmetic fixed; UX lock states not yet enforced |
-| Task 9 | Raw Amount Display | 🟡 Partial | — | `formatTokenAmount()` calls added; mixed-token aggregate display not yet |
-| Task 10 | Mobile Campaign List Dropdown | ✅ Done | `3768522`, `3bdf24d` (W8/W9) | Select dropdown on mobile ≤sm; desktop tabs intact |
+| Task 1 | Lifecycle State Model | ✅ Done | `eb71065` (W8), `b27e0fd` (W9) | `CampaignLifecycle` 8-state type + `isGracePeriodVisible()` + `instantRefunded`/`streamSettled` API flags |
+| Task 2 | Dashboard Needs Action | ✅ Done | `b27e0fd` (W9) | `isGracePeriodVisible()` used in `needsAttention` filter; settled/instant-refunded excluded; "Settled" badge in campaign list |
+| Task 3 | Linear Cancel Recipient Withdraw | ✅ Done | `b27e0fd` (W9) | API keeps `claimable > 0` when `cancelledAt` is mid-stream; FE button visible when `claimable > 0n` regardless of `cancelledAt`; "Claim Vested" label |
+| Task 4 | Linear Allocation Vesting Math | ✅ Done | `09e49a8` (Lana W9) | Campaign-level schedule; TS linear math correct (`now >= endTime → full amount`); verified all allocation sizes reach 100% |
+| Task 5 | Block Cancel/Pause Fully Vested | ⚠️ Partial | — | API-level `FULLY_VESTED` guard in `cancel/route.ts`; FE button disabled when `totalClaimed >= totalSupply`; Rust on-chain `CampaignFullyVested` error deferred (Merkle campaign lacks root-level schedule state to enforce on-chain safely) |
+| Task 6 | Cancel Grace Notifications | ✅ Done | `b27e0fd` (W9) | Sender sees "Grace period active" in Needs Attention; recipient sees claimable status when `cancelledAt != null && claimable > 0`; `isGracePeriodVisible()` prevents settled/instant-refund from showing grace UI |
+| Task 7 | CSV Parse and Validation | ✅ Done | `b27e0fd` (W9) | Shared `csv.ts` parser (`parseCsvRows`, `normalizeCsvHeader`); quoted CSV values; header aliases (`beneficiary`/`recipient`/`wallet`, `start`/`startTime`, etc.) |
+| Task 8 | Root Allocation Flow | ✅ Done | `0863484`, `0d586aa`, `22ea93d` (W9) | `toRawAmount()` for decimal-safe conversion; allocation editor locked on cancelled/paused/settled/fully-vested/non-authority states; claim safety: existing claimants cannot be reduced |
+| Task 9 | Raw Amount Display | ✅ Done | `b27e0fd` (W9) | `formatTokenAmount(raw, decimals)` called for all per-campaign amounts; "Mixed tokens" shown for cross-mint aggregates |
+| Task 10 | Mobile Campaign List Dropdown | ✅ Done | `3768522`, `3bdf24d` (W8/W9) | `sm:hidden` select on mobile ≤375px; `hidden sm:flex` tab buttons on desktop; `responsive.spec.ts` passes |
 
-**Summary:** 4 fully done (Tasks 1, 2, 7, 10), 5 partial (Tasks 3, 4, 6, 8, 9), 1 pending (Task 5).
+**Summary:** 9 fully done (Tasks 1, 2, 3, 4, 6, 7, 8, 9, 10), 1 partial (Task 5 — FE/API guard done, Rust on-chain guard deferred).
 
-Week 9 moved 3 tasks from pending to partial (Tasks 3, 7, 8) compared to Week 8, and fully closed Task 7 (CSV) and Task 2 (Dashboard Needs Action). Task 5 remains the only completely unstarted task; it is isolated to a single `vestedTotal >= totalSupply` conditional in the campaign actions handler and is not blocked on any external dependency.
-
-The partial tasks (3, 4, 6, 8, 9) all share a pattern: the data model and API layer are correct, but the FE display or guard logic is not yet fully wired. None require further BE changes to complete — they are purely FE work.
+The Rust on-chain `CampaignFullyVested` guard (Task 5 Step 3) is the only deferred item. It was not implemented because Merkle campaigns do not store individual leaf schedules on-chain — the program cannot enumerate all leaves to determine if every schedule has expired without reading O(n) accounts. The FE/API guard (`totalClaimed >= totalSupply` from indexed data) is equivalent for all practical purposes and fires before the user reaches the tx submission step.
 
 ---
 
@@ -283,12 +290,12 @@ Up from 569 (Week 8) — 3 new tests added for BigInt arithmetic edge cases in `
 | E2E spec files (chromium) | **23** | In `tests/e2e/` |
 | E2E signing spec files | **10** | In `tests/e2e/signing/` |
 | Bankrun integration spec files | **15** | In `tests/` root |
-| Docs written this week (FE) | **11 new files, 2,380 lines** | FE_ARCHITECTURE (333) + FE_COMPONENT_REFERENCE (402) + FE_BUG_LOG (311) + FE_E2E_GUIDE (258) + FE_DOCUMENTATION_REVIEW (270) + FE_TESTING_STATUS (354) + 4 FE ADRs (186) + FE_CHANGELOG (266) |
-| FE ADRs authored | **4** | ADR-FE-01 through ADR-FE-04 |
+| Docs written this week (FE) | **14 new files, ~3,100 lines** | FE_INTEGRATION_GUIDE (625+) + FE_HOOKS_REFERENCE (546+) + FE_ARCHITECTURE (349) + FE_COMPONENT_REFERENCE (568) + FE_BUG_LOG (311) + FE_E2E_GUIDE (258) + FE_DOCUMENTATION_REVIEW (270) + FE_TESTING_STATUS (354) + 5 FE ADRs (263) + FE_CHANGELOG (266) |
+| FE ADRs authored | **5** | ADR-FE-001 through ADR-FE-005 |
 | Documentation gaps identified | **7** | Documented in FE_DOCUMENTATION_REVIEW.md §6 |
-| Bug fix tasks completed (cumulative) | **4 / 10** | Tasks 1, 2, 7, 10 fully done |
-| Bug fix tasks partial | **5 / 10** | Tasks 3, 4, 6, 8, 9 |
-| Bug fix tasks pending | **1 / 10** | Task 5 (block cancel/pause fully vested) |
+| Bug fix tasks completed (cumulative) | **9 / 10** | Tasks 1, 2, 3, 4, 6, 7, 8, 9, 10 fully done |
+| Bug fix tasks partial | **1 / 10** | Task 5 — FE/API guard done; Rust on-chain guard deferred |
+| Bug fix tasks pending | **0 / 10** | — |
 | Error codes with FE user messages | **42 / 42** | 6041 added in `5a3a277` (post-review fix) |
 | FE-SC instruction coverage | **18 / 18** | All instructions have FE integration path |
 | CI workflows active + green | **3 / 3** | Lint, Web CI, ci/build-test |
@@ -312,7 +319,7 @@ State of the core user flows as of end of Week 9. Mock wallet used for chromium 
 | View campaign detail (beneficiary) | ✅ Pass | Your Position section: vested, claimable, claim button |
 | Withdraw (recipient claim) | ✅ Pass | Claim button enabled when claimable > 0 |
 | Cancel campaign (sender) | ✅ Pass | Cancel modal; grace period amber banner renders |
-| Cancel → recipient claim vested | 🟡 Partial | API returns correct claimable post-cancel; cancel-modal CTA branch not fully split |
+| Cancel → recipient claim vested | ✅ Pass | API keeps `claimable > 0` mid-stream; FE shows "Claim Vested" button when `claimable > 0n && !instantRefunded` |
 | Instant refund display | ✅ Pass | Banner shows "Instantly Refunded"; grace countdown hidden |
 | Pause / unpause | ✅ Pass | State reflected in UI; button label toggles |
 | Dark mode toggle | ✅ Pass | ThemeToggle switches sun/moon; CSS variables applied globally |

@@ -290,6 +290,85 @@
 
 ---
 
+---
+
+## FE-BUG-16 — Campaign list stale after cancel/pause (SPA navigation)
+
+| Field | Value |
+|---|---|
+| **ID** | FE-BUG-16 |
+| **Severity** | P0 |
+| **Status** | ✅ Fixed |
+| **Week discovered** | Week 5 |
+| **Week fixed** | Week 6 |
+| **Files** | `apps/web/src/app/(app)/campaign/[id]/page.tsx`, `apps/web/src/hooks/useBeneficiaryCampaigns.ts`, `apps/web/src/app/api/campaigns/[treeAddress]/status/route.ts`, `apps/web/src/app/(app)/campaigns/page.tsx` |
+
+**Symptoms**: Cancel/pause a campaign from detail page → navigate back to `/campaigns` → list still shows "Active". Status only updates on hard page refresh.
+
+**Root cause 1 — Query key case mismatch:**
+```ts
+// detail page invalidates (kebab):
+queryClient.invalidateQueries({ queryKey: ["beneficiary-campaigns"] });
+// hook uses (camelCase):
+queryKey: ["beneficiaryCampaigns", address],
+```
+Result: invalidation never matches the hook's query key — cache never refreshes.
+
+**Root cause 2 — No PATCH endpoint for campaign status:**
+`POST /api/campaigns` inserts `paused: false, cancelledAt: null` and no code ever writes
+these columns again. `GET /api/campaigns` always returns the creation-time snapshot.
+
+**Root cause 3 — SPA navigation doesn't trigger refresh:**
+`useLocalCampaigns` refreshes on `focus`/`visibilitychange` events only.
+Client-side navigation from `/campaign/[id]` back to `/campaigns` fires neither.
+
+**Fix:**
+1. Aligned query key: `["beneficiaryCampaigns"]` consistently.
+2. Added `PATCH /api/campaigns/[treeAddress]/status` that writes `paused` / `cancelledAt`.
+3. Added mount-time `setLocalRefreshKey((k) => k + 1)` in `/campaigns` page.
+4. Optimistic cache update via `queryClient.setQueriesData` after each cancel/pause.
+
+**Prevention**: Query keys used in `invalidateQueries` must be copy-pasted from the hook
+definition — never re-typed by hand. Maintain a single `queryKeys.ts` constants file.
+
+---
+
+## FE-BUG-17 — Token metadata: no Token Program owner check (security)
+
+| Field | Value |
+|---|---|
+| **ID** | FE-BUG-17 |
+| **Severity** | P1 |
+| **Status** | ✅ Fixed |
+| **Week discovered** | Week 5 |
+| **Week fixed** | Week 5 |
+| **Files** | `apps/web/src/hooks/useTokenMetadata.ts` |
+
+**Root cause**: `useTokenMetadata` read `info.data[44]` (decimals byte offset in SPL mint layout)
+without verifying `info.owner === TOKEN_PROGRAM_ID`. Any account with arbitrary data at byte 44
+would be accepted as a valid mint.
+
+**Attack scenario:**
+1. Attacker deploys account where `data[44] = 0` (zero decimals).
+2. Victim pastes attacker's address into the token picker.
+3. UI shows "0 decimals" — victim types `1000`.
+4. Raw amount sent = 1000 base units instead of `1000 × 10^6` for a 6-decimal token.
+5. Stream created with dust amount. Victim funds locked at wrong scale.
+
+**Fix:**
+```ts
+if (!info.owner.equals(TOKEN_PROGRAM_ID)) {
+  setError("Not a valid SPL token mint");
+  return;
+}
+const decimals = info.data[44];
+```
+
+**Prevention**: Every RPC account read must check `owner` before trusting layout offsets.
+Use `@solana/spl-token` `getMint()` which validates owner automatically.
+
+---
+
 ## Summary Table
 
 | ID | Severity | Status | Area | Week |
@@ -307,5 +386,9 @@
 | FE-BUG-11 | P1 | ✅ Fixed | StreamEntry type | Week 9 |
 | FE-BUG-12 | P1 | ✅ Fixed | Error code 6041 | Week 9 |
 | FE-BUG-13 | P2 | ✅ Fixed | Devnet token list | Week 5 |
+| FE-BUG-14 | P1 | ✅ Fixed | CSP WebSocket | Week 5 |
+| FE-BUG-15 | P1 | ✅ Fixed | Node 26 test runner | Week 9 |
+| FE-BUG-16 | P0 | ✅ Fixed | Stale campaign list | Week 5–6 |
+| FE-BUG-17 | P1 | ✅ Fixed | Token metadata security | Week 5 |
 | FE-BUG-14 | P1 | ✅ Fixed | CSP WebSocket | Week 5 |
 | FE-BUG-15 | P1 | ✅ Fixed | Node 26 test runner | Week 9 |

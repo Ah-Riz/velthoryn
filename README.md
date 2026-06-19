@@ -101,7 +101,9 @@ For deeper reads:
 - [`docs/week9/FE_DOCUMENTATION_REVIEW.md`](docs/week9/FE_DOCUMENTATION_REVIEW.md) — FE-perspective review of instruction reference + integration guide; 4 FE ADRs; FE-SC interface matrix; error code coverage (6000–6041).
 - [`docs/week9/FE_TESTING_STATUS.md`](docs/week9/FE_TESTING_STATUS.md) — FE test suite status: Vitest 572/572, E2E 23 chromium specs + 10 signing specs, CI pipeline status.
 - [`docs/week9/FE_ARCHITECTURE.md`](docs/week9/FE_ARCHITECTURE.md) — FE tech stack, directory structure, data flow, state management, wallet integration, 8-state lifecycle, env vars.
-- [`docs/week9/FE_COMPONENT_REFERENCE.md`](docs/week9/FE_COMPONENT_REFERENCE.md) — all 68 FE components with props, purpose, and usage context.
+- [`docs/week9/FE_INTEGRATION_GUIDE.md`](docs/week9/FE_INTEGRATION_GUIDE.md) — **FE developer integration guide**: hooks + tx-builder walkthrough (create → claim → admin ops); code-first, abstraction-layer focused (vs raw Anchor SDK in INTEGRATION_GUIDE.md).
+- [`docs/week9/FE_HOOKS_REFERENCE.md`](docs/week9/FE_HOOKS_REFERENCE.md) — complete reference for all 21 hooks + tx-builder functions: params, return types, TanStack Query keys, usage snippets.
+- [`docs/week9/FE_COMPONENT_REFERENCE.md`](docs/week9/FE_COMPONENT_REFERENCE.md) — all 68 FE components with props, purpose, and usage examples.
 - [`docs/week9/FE_BUG_LOG.md`](docs/week9/FE_BUG_LOG.md) — 15 FE bugs (FE-BUG-01 to FE-BUG-15): root cause, fix status, prevention.
 - [`docs/week9/FE_E2E_GUIDE.md`](docs/week9/FE_E2E_GUIDE.md) — E2E quick start, mock wallet architecture, env setup, writing tests, debugging, CI.
 

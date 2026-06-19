@@ -15,14 +15,18 @@
 | Component library | shadcn/ui | latest |
 | Styling | Tailwind CSS | v4 |
 | Solana wallet | `@solana/wallet-adapter-react` | latest |
-| Anchor client | `@coral-xyz/anchor` | latest |
+| Anchor client | `@coral-xyz/anchor` | 0.32.1 |
 | SPL tokens | `@solana/spl-token` | latest |
+| `@solana/web3.js` | Solana web3.js | v1.98.4 (v1, not v2) |
 | Testing (unit) | Vitest + Testing Library | latest |
 | Testing (E2E) | Playwright | latest |
-| DB ORM | Prisma | latest |
-| Storage (Merkle data) | Supabase | v2 |
-| File uploads | Pinata IPFS | - |
+| DB ORM | Drizzle ORM | 0.39.3 |
+| DB host | Supabase Postgres (pooler) | — |
+| State (global) | Zustand | v5 |
+| Notifications | sonner | latest |
 | Fonts | Space Grotesk · JetBrains Mono · Geist | - |
+
+> **Not implemented (Phase 2):** Supabase JS client (Auth + Storage), Pinata IPFS file uploads.
 
 ---
 
@@ -148,6 +152,7 @@ RootRotationCard
 |---|---|---|
 | Server state | TanStack Query v5 | Campaign data, proof data, vesting progress |
 | Local state | React `useState` | Form fields, UI toggles, modal open/close |
+| Global client state | Zustand (`useAppStore`) | `selectedCampaignId` — cross-component campaign selection |
 | Persistent client | `localStorage` | Pending campaign index queue, sidebar collapse state |
 | Wallet state | wallet-adapter context | Connected wallet, public key, sendTransaction |
 | Token balances | WalletTokensProvider | SPL token accounts for connected wallet |
@@ -213,15 +218,17 @@ The `CampaignLifecycle` type (`active | paused | claimable | claimed | cancelled
           └─► claimed (all tokens claimed)
 ```
 
-Helper `isGracePeriodVisible(campaign)` → `true` when `cancelledAt` is set and less than 7 days ago.
+Helper `isGracePeriodVisible({ cancelledAt, instantRefunded, streamSettled })` → `true` only when **all three**: `cancelledAt !== null && !instantRefunded && !streamSettled`. The "less than 7 days" time check is separate — done by comparing `cancelledAt + GRACE_PERIOD_SECS` to `now`.
 
 **UI branching by lifecycle state** (in `campaign/[id]/page.tsx`):
-- `active`: show ClaimWithProofButton, PauseToggleButton, WithdrawUnvestedButton
-- `paused`: show resume button (PauseToggleButton), disable claims
-- `cancelled_grace`: show grace period countdown, allow unvested withdrawal
-- `cancelled_expired`: allow unvested withdrawal, disable claims
-- `instant_refunded`: show refund banner, disable all actions
-- `settled`: show settled state, disable new claims
+- `active`: vesting in progress, cliff not yet reached — show PauseToggleButton; claim button disabled with countdown
+- `claimable`: at least some tokens vested — ClaimWithProofButton enabled, PauseToggleButton visible
+- `claimed`: all tokens claimed — claim button disabled, show completion state
+- `paused`: show resume button (PauseToggleButton), claim button disabled
+- `cancelled_grace`: `isGracePeriodVisible() === true` — grace period countdown, ClaimWithProofButton still active for vested portion
+- `cancelled_expired`: grace expired — claim disabled, show WithdrawUnvestedButton for creator
+- `instant_refunded`: single-leaf instant refund — show refund banner, all actions disabled
+- `settled`: single-leaf cancel with vested split — show settled state, no further claims
 
 ---
 
@@ -235,27 +242,65 @@ Using `next-themes` with `ThemeProvider` at the root. Design tokens are in `glob
 
 | Variable | Required | Description |
 |---|---|---|
-| `DATABASE_URL` | Yes | Prisma Postgres connection |
+| `DATABASE_URL` | Yes | Drizzle ORM — Supabase Postgres connection string |
 | `NEXT_PUBLIC_RPC_ENDPOINT` | Yes | Solana RPC URL (devnet or mainnet) |
-| `NEXT_PUBLIC_SUPABASE_URL` | Yes | Supabase project URL |
-| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Yes | Supabase anon/public key |
 | `ADMIN_API_KEY` | Yes | Admin-only route auth header |
 | `API_KEY` | Yes | Internal API route auth |
-| `PINATA_JWT` | Yes | Pinata IPFS JWT for Merkle data uploads |
-| `PINATA_GATEWAY_URL` | Yes | Pinata gateway URL |
 | `CRON_SECRET` | Yes | Cron job auth (`/api/cron/sync`) |
-| `UPSTASH_REDIS_REST_URL` | Optional | Rate limiting (Upstash) |
+| `COINGECKO_API_KEY` | Yes | CoinGecko price feed proxy (`/api/prices`) |
+| `UPSTASH_REDIS_REST_URL` | Optional | Rate limiting (Upstash Redis) |
 | `UPSTASH_REDIS_REST_TOKEN` | Optional | Rate limiting token |
 | `ALLOWED_ORIGIN` | Optional | CORS origin (default: velthoryn.site) |
-| `COINGECKO_API_KEY` | Optional | Price feed API key |
-| `NEXT_PUBLIC_SENTRY_DSN` | Optional | Sentry error monitoring |
-| `NEXT_PUBLIC_ENABLE_VERCEL_ANALYTICS` | Optional | Vercel Analytics toggle |
-| `NEXT_PUBLIC_E2E_MOCK_WALLET` | Test only | Enable E2E mock wallet bypass |
-| `NEXT_PUBLIC_SOLANA_CLUSTER` | Optional | Override RPC cluster detection |
+| `NEXT_PUBLIC_SENTRY_DSN` | Optional | Sentry error monitoring DSN |
+| `NEXT_PUBLIC_ENABLE_VERCEL_ANALYTICS` | Optional | Enable Vercel Web Analytics |
+| `NEXT_PUBLIC_SUPABASE_URL` | Phase 2 | Supabase project URL (client-side Auth/Storage — not yet active) |
+| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Phase 2 | Supabase anon key (client-side Auth/Storage — not yet active) |
+| `PINATA_JWT` | Phase 2 | Pinata IPFS JWT (file uploads — not yet implemented) |
+| `PINATA_GATEWAY_URL` | Phase 2 | Pinata gateway URL (file uploads — not yet implemented) |
+| `NEXT_PUBLIC_E2E_MOCK_WALLET` | Test only | Enable E2E mock wallet bypass (set in `dev:e2e` script) |
+| `NEXT_PUBLIC_SOLANA_CLUSTER` | Optional | Override auto-detected cluster (`"devnet"` \| `"mainnet-beta"`) |
 
 ---
 
-## 11. Security Headers
+## 11. Known Product Tradeoffs
+
+These are real tensions observed by external users and the core team. They are not bugs —
+they are deliberate design choices with documented costs.
+
+**1. 7-day grace period is hostile UX for legitimate cancellations.**
+If an employee is on a two-week vacation when an admin cancels a campaign, they risk
+losing already-vested tokens unless they happen to return within 7 days. Tokens that are
+vested are contractually owed; the 7-day window introduces trust and legal risk.
+*Why we kept it:* The grace period prevents a creator from cancelling and draining the
+vault before a beneficiary can claim. It is a security guarantee, not just a convenience.
+*Mitigation roadmap:* Make the grace period configurable per campaign (1 day → 30 days).
+See [ADR-FE-007](ADRs/ADR-FE-007-cancel-instant-vs-grace-design.md) for cancel design context.
+
+**2. Off-chain centralization: no backend → no claims.**
+Merkle proof generation requires the off-chain tree to be available. If Velthoryn's
+backend goes down, beneficiaries cannot claim — they cannot reconstruct the proof from the
+Solana chain alone. This contradicts the "trustless" framing.
+*Why we built it this way:* On-chain leaf storage at scale is prohibitively expensive.
+Merkle compression trades decentralization for cost efficiency at 1000+ recipients.
+*Mitigation:* Root rotation guard + eventual IPFS pinning of Merkle trees (Phase 2).
+
+**3. Root rotation is operationally heavy.**
+Revoking one recipient from a 1,000-person campaign requires recalculating the full
+Merkle tree, generating a new root, updating it on-chain, and syncing the database so
+all 999 remaining users can still generate valid proofs. Any desync leaves valid
+recipients unable to claim.
+
+**4. "Zero friction" claim is actually pull-based.**
+Recipients must remember unlock schedules, return to the site, connect wallets, and
+manually claim. True zero-friction would be push-based streams. The current design is
+"low friction," not "zero friction."
+
+> These tradeoffs were documented from real external user critique received during Week 6
+> pilot testing. They inform the post-launch roadmap.
+
+---
+
+## 12. Security Headers
 
 Set in `next.config.ts`:
 - `Content-Security-Policy`: restricts scripts/frames, allows `wss://helius-rpc.com`
@@ -266,7 +311,7 @@ Set in `next.config.ts`:
 
 ---
 
-## 12. Build & CI
+## 13. Build & CI
 
 | Command | Description |
 |---|---|
@@ -281,7 +326,7 @@ CI pipelines: `.github/workflows/ci.yml` (unit + type), `.github/workflows/web-c
 
 ---
 
-## 13. Campaign Lifecycle State Diagram
+## 14. Campaign Lifecycle State Diagram
 
 The `CampaignLifecycle` type has 8 states. The diagram below shows valid transitions; all others are blocked by on-chain guards.
 
@@ -307,7 +352,7 @@ stateDiagram-v2
 
 ---
 
-## 14. Root Rotation UI (useUpdateRoot + AllocationEditor)
+## 15. Root Rotation UI (useUpdateRoot + AllocationEditor)
 
 `useUpdateRoot` hook (`src/hooks/useUpdateRoot.ts`) drives the Allocations page
 (`src/app/(app)/campaign/[id]/allocations/page.tsx`).
@@ -331,3 +376,16 @@ stateDiagram-v2
 **FE guard:** The `AllocationEditor` disables the "Save Allocations" button when
 `computedRoot === campaign.merkleRoot` (pre-computes client-side to avoid a
 wasted transaction).
+
+---
+
+## Further Reading
+
+| Doc | What it covers |
+|-----|---------------|
+| [`FE_INTEGRATION_GUIDE.md`](FE_INTEGRATION_GUIDE.md) | Step-by-step: create campaign, claim tokens, admin ops — using hooks + tx-builder (code-first) |
+| [`FE_HOOKS_REFERENCE.md`](FE_HOOKS_REFERENCE.md) | All 21 hooks + tx-builder functions: params, return types, TanStack Query keys, usage snippets |
+| [`FE_COMPONENT_REFERENCE.md`](FE_COMPONENT_REFERENCE.md) | All 68 components with props and usage examples |
+| [`FE_E2E_GUIDE.md`](FE_E2E_GUIDE.md) | Playwright E2E setup, mock wallet, writing new tests |
+| [`ADRs/`](ADRs/) | FE-001 shadcn/ui, FE-002 mock wallet, FE-003 8-state lifecycle, FE-004 bankrun warpToSlot, FE-005 server-side tx building |
+| [`INSTRUCTION_REFERENCE.md`](INSTRUCTION_REFERENCE.md) | On-chain instruction signatures (raw Anchor SDK level — Lana) |

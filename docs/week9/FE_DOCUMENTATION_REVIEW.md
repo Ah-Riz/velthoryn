@@ -244,6 +244,19 @@ The following table records specific gaps a new frontend developer would encount
 - Gap #4 — Campaign-level schedule note in integration reference.
 - Gap #5 — useUpdateRoot + AllocationEditor FE guide — **fixed** (added to FE_ARCHITECTURE.md §14).
 
+### Post-session update (2026-06-19)
+
+Three new FE documents were created to close the outstanding gaps:
+
+| Document | Lines | Gaps addressed |
+|----------|-------|----------------|
+| [`FE_INTEGRATION_GUIDE.md`](FE_INTEGRATION_GUIDE.md) | 700+ | Gap #4 — campaign-level schedule (`releaseType`, `startDate`/`cliffDate`/`endDate` from `useCampaignDetail`) documented in §2–§3. Also adds §5b showing single-stream `withdraw` flow (previously undocumented). |
+| [`FE_HOOKS_REFERENCE.md`](FE_HOOKS_REFERENCE.md) | 546+ | Gap #2 (partial) — `useClaimRecord` return type + QueryKey documented; full 232-byte zero-copy binary layout remains deferred. |
+| [`ADR-FE-005-server-side-tx-building.md`](ADRs/ADR-FE-005-server-side-tx-building.md) | 77 | Previously undocumented architectural decision (server/client tx split). |
+
+**Remaining open:**
+- Gap #2 (partial) — zero-copy `ClaimRecord` binary layout §14 addendum deferred pending Issue #29 devnet stabilization.
+
 ---
 
 ## Appendix A: Files Verified During This Review
