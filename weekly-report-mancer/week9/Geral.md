@@ -194,7 +194,7 @@ Added `6041 PerLeafCapExceeded` to the error table (was stopping at 6040). Updat
 | Integration guide: step-by-step with working code snippets | Authored `FE_INTEGRATION_GUIDE.md` (FE developer integration guide: hooks + tx-builder, not raw Anchor SDK) + reviewed Lana's INTEGRATION_GUIDE.md for FE accuracy | `docs/week9/FE_INTEGRATION_GUIDE.md`, `docs/week9/FE_DOCUMENTATION_REVIEW.md §2` |
 | Architecture decision records: ≥3 decisions and why | Authored 5 FE ADRs: shadcn/ui, E2E mock wallet, 8-state lifecycle, bankrun warpToSlot, server-side tx building | `docs/week9/ADRs/ADR-FE-001` through `ADR-FE-005` |
 | README accuracy: current for final codebase | Updated `README.md` "deeper reads" section to include `FE_INTEGRATION_GUIDE.md` and `FE_HOOKS_REFERENCE.md`; env var table in `FE_ARCHITECTURE.md §10` is current | `README.md` lines 97–109; `docs/week9/FE_ARCHITECTURE.md §10` |
-| Marketing teammate reviewed integration guide for clarity | **[ACTION NEEDED]** — `FE_INTEGRATION_GUIDE.md` written for non-SC clarity; pending marketing teammate review before final submission. | — |
+| Marketing teammate reviewed integration guide for clarity | aicee (marketing) reviewed docs on 2026-06-18. Initial reaction: "kok aku bingung ih bacanyaaa" — expected, docs target developers not marketers. After context explanation confirmed she can access and navigate the docs. Will do a formal review and wants a walkthrough meeting; formal sign-off pending. | aicee chat, 2026-06-18 |
 
 ---
 
@@ -277,6 +277,7 @@ Up from 569 (Week 8) — 3 new tests added for BigInt arithmetic edge cases in `
 | BE route tests need Postgres | 🟡 Pending | Staged in `tests/api/**`; not runnable in CI without Postgres service |
 | Mollusk 4 handlers blocked (init_if_needed) | 🟡 External | Waiting on Mollusk 0.14 upstream release (Lana's scope) |
 | `errors.ts` missing 6041 PerLeafCapExceeded | ✅ Fixed | Added in `5a3a277` (post-review); `VESTING_ERROR_CODES` and `USER_MESSAGES` both updated |
+| Marketing formal sign-off | 🟡 Pending | aicee reviewed docs 2026-06-18; wants walkthrough meeting besok/lusa (2026-06-21) — **deadline is 2026-06-20**. Recommend async text confirmation today before submission. |
 
 ---
 
@@ -291,7 +292,7 @@ Up from 569 (Week 8) — 3 new tests added for BigInt arithmetic edge cases in `
 | E2E signing spec files | **10** | In `tests/e2e/signing/` |
 | Bankrun integration spec files | **15** | In `tests/` root |
 | Docs written this week (FE) | **14 new files, ~3,100 lines** | FE_INTEGRATION_GUIDE (625+) + FE_HOOKS_REFERENCE (546+) + FE_ARCHITECTURE (349) + FE_COMPONENT_REFERENCE (568) + FE_BUG_LOG (311) + FE_E2E_GUIDE (258) + FE_DOCUMENTATION_REVIEW (270) + FE_TESTING_STATUS (354) + 5 FE ADRs (263) + FE_CHANGELOG (266) |
-| FE ADRs authored | **5** | ADR-FE-001 through ADR-FE-005 |
+| FE ADRs authored | **7** | ADR-FE-001 through ADR-FE-007 |
 | Documentation gaps identified | **7** | Documented in FE_DOCUMENTATION_REVIEW.md §6 |
 | Bug fix tasks completed (cumulative) | **9 / 10** | Tasks 1, 2, 3, 4, 6, 7, 8, 9, 10 fully done |
 | Bug fix tasks partial | **1 / 10** | Task 5 — FE/API guard done; Rust on-chain guard deferred |

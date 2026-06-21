@@ -2317,6 +2317,7 @@ export default function CampaignPage({ params }: { params: Promise<{ id: string 
                   program={program}
                   publicKey={publicKey}
                   treePubkey={new PublicKey(treeAddress)}
+                  mint={treeState.mint}
                   totalEntitled={BigInt(claimRecordQuery.data.totalEntitled.toString())}
                   claimedAmount={BigInt(claimRecordQuery.data.claimedAmount.toString())}
                   cancelledAt={cancelledAtBigint}
