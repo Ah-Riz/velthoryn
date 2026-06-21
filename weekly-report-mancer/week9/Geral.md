@@ -330,6 +330,50 @@ State of the core user flows as of end of Week 9. Mock wallet used for chromium 
 
 ---
 
+## §12: Post-Week-9 Bug Fixes (2026-06-21, commit `a4ce589`)
+
+Four additional bugs found and fixed after the main Week 9 submission, during live devnet testing.
+
+### FE-BUG-18 — Duplicate Schedule card on cliff/linear create pages
+
+Lana's `09e49a8` added campaign-level schedule fields (shared Start/Cliff/End) on cliff/linear create pages, but the original per-stream schedule fields inside each stream card were not removed. Both UIs were active simultaneously, creating a confusing duplicate. CSV bulk mode also had a stale `sharedSchedule` override injected into `parseBulkCsv()` calls — CSVs have per-row date columns and don't need an override.
+
+**Fix (`a4ce589`):** Removed the campaign-level Schedule card entirely from `cliff/page.tsx` and `linear/page.tsx`. Removed dead state, dead functions, and the `sharedSchedule` injection from `bulk.ts`. Per-stream fields inside each stream card are the single source of truth.
+
+### FE-BUG-19 — Native SOL claim fails with AccountNotFound when beneficiary wallet has 0 SOL
+
+On Solana, a wallet with 0 lamports does not exist in the account database. RPC rejects the transaction at pre-flight (`AccountNotFound`) before BPF execution — simulation logs are empty (`logs: []`), making the error invisible to the generic handler. The SPL token path already had a balance pre-check; the native SOL path did not.
+
+**Fix (`a4ce589`, `ClaimWithProofButton.tsx`):** Added a balance pre-check before building the native SOL claim instruction: `getBalance(publicKey)` + `getMinimumBalanceForRentExemption(240)` in parallel. If `beneficiaryLamports < minRequired`, shows: *"Insufficient SOL for transaction fees and claim account rent. Wallet has X SOL, needs ~Y SOL. Fund your wallet first."* Added `AccountNotFound` detection in the simulation catch block as a second-layer fallback.
+
+### FE-BUG-20 — close_claim_record fails with AccountNotInitialized (3012) after final native SOL claim
+
+**Root cause (protocol):** `claim.rs` and `withdraw.rs` drain ALL VestingTree lamports on final claim — including rent — zeroing the PDA. Solana deletes zero-lamport accounts at end of transaction. `close_claim_record` requires `vesting_tree` as a non-optional Anchor account; Anchor throws 3012 when the account is gone. This means beneficiaries of fully-claimed native SOL campaigns permanently lose claim record rent (~0.002 SOL each).
+
+`withdraw_unvested.rs` (SC-FIND-02) and `instant_refund_campaign.rs` already preserve `rent_min` correctly. SC-FIND-07 tracks the required fix to `claim.rs` + `withdraw.rs` (requires redeploy).
+
+**FE workaround (`a4ce589`, `CloseClaimRecordButton.tsx`):** Added `mint: PublicKey` prop. Fetches both `claimRecord` and `vestingTree` account infos in parallel before building the instruction. If VestingTree is gone and `isNativeSol(mint)`, shows: *"This campaign's SOL vault was fully claimed. The campaign account was destroyed — this is a known limitation of native SOL campaigns — claim record rent (~0.002 SOL) cannot be reclaimed on-chain."* Improved simulation error routing through `formatVestingError` with explicit `AccountNotInitialized` detection.
+
+### FE-BUG-21 — PendingFundingsPanel text invisible in light mode
+
+The "Unfunded Campaigns" panel used `text-amber-100` and `text-amber-200/80` — near-white, invisible on light backgrounds.
+
+**Fix (`a4ce589`, `PendingFundingsPanel.tsx`):** `text-amber-800 dark:text-amber-100` and `text-amber-700/80 dark:text-amber-200/80`.
+
+---
+
+### Protocol finding — SC-FIND-07 (VestingTree PDA destruction on final native SOL claim)
+
+Discovered during debugging of FE-BUG-20. Four instructions audited:
+- `claim.rs` ❌ destroys VestingTree on final claim (all lamports drained)
+- `withdraw.rs` ❌ destroys VestingTree on final single-stream withdraw
+- `withdraw_unvested.rs` ✅ SC-FIND-02 fix already preserves `rent_min`
+- `instant_refund_campaign.rs` ✅ correctly preserves `rent_min`
+
+Documented in `docs/PENDING_WORK.md` as SC-FIND-07. FE workaround in place. SC fix (preserve `rent_min` in `claim.rs` + `withdraw.rs` final drain) requires redeploy.
+
+---
+
 ## §11: Self-Assessment
 
 **What I'm confident works — and why:**

@@ -31,6 +31,7 @@ Detect → triage → fix → docs pass across SC / MERKLE / BE / DB. Full detai
 - **Remove the now-obsolete Issue #29 BE guards** (`cliffLinearSeen` in `apps/web/src/app/api/campaigns/prepare/route.ts:70-84` + `import/route.ts:92-110`) — separate post-deploy PR, after the upgraded program is on mainnet. Keep the milestone duplicate guard.
 - FE multi-leaf-cliff/linear support in the bulk-send UI → Geral (handoff; the on-chain program now supports it).
 - `BE-SEC-02` (XFF trust) + `BE-SEC-04` (Redis prod assertion) → revisit if moving off Vercel.
+- **SC-FIND-07 (new, 2026-06-21) — `claim.rs` + `withdraw.rs` drain all lamports on final native SOL claim, destroying VestingTree PDA.** `claim.rs` final drain uses `pda_info.lamports()` (all lamports including rent); `withdraw.rs` single-stream final withdraw has the same pattern. Solana deletes zero-lamport accounts at transaction end → `close_claim_record` subsequently fails with `AccountNotInitialized (3012)` because `vesting_tree` is a required non-optional account. `withdraw_unvested.rs` (SC-FIND-02) and `instant_refund_campaign.rs` already correctly preserve `rent_min`. Fix: apply the same pattern to `claim.rs` and `withdraw.rs` — `pda_info.lamports().saturating_sub(rent_min)` on the final drain. Requires SC redeploy. FE workaround already in place (see FE-BUG-20): pre-checks VestingTree existence and shows clear native-SOL-specific error if gone.
 
 ---
 
