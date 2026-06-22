@@ -35,8 +35,16 @@ export function PortfolioDonut({ segments, centerValue, centerSub, size = 108, i
   }
 
   const gap = 3;
-  let cumulative = 0;
   const valueFontSize = centerValue.length <= 6 ? 13 : centerValue.length <= 9 ? 10.5 : 8.5;
+
+  const segmentData = segments.reduce<Array<DonutSegment & { start: number; arcLen: number }>>(
+    (arr, seg) => {
+      const prev = arr.at(-1);
+      const start = prev ? prev.start + prev.proportion : 0;
+      return [...arr, { ...seg, start, arcLen: Math.max(0, seg.proportion * C - gap) }];
+    },
+    []
+  );
 
   return (
     <div className="flex flex-col items-center gap-3">
@@ -51,10 +59,8 @@ export function PortfolioDonut({ segments, centerValue, centerSub, size = 108, i
             stroke="rgba(255,255,255,0.06)"
             strokeWidth="12"
           />
-          {segments.map((seg, i) => {
-            const start = cumulative;
-            cumulative += seg.proportion;
-            const arcLen = Math.max(0, seg.proportion * C - gap);
+          {segmentData.map((seg, i) => {
+            const { start, arcLen } = seg;
             if (arcLen <= 0) return null;
             return (
               <circle
