@@ -14,14 +14,14 @@ test.describe("Responsive layout", () => {
     expect(pageErrors).toEqual([]);
   });
 
-  test("desktop viewport shows full header with network badge", async ({ page }) => {
+  test("desktop viewport shows full header with branding", async ({ page }) => {
     const pageErrors = collectRelevantPageErrors(page);
     await enableE2eWallet(page);
     await page.setViewportSize({ width: 1280, height: 720 });
     await gotoWithRetry(page, "/dashboard");
 
     await expect(page.locator("header")).toBeVisible();
-    await expect(page.getByText("Devnet").first()).toBeVisible();
+    await expect(page.getByText("Velthoryn").first()).toBeVisible();
     expect(pageErrors).toEqual([]);
   });
 

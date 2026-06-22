@@ -116,7 +116,7 @@ test.describe("Manual create flows", () => {
   test("form summary shows network info", async ({ page }) => {
     const pageErrors = await openManualCreatePage(page, "/campaign/create/cliff");
 
-    await expect(page.getByText("Devnet").first()).toBeVisible();
+    await expect(page.getByText("Solana").first()).toBeVisible();
     await expect(page.getByText(/your balance/i)).toBeVisible();
     expect(pageErrors).toEqual([]);
   });

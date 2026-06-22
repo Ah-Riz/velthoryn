@@ -8,7 +8,6 @@ import { useMintDecimals } from "@/hooks/useMintDecimals";
 import { useMintPrices } from "@/hooks/useMintPrices";
 import { POPULAR_TOKENS } from "@/lib/constants/popular-tokens";
 import { NATIVE_SOL_MINT_ADDRESS } from "@/lib/sol/auto-wrap";
-import { CLUSTER } from "@/lib/sol/cluster";
 
 // ─── Token metadata ───────────────────────────────────────────────────────────
 
@@ -16,7 +15,6 @@ type MintMeta = {
   symbol: string;
   name: string;
   logoURI?: string;
-  isDevnet: boolean;
 };
 
 function getMintMeta(mint: string): MintMeta {
@@ -26,20 +24,14 @@ function getMintMeta(mint: string): MintMeta {
       name: "Solana",
       logoURI:
         "https://raw.githubusercontent.com/solana-labs/token-list/main/assets/mainnet/So11111111111111111111111111111111111111112/logo.png",
-      isDevnet: false,
     };
   const p = POPULAR_TOKENS.find((t) => t.mint === mint);
   if (p) {
-    const isDevnet =
-      p.name.toLowerCase().includes("devnet") ||
-      p.name.toLowerCase().includes("testnet") ||
-      CLUSTER !== "mainnet-beta";
-    return { symbol: p.symbol, name: p.name, logoURI: p.logoURI, isDevnet };
+    return { symbol: p.symbol, name: p.name, logoURI: p.logoURI };
   }
   return {
     symbol: mint.slice(0, 4).toUpperCase(),
     name: `${mint.slice(0, 8)}…`,
-    isDevnet: CLUSTER !== "mainnet-beta",
   };
 }
 
@@ -61,18 +53,6 @@ function TokenLogo({ logoURI, symbol }: { logoURI?: string; symbol: string }) {
     <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary/20 text-[11px] font-bold text-primary ring-1 ring-white/10">
       {symbol[0]}
     </div>
-  );
-}
-
-// ─── Network badge ────────────────────────────────────────────────────────────
-
-function NetworkBadge({ cluster }: { cluster: typeof CLUSTER }) {
-  if (cluster === "mainnet-beta") return null;
-  const label = cluster === "devnet" ? "Devnet" : "Testnet";
-  return (
-    <span className="inline-flex items-center rounded px-1 py-0.5 font-mono text-[9px] font-semibold uppercase tracking-wider border border-amber-500/30 bg-amber-500/10 text-amber-400">
-      {label}
-    </span>
   );
 }
 
@@ -231,7 +211,6 @@ export default function PortfolioPage() {
       symbol: string;
       name: string;
       logoURI?: string;
-      isDevnet: boolean;
       decimals: number;
       entitled: number;
       vested: number;
@@ -562,7 +541,7 @@ export default function PortfolioPage() {
                                 <span className="text-[13px] font-semibold text-foreground">
                                   {row.symbol}
                                 </span>
-                                {row.isDevnet && <NetworkBadge cluster={CLUSTER} />}
+    
                                 <AssetStatusBadge vestedPct={row.vestedPct} claimable={row.claimable} />
                               </div>
                               <div className="text-[11px] text-muted-foreground leading-tight">
@@ -703,7 +682,7 @@ export default function PortfolioPage() {
                             <span className="text-[13px] font-semibold text-foreground">
                               {row.symbol}
                             </span>
-                            {row.isDevnet && <NetworkBadge cluster={CLUSTER} />}
+
                             <AssetStatusBadge vestedPct={row.vestedPct} claimable={row.claimable} />
                           </div>
                           <div className="text-[11px] text-muted-foreground truncate">{row.name}</div>

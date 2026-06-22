@@ -65,7 +65,7 @@ export function Footer() {
             <h5>Trust</h5>
             <a href={`${docsBase}/AUDIT_REPORT.md`} target="_blank" rel="noopener noreferrer">Audit Report</a>
             <a href={`${docsBase}/SECURITY.md`} target="_blank" rel="noopener noreferrer">Security Notes</a>
-            <a href={`${docsBase}/DEVNET_TEST_RESULTS.md`} target="_blank" rel="noopener noreferrer">Devnet Results</a>
+            <a href={`${docsBase}/DEVNET_TEST_RESULTS.md`} target="_blank" rel="noopener noreferrer">Test Results</a>
             <a href={repoUrl} target="_blank" rel="noopener noreferrer">Open Source</a>
           </div>
           <div className="fcol">
