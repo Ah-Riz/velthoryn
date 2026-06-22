@@ -375,33 +375,9 @@ export default function PortfolioPage() {
       ) : (
         <>
           {/* ── Summary stat cards ── */}
-          <div className="grid grid-cols-2 gap-2 sm:gap-3 lg:grid-cols-5">
-            {/*
-             * Portfolio Value = remaining unclaimed (entitled - claimed).
-             * This is what the user still has locked or claimable.
-             */}
-            <ProgressStatCard
-              label="Portfolio Value"
-              value={
-                statsLoading ? "—"
-                : portfolioData ? formatUsd(portfolioData.portfolioValueUsd)
-                : "—"
-              }
-              pct={statsLoading ? undefined : portfolioData?.portfolioPct}
-              sub={
-                statsLoading ? undefined
-                : portfolioData?.hasAnyPrice
-                  ? portfolioData.portfolioValueUsd === 0
-                    ? "All funds claimed"
-                    : "Current unclaimed portfolio value"
-                  : portfolioData ? "Price data unavailable"
-                  : summary ? `${summary.campaignCount} campaign${(summary.campaignCount ?? 0) !== 1 ? "s" : ""}` : undefined
-              }
-              loading={statsLoading}
-            />
+          <div className="grid grid-cols-2 gap-2 sm:gap-3 lg:grid-cols-4">
             {/*
              * Total Allocated = full gross allocation regardless of claimed amount.
-             * Distinct from Portfolio Value when claimed > 0.
              */}
             <ProgressStatCard
               label="Total Allocated"
@@ -473,7 +449,6 @@ export default function PortfolioPage() {
               }
               claimable
               loading={statsLoading}
-              className="col-span-2 lg:col-span-1"
             />
           </div>
 
@@ -489,14 +464,6 @@ export default function PortfolioPage() {
                   {summary?.campaignCount ?? 0} Campaign{(summary?.campaignCount ?? 0) !== 1 ? "s" : ""}
                   {" · "}
                   {portfolioData.rows.length} Asset{portfolioData.rows.length !== 1 ? "s" : ""}
-                  {portfolioData.hasAnyPrice && portfolioData.totalClaimableUsd > 0 && (
-                    <>
-                      {" · "}
-                      <span className="text-emerald-400">
-                        {formatUsd(portfolioData.totalClaimableUsd)} Claimable
-                      </span>
-                    </>
-                  )}
                 </span>
               </div>
 
@@ -608,12 +575,6 @@ export default function PortfolioPage() {
                               {portfolioData.rows.length > 1 && row.allocationPct > 0 && (
                                 <div className="font-mono text-[10px] text-muted-foreground/60">
                                   {row.allocationPct.toFixed(1)}% of portfolio
-                                </div>
-                              )}
-                              {/* Claimable USD */}
-                              {row.claimableUsd != null && row.claimableUsd > 0 && (
-                                <div className="font-mono text-[10px] text-emerald-400">
-                                  {formatUsd(row.claimableUsd)} claimable
                                 </div>
                               )}
                               {/* Token price */}

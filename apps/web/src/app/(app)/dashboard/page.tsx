@@ -9,6 +9,7 @@ import { useLocalCampaigns } from "@/hooks/useLocalCampaigns";
 import { useVestingProgressSummary } from "@/hooks/useVestingProgress";
 import { ActivityFeed } from "@/components/dashboard/ActivityFeed";
 import { StatCard } from "@/components/ui/StatCard";
+import { PortfolioDonut, type DonutSegment } from "@/components/ui/PortfolioDonut";
 import { GracePeriodCountdown } from "@/components/campaign/detail/GracePeriodCountdown";
 import { getRecipientStreamStatus, getSenderStreamStatus, isGracePeriodVisible } from "@/lib/vesting/list";
 import {
@@ -35,16 +36,18 @@ function ActionCard({
   title,
   description,
   icon,
+  className,
 }: {
   href: string;
   title: string;
   description: string;
   icon: React.ReactNode;
+  className?: string;
 }) {
   return (
     <Link
       href={href}
-      className="group flex items-start gap-3 sm:gap-4 rounded-xl sm:rounded-2xl border border-line bg-muted p-3.5 sm:p-5 transition-all hover:border-primary/30 hover:bg-surface-hover"
+      className={`group flex items-center gap-3 sm:gap-4 rounded-xl sm:rounded-2xl border border-line bg-muted p-3.5 sm:p-5 transition-all hover:border-primary/30 hover:bg-surface-hover${className ? ` ${className}` : ""}`}
     >
       <div className="flex h-8 w-8 sm:h-10 sm:w-10 shrink-0 items-center justify-center rounded-lg sm:rounded-xl border border-primary/20 bg-primary/10 text-accent-light transition-all group-hover:border-primary/40 group-hover:bg-primary/20">
         {icon}
@@ -354,6 +357,98 @@ export default function DashboardPage() {
     return hasPriced ? total : null;
   }, [vestingSummary, decimalsMap, pricesMap]);
 
+  const claimedValueUsd = useMemo(() => {
+    if (!vestingSummary || vestingSummary.mintSums.size === 0) return null;
+    let total = 0;
+    let hasPriced = false;
+    for (const [mint, sums] of vestingSummary.mintSums) {
+      const dec = decimalsMap.get(mint);
+      const price = pricesMap.get(mint);
+      if (dec === undefined || price == null || price === 0) continue;
+      total += (Number(sums.claimed) / Math.pow(10, dec)) * price;
+      hasPriced = true;
+    }
+    return hasPriced ? total : null;
+  }, [vestingSummary, decimalsMap, pricesMap]);
+
+  const lockedValueUsd = useMemo(() => {
+    if (!vestingSummary || vestingSummary.mintSums.size === 0) return null;
+    let total = 0;
+    let hasPriced = false;
+    for (const [mint, sums] of vestingSummary.mintSums) {
+      const dec = decimalsMap.get(mint);
+      const price = pricesMap.get(mint);
+      if (dec === undefined || price == null || price === 0) continue;
+      const locked = sums.entitled > sums.vested ? sums.entitled - sums.vested : 0n;
+      total += (Number(locked) / Math.pow(10, dec)) * price;
+      hasPriced = true;
+    }
+    return hasPriced ? total : null;
+  }, [vestingSummary, decimalsMap, pricesMap]);
+
+  const donutData = useMemo(() => {
+    const LOCKED_COLOR = "rgba(255,255,255,0.12)";
+    const CLAIMABLE_COLOR = "#E8B84B";
+    const CLAIMED_COLOR = "#22c55e";
+
+    if (!vestingSummary || vestingSummary.totalEntitled === 0n) {
+      return {
+        segments: [
+          { proportion: 1, color: LOCKED_COLOR, label: "Locked", amount: "—" },
+          { proportion: 0, color: CLAIMABLE_COLOR, label: "Claimable", amount: "—" },
+          { proportion: 0, color: CLAIMED_COLOR, label: "Claimed", amount: "—" },
+        ] as DonutSegment[],
+        centerValue: "—",
+      };
+    }
+
+    const allUsd =
+      claimedValueUsd !== null && claimableValueUsd !== null && lockedValueUsd !== null;
+
+    let lockedProp: number, claimableProp: number, claimedProp: number;
+    let lockedAmt: string, claimableAmt: string, claimedAmt: string;
+
+    if (allUsd) {
+      const totalUsd = (lockedValueUsd ?? 0) + (claimableValueUsd ?? 0) + (claimedValueUsd ?? 0);
+      lockedProp = totalUsd > 0 ? (lockedValueUsd ?? 0) / totalUsd : 1;
+      claimableProp = totalUsd > 0 ? (claimableValueUsd ?? 0) / totalUsd : 0;
+      claimedProp = totalUsd > 0 ? (claimedValueUsd ?? 0) / totalUsd : 0;
+      lockedAmt = formatUsd(lockedValueUsd ?? 0);
+      claimableAmt = formatUsd(claimableValueUsd ?? 0);
+      claimedAmt = formatUsd(claimedValueUsd ?? 0);
+    } else {
+      const total = Number(vestingSummary.totalEntitled);
+      const lockedRaw =
+        vestingSummary.totalEntitled > vestingSummary.totalVested
+          ? vestingSummary.totalEntitled - vestingSummary.totalVested
+          : 0n;
+      lockedProp = total > 0 ? Number(lockedRaw) / total : 1;
+      claimableProp = total > 0 ? Number(vestingSummary.totalClaimable) / total : 0;
+      claimedProp = total > 0 ? Number(vestingSummary.totalClaimed) / total : 0;
+
+      if (!isMixedTokens) {
+        const mintAddr = [...vestingSummary.mintSums.keys()][0];
+        const dec = mintAddr ? (decimalsMap.get(mintAddr) ?? null) : null;
+        lockedAmt = formatTokenAmount(lockedRaw, dec);
+        claimableAmt = formatTokenAmount(vestingSummary.totalClaimable, dec);
+        claimedAmt = formatTokenAmount(vestingSummary.totalClaimed, dec);
+      } else {
+        lockedAmt = "—";
+        claimableAmt = "Mixed";
+        claimedAmt = "Mixed";
+      }
+    }
+
+    return {
+      segments: [
+        { proportion: lockedProp, color: LOCKED_COLOR, label: "Locked", amount: lockedAmt },
+        { proportion: claimableProp, color: CLAIMABLE_COLOR, label: "Claimable", amount: claimableAmt },
+        { proportion: claimedProp, color: CLAIMED_COLOR, label: "Claimed", amount: claimedAmt },
+      ] as DonutSegment[],
+      centerValue: claimableValueUsd !== null ? formatUsd(claimableValueUsd) : claimableFormatted,
+    };
+  }, [vestingSummary, claimedValueUsd, claimableValueUsd, lockedValueUsd, isMixedTokens, decimalsMap, claimableFormatted]);
+
   // Count-based stats only need sender/recipient DB queries to resolve.
   // localCampaigns is a fallback (only used on DB error) — don't block counts on its slow RPC fetch.
   const countLoading = senderQuery.isLoading || recipientQuery.isLoading;
@@ -362,7 +457,6 @@ export default function DashboardPage() {
   // Portfolio hero needs vesting progress + decimals + prices.
   const portfolioLoading = vestingLoading || (vestingMintAddresses.length > 0 && (decimalsLoading || pricesLoading));
 
-  const claimableAmount = vestingSummary?.totalClaimable ?? 0n;
   const claimableStreams = vestingSummary?.claimableCampaigns ?? counts.claimableCount;
 
   return (
@@ -391,65 +485,98 @@ export default function DashboardPage() {
         </div>
       ) : (
         <>
-          {/* Hero Portfolio Summary */}
+          {/* Hero: Portfolio donut (left) + Quick Actions (right) */}
           <div className="grid gap-3 sm:grid-cols-[2fr_1fr]">
-            {/* Claimable Now — Primary Hero */}
+            {/* Portfolio Donut Card */}
             <Link
               href="/portfolio"
-              className="group relative flex flex-col justify-between overflow-hidden rounded-2xl border border-violet/25 bg-violet/[0.04] p-5 transition-all hover:border-violet/40 hover:bg-violet/[0.07] min-h-[120px]"
+              className="group relative overflow-hidden rounded-2xl border border-violet/25 bg-violet/[0.04] p-5 transition-all hover:border-violet/40 hover:bg-violet/[0.07]"
             >
               <div className="pointer-events-none absolute inset-0 rounded-2xl" style={{ background: "radial-gradient(ellipse at top left, rgba(124,58,237,0.13), transparent 60%)" }} />
-              <div className="relative">
-                <div className="flex items-center justify-between gap-2">
-                  <span className="font-mono text-[10px] font-medium uppercase tracking-[0.18em] text-violet/70">Claimable Now</span>
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="text-muted-foreground/60 transition-transform group-hover:translate-x-0.5 group-hover:text-muted-foreground">
-                    <polyline points="9 18 15 12 9 6" />
-                  </svg>
-                </div>
+
+              {/* Header */}
+              <div className="relative flex items-center justify-between gap-2 mb-5">
+                <span className="font-mono text-[10px] font-medium uppercase tracking-[0.18em] text-violet/70">Portfolio</span>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="text-muted-foreground/60 transition-transform group-hover:translate-x-0.5 group-hover:text-muted-foreground">
+                  <polyline points="9 18 15 12 9 6" />
+                </svg>
+              </div>
+
+              {/* Centered body: donut + horizontal legend */}
+              <div className="relative flex flex-col items-center gap-4 pb-1">
+                <PortfolioDonut
+                  segments={donutData.segments}
+                  centerValue={donutData.centerValue}
+                  centerSub="Claimable Now"
+                  size={148}
+                  showLegend={false}
+                  isLoading={portfolioLoading}
+                />
+
                 {portfolioLoading ? (
-                  <div className="mt-4 h-10 w-36 animate-pulse rounded-xl bg-foreground/10" />
+                  <div className="flex items-center gap-5 sm:gap-8">
+                    {[0, 1, 2].map((i) => (
+                      <div key={i} className="flex flex-col items-center gap-1.5">
+                        <div className="h-3 w-12 animate-pulse rounded bg-foreground/10" />
+                        <div className="h-[20px] w-16 animate-pulse rounded-lg bg-foreground/10" />
+                      </div>
+                    ))}
+                  </div>
                 ) : (
-                  <div className="mt-3 text-[38px] sm:text-[50px] font-semibold leading-none tracking-tight text-accent-light">
-                    {claimableValueUsd !== null ? formatUsd(claimableValueUsd) : claimableFormatted}
+                  <div className="flex items-start justify-center gap-5 sm:gap-8 flex-wrap">
+                    {donutData.segments.map((seg) => (
+                      <div key={seg.label} className="flex flex-col items-center gap-0.5">
+                        <div className="flex items-center gap-1.5">
+                          <div className="shrink-0 rounded-full" style={{ width: 6, height: 6, backgroundColor: seg.color }} />
+                          <span className="font-mono text-[9px] font-medium uppercase tracking-[0.14em] text-muted-foreground">
+                            {seg.label}
+                          </span>
+                        </div>
+                        <span className="text-[13px] sm:text-[14px] font-semibold leading-tight tracking-tight text-foreground tabular-nums">
+                          {seg.amount}
+                        </span>
+                      </div>
+                    ))}
                   </div>
                 )}
-              </div>
-              <div className="relative mt-4 font-mono text-[11px] text-muted-foreground">
-                {claimableSub
-                  ? claimableSub
-                  : claimableStreams > 0
-                    ? `${claimableStreams} stream${claimableStreams > 1 ? "s" : ""} ready to claim`
-                    : "Nothing available to claim right now"}
+
+                {!portfolioLoading && (
+                  <div className="font-mono text-[10px] text-muted-foreground/70">
+                    {counts.active > 0
+                      ? `${counts.active} active stream${counts.active > 1 ? "s" : ""}`
+                      : "No active streams"}
+                  </div>
+                )}
               </div>
             </Link>
 
-            {/* Right column: Portfolio Value + Active Streams */}
-            <div className="grid gap-3 grid-rows-2">
-              <div className="relative overflow-hidden rounded-2xl border border-line bg-muted px-4 py-4 transition-colors hover:border-line-hover">
-                <div className="font-mono text-[9px] sm:text-[10px] font-medium uppercase tracking-[0.16em] text-muted-foreground">Portfolio Value</div>
-                {portfolioLoading ? (
-                  <div className="mt-2 h-5 sm:h-6 w-20 animate-pulse rounded-lg bg-foreground/10" />
-                ) : (
-                  <div className="mt-1.5 text-[18px] sm:text-[22px] font-semibold leading-none tracking-tight text-foreground">
-                    {portfolioValueUsd !== null ? formatUsd(portfolioValueUsd) : "—"}
-                  </div>
-                )}
-                <div className="mt-1 font-mono text-[10px] text-muted-foreground truncate">Current unclaimed value</div>
-              </div>
-
-              <div className="relative overflow-hidden rounded-2xl border border-line bg-muted px-4 py-4 transition-colors hover:border-line-hover">
-                <div className="font-mono text-[9px] sm:text-[10px] font-medium uppercase tracking-[0.16em] text-muted-foreground">Active Streams</div>
-                {countLoading ? (
-                  <div className="mt-2 h-5 sm:h-6 w-10 animate-pulse rounded-lg bg-foreground/10" />
-                ) : (
-                  <div className="mt-1.5 text-[18px] sm:text-[22px] font-semibold leading-none tracking-tight text-foreground">
-                    {counts.active}
-                  </div>
-                )}
-                <div className="mt-1 font-mono text-[10px] text-muted-foreground truncate">
-                  {counts.active > 0 ? "Currently vesting" : "No active vesting schedules"}
-                </div>
-              </div>
+            {/* Quick Actions — right column */}
+            <div className="flex flex-col gap-3">
+              <ActionCard
+                className="flex-1"
+                href="/campaign/create"
+                title="Create New Stream"
+                description="Set up a new vesting stream for token distribution"
+                icon={
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <circle cx="12" cy="12" r="10" />
+                    <line x1="12" y1="8" x2="12" y2="16" />
+                    <line x1="8" y1="12" x2="16" y2="12" />
+                  </svg>
+                }
+              />
+              <ActionCard
+                className="flex-1"
+                href="/campaigns"
+                title="View My Campaigns"
+                description="Monitor and manage your existing vesting streams"
+                icon={
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+                    <polyline points="14 2 14 8 20 8" />
+                  </svg>
+                }
+              />
             </div>
           </div>
 
@@ -540,38 +667,6 @@ export default function DashboardPage() {
               })}
             </div>
           )}
-
-          {/* Quick Actions */}
-          <div>
-            <h2 className="mb-3 font-mono text-[11px] font-medium uppercase tracking-[0.18em] text-muted-foreground">
-              Quick Actions
-            </h2>
-            <div className="grid gap-3 sm:grid-cols-2">
-              <ActionCard
-                href="/campaign/create"
-                title="Create New Stream"
-                description="Set up a new vesting stream for token distribution"
-                icon={
-                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <circle cx="12" cy="12" r="10" />
-                    <line x1="12" y1="8" x2="12" y2="16" />
-                    <line x1="8" y1="12" x2="16" y2="12" />
-                  </svg>
-                }
-              />
-              <ActionCard
-                href="/campaigns"
-                title="View My Campaigns"
-                description="Monitor and manage your existing vesting streams"
-                icon={
-                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
-                    <polyline points="14 2 14 8 20 8" />
-                  </svg>
-                }
-              />
-            </div>
-          </div>
 
           {/* Summary Stats */}
           <div className="grid grid-cols-2 gap-2 sm:gap-4 lg:grid-cols-3">
