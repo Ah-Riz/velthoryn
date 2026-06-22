@@ -1,0 +1,113 @@
+- **Getting Started**
+  - [Documentation Index](README.md)
+  - [Local Development Setup](LOCAL_DEV.md)
+  - [Testing Guide](TESTING.md)
+  - [Program Integration Guide](INTEGRATION.md)
+  - [Frontend Integration Guide](FE_INTEGRATION.md)
+
+- **Protocol (On-Chain)**
+  - [Program Internals](PROGRAM.md)
+  - [Instruction Reference](week9/INSTRUCTION_REFERENCE.md)
+  - [Stream Model](STREAM_MODEL.md)
+  - [Error Code Map](ERROR_MAP.md)
+  - [Native SOL Vesting](NATIVE_SOL_VESTING.md)
+  - [Campaign vs Stream Entry Points](CREATE_CAMPAIGN_VS_CREATE_STREAM.md)
+  - [Merkle Root Rotation Guide](ROOT_ROTATION_GUIDE.md)
+  - [Compute Unit Budget](CU_BUDGET.md)
+  - [Known Issue #29 Design](KNOWN_ISSUE_29_DESIGN.md)
+
+- **Backend & API**
+  - [Backend API Architecture](BACKEND_API.md)
+  - [API Trust Boundaries](API_TRUST_BOUNDARIES.md)
+  - [SC Integration Guide](week9/INTEGRATION_GUIDE.md)
+  - [BE-SC Merkle Acceptance Status](BE-SC-MERKLE-ACCEPTANCE-STATUS.md)
+  - [E2E Backend Verification](E2E_BE_VERIFICATION.md)
+
+- **Frontend**
+  - [FE Architecture](week9/FE_ARCHITECTURE.md)
+  - [FE Integration Guide](week9/FE_INTEGRATION_GUIDE.md)
+  - [Component Reference](week9/FE_COMPONENT_REFERENCE.md)
+  - [Hooks Reference](week9/FE_HOOKS_REFERENCE.md)
+  - [E2E Testing Guide](week9/FE_E2E_GUIDE.md)
+  - [FE Testing Status](week9/FE_TESTING_STATUS.md)
+  - [FE Bug Log](week9/FE_BUG_LOG.md)
+  - [FE Changelog](FE_CHANGELOG.md)
+  - [FE Documentation Review](week9/FE_DOCUMENTATION_REVIEW.md)
+
+- **Security & Audit**
+  - [Security Design (Protocol)](SECURITY.md)
+  - [Security Design (Frontend)](SECURITY_GERAL.md)
+  - [Audit Report](AUDIT_REPORT.md)
+  - [Security Audit Report](security-audit-report.md)
+  - [Code Maturity Assessment](MATURITY_REPORT.md)
+
+- **Operations & Deployment**
+  - [Mainnet Deployment Checklist](MAINNET_CHECKLIST.md)
+  - [Multisig Authority Setup](operations/multisig-setup.md)
+  - [Backup & Restore Procedures](operations/backup-restore.md)
+  - [Verification Log](operations/verification-log.md)
+  - [Hosting Recommendation](HOSTING_RECOMMENDATION.md)
+
+- **Features**
+  - [Transparency Dashboard (F2)](TRANSPARENCY_DASHBOARD.md)
+  - [Automatic Clawback (F3)](AUTOMATIC_CLAWBACK.md)
+
+- **Roadmap**
+  - [Roadmap Overview](roadmap/README.md)
+  - [00 — SC Remediation](roadmap/00-GAP-ANALYSIS.md)
+    - [Requirements](roadmap/00-REQUIREMENTS-SC-REMEDIATION.md)
+    - [Design](roadmap/00-DESIGN-SC-REMEDIATION.md)
+    - [Tasks](roadmap/00-TASKS-SC-REMEDIATION.md)
+  - [01 — P0 Security Ops](roadmap/01-REQUIREMENTS-P0-SECURITY-OPS.md)
+    - [Design](roadmap/01-DESIGN-P0-SECURITY-OPS.md)
+    - [Tasks](roadmap/01-TASKS-P0-SECURITY-OPS.md)
+  - [02 — F1 Bulk Send](roadmap/02-REQUIREMENTS-F1-BULK-SEND.md)
+    - [Design](roadmap/02-DESIGN-F1-BULK-SEND.md)
+    - [Tasks](roadmap/02-TASKS-F1-BULK-SEND.md)
+  - [03 — F2 Dashboard](roadmap/03-REQUIREMENTS-F2-DASHBOARD.md)
+    - [Design](roadmap/03-DESIGN-F2-DASHBOARD.md)
+    - [Tasks](roadmap/03-TASKS-F2-DASHBOARD.md)
+  - [04 — F3 Clawback](roadmap/04-REQUIREMENTS-F3-CLAWBACK.md)
+    - [Design](roadmap/04-DESIGN-F3-CLAWBACK.md)
+    - [Tasks](roadmap/04-TASKS-F3-CLAWBACK.md)
+  - [05 — F4 Hardening](roadmap/05-REQUIREMENTS-F4-HARDENING.md)
+    - [Design](roadmap/05-DESIGN-F4-HARDENING.md)
+    - [Tasks](roadmap/05-TASKS-F4-HARDENING.md)
+
+- **Architecture Decision Records**
+  - [ADR-001: Merkle Compressed Vesting](week9/ADRs/ADR-001-merkle-compressed-vesting.md)
+  - [ADR-002: Keccak-256 Domain Separation](week9/ADRs/ADR-002-keccak-256-domain-separation.md)
+  - [ADR-003: Issue #29 Deferred On-Chain Fix](week9/ADRs/ADR-003-issue-29-deferred-on-chain-fix.md)
+  - [ADR-FE-001: shadcn/ui Adoption](week9/ADRs/ADR-FE-001-shadcn-ui-adoption.md)
+  - [ADR-FE-002: E2E Mock Wallet localStorage](week9/ADRs/ADR-FE-002-e2e-mock-wallet-localStorage.md)
+  - [ADR-FE-003: 8-State Campaign Lifecycle](week9/ADRs/ADR-FE-003-campaign-lifecycle-8-state.md)
+  - [ADR-FE-004: Bankrun warpToSlot Ordering](week9/ADRs/ADR-FE-004-bankrun-warptoslot-before-setclock.md)
+  - [ADR-FE-005: Server-Side Tx Building](week9/ADRs/ADR-FE-005-server-side-tx-building.md)
+  - [ADR-FE-006: Manual Claim Instruction (IDL Drift)](week9/ADRs/ADR-FE-006-manual-claim-instruction-idl-drift.md)
+  - [ADR-FE-007: Cancel Instant vs Grace Design](week9/ADRs/ADR-FE-007-cancel-instant-vs-grace-design.md)
+
+- **Product Specifications**
+  - [PRD — Protocol (Lana)](PRD_LANA.md)
+  - [PRD — Frontend (Geral)](PRD_GERAL.md)
+  - [PDD — Protocol (Lana)](PDD_LANA.md)
+  - [PDD — Frontend (Geral)](PDD_GERAL.md)
+  - [TDD — Protocol (Lana)](TDD_LANA.md)
+  - [TDD — Frontend (Geral)](TDD_GERAL.md)
+
+- **Internal Reports**
+  - [Week 9 Summary](week9/README.md)
+  - [Week 9 Bug List](week9/BUG_LIST.md)
+  - [Devnet Test Results](DEVNET_TEST_RESULTS.md)
+  - [Week 8 Known Issues](WEEK8_KNOWN_ISSUES.md)
+  - [Week 8 Performance Report](WEEK8_PERFORMANCE_REPORT.md)
+  - [Week 7 Coverage Report](WEEK7_COVERAGE_REPORT.md)
+  - [Week 7 Feature Validation](WEEK7_FEATURE_VALIDATION_REPORT.md)
+  - [Week 7 Security Checklist](WEEK7_SECURITY_CHECKLIST_GDOC.md)
+  - [Week 7 FE Coverage Report](WEEK7_FE_COVERAGE_REPORT.md)
+  - [Week 7 FE Issue Log](WEEK7_FE_ISSUE_LOG.md)
+  - [Week 7 FE Security Checklist](WEEK7_FE_SECURITY_CHECKLIST.md)
+  - [Testing Tools](TESTING_TOOLS.md)
+  - [Testing Tools Report](TESTING_TOOLS_REPORT.md)
+  - [Pending Work](PENDING_WORK.md)
+  - [Ship Path — Next Steps](SHIP-PATH-NEXT.md)
+  - [API Route Trust Boundaries (Legacy)](API_ROUTE_TRUST_BOUNDARIES.md)
