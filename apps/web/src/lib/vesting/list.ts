@@ -24,7 +24,7 @@ export type RecipientStream = {
   streamSettled?: boolean;
 };
 
-export type StreamStatus = "Active" | "Scheduled" | "Claimable" | "Claimed" | "Paused" | "Cancelled" | "Grace Period" | "Settled";
+export type StreamStatus = "Active" | "Scheduled" | "Claimable" | "Claimed" | "Paused" | "Cancelled" | "Grace Period" | "Settled" | "Refunded";
 
 export type CampaignLifecycle =
   | "active"
@@ -85,7 +85,8 @@ export function getSenderStreamStatus(stream: SenderStream): StreamStatus {
   const totalSupply = toBigInt(stream.totalSupply);
   const totalClaimed = toBigInt(stream.totalClaimed);
 
-  if (stream.streamSettled || stream.instantRefunded) return "Settled";
+  if (stream.streamSettled) return "Settled";
+  if (stream.instantRefunded) return "Refunded";
   if (stream.hasCancelEvent) return "Grace Period";
   if (stream.cancelledAt !== null) return "Cancelled";
   if (stream.paused) return "Paused";

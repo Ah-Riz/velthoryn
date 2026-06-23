@@ -4,7 +4,7 @@ import { useMemo } from "react";
 import { useWallet } from "@solana/wallet-adapter-react";
 import { useCampaignList } from "@/hooks/useCampaignList";
 import { useBeneficiaryCampaigns } from "@/hooks/useBeneficiaryCampaigns";
-import { getRecipientStreamStatus } from "@/lib/vesting/list";
+import { getRecipientStreamStatus, isGracePeriodVisible } from "@/lib/vesting/list";
 
 type NeedsActionResult = {
   count: number;
@@ -31,7 +31,11 @@ export function useNeedsActionCount(): NeedsActionResult {
     const nowTs = BigInt(Math.floor(Date.now() / 1000));
 
     for (const c of senderQuery.data?.campaigns ?? []) {
-      if (c.creator === walletAddress && c.cancelledAt !== null) {
+      if (c.creator === walletAddress && isGracePeriodVisible({
+        cancelledAt: c.cancelledAt,
+        instantRefunded: c.instantRefunded,
+        streamSettled: c.streamSettled,
+      })) {
         n++;
       }
     }

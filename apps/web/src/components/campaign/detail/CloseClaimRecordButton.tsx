@@ -5,12 +5,14 @@ import { PublicKey, Transaction } from "@solana/web3.js";
 import { type Program } from "@coral-xyz/anchor";
 import { useWallet, useConnection } from "@solana/wallet-adapter-react";
 import { derivePda } from "@/lib/anchor/client";
-import { formatVestingError } from "@/lib/anchor/errors";
+import { formatVestingError, isWalletCancellation } from "@/lib/anchor/errors";
+import { isNativeSol } from "@/lib/sol/auto-wrap";
 
 type Props = {
   program: Program;
   publicKey: PublicKey;
   treePubkey: PublicKey;
+  mint: PublicKey;
   totalEntitled: bigint;
   claimedAmount: bigint;
   cancelledAt: bigint | null;
@@ -25,6 +27,7 @@ export function CloseClaimRecordButton({
   program,
   publicKey,
   treePubkey,
+  mint,
   totalEntitled,
   claimedAmount,
   cancelledAt,
@@ -46,10 +49,40 @@ export function CloseClaimRecordButton({
     try {
       const [claimRecordPda] = derivePda(["claim", treePubkey.toBuffer(), publicKey.toBuffer()]);
 
-      // Verify claim record exists on-chain before sending
-      const accountInfo = await connection.getAccountInfo(claimRecordPda);
-      if (!accountInfo) {
-        toast("Claim record not found on-chain. It may already be closed.", "error");
+      // Check both accounts in parallel
+      const [claimRecordInfo, vestingTreeInfo] = await Promise.all([
+        connection.getAccountInfo(claimRecordPda),
+        connection.getAccountInfo(treePubkey),
+      ]);
+
+      // Claim record checks
+      if (!claimRecordInfo) {
+        toast("Claim record not found on-chain. It may have already been closed.", "info");
+        return;
+      }
+      if (!claimRecordInfo.owner.equals(program.programId)) {
+        toast("Claim record has already been closed. Rent was already reclaimed.", "info");
+        return;
+      }
+
+      // VestingTree must exist — if it doesn't, the SC instruction will fail with
+      // AccountNotInitialized (3012) because vesting_tree is a required account.
+      // This happens specifically with native SOL campaigns: the final claim drains
+      // ALL lamports from the VestingTree PDA to zero, which destroys the account.
+      // SPL campaigns are not affected since VestingTree keeps its own rent.
+      if (!vestingTreeInfo || !vestingTreeInfo.owner.equals(program.programId)) {
+        if (isNativeSol(mint)) {
+          toast(
+            "This campaign's SOL vault was fully claimed. The campaign account was destroyed in the process, " +
+            "which is a known limitation of native SOL campaigns — claim record rent (~0.002 SOL) cannot be reclaimed on-chain.",
+            "error",
+          );
+        } else {
+          toast(
+            "Campaign account not found on-chain. The claim record cannot be closed.",
+            "error",
+          );
+        }
         return;
       }
 
@@ -63,17 +96,25 @@ export function CloseClaimRecordButton({
         .instruction();
       const tx = new Transaction().add(ix);
 
-      // Simulate first to get detailed error logs
       tx.recentBlockhash = (await connection.getLatestBlockhash("confirmed")).blockhash;
       tx.feePayer = publicKey;
       const sim = await connection.simulateTransaction(tx);
       if (sim.value.err) {
         const logs = sim.value.logs ?? [];
-        const programLog = logs.find((l) => l.includes("Error Code:") || l.includes("error:"));
-        const msg = programLog
-          ? programLog.replace(/^.*Error Code:\s*/, "").replace(/^.*error:\s*/, "")
-          : "Transaction simulation failed";
-        toast(msg, "error");
+        const logsStr = logs.join("\n");
+        const errStr = JSON.stringify(sim.value.err);
+
+        if (logsStr.includes("AccountNotInitialized") || errStr.includes("AccountNotInitialized")) {
+          toast("Campaign account no longer exists on-chain. Claim record rent cannot be reclaimed.", "error");
+          return;
+        }
+
+        const formatted = formatVestingError({ message: [logsStr, errStr].join("\n") });
+        if (formatted !== "Transaction failed. Please try again.") {
+          toast(formatted, "error");
+          return;
+        }
+        toast("Close record failed. The record may not be eligible for closing yet.", "error");
         return;
       }
 
@@ -82,7 +123,7 @@ export function CloseClaimRecordButton({
       toast("Claim record closed. Rent reclaimed.", "success");
       onSuccess();
     } catch (err: unknown) {
-      if (err instanceof Error && /User rejected|Connection rejected/i.test(err.message)) return;
+      if (isWalletCancellation(err)) return;
       toast(formatVestingError(err), "error");
     } finally {
       setLoading(false);

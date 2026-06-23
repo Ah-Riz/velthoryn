@@ -194,7 +194,7 @@ Added `6041 PerLeafCapExceeded` to the error table (was stopping at 6040). Updat
 | Integration guide: step-by-step with working code snippets | Authored `FE_INTEGRATION_GUIDE.md` (FE developer integration guide: hooks + tx-builder, not raw Anchor SDK) + reviewed Lana's INTEGRATION_GUIDE.md for FE accuracy | `docs/week9/FE_INTEGRATION_GUIDE.md`, `docs/week9/FE_DOCUMENTATION_REVIEW.md §2` |
 | Architecture decision records: ≥3 decisions and why | Authored 5 FE ADRs: shadcn/ui, E2E mock wallet, 8-state lifecycle, bankrun warpToSlot, server-side tx building | `docs/week9/ADRs/ADR-FE-001` through `ADR-FE-005` |
 | README accuracy: current for final codebase | Updated `README.md` "deeper reads" section to include `FE_INTEGRATION_GUIDE.md` and `FE_HOOKS_REFERENCE.md`; env var table in `FE_ARCHITECTURE.md §10` is current | `README.md` lines 97–109; `docs/week9/FE_ARCHITECTURE.md §10` |
-| Marketing teammate reviewed integration guide for clarity | **[ACTION NEEDED]** — `FE_INTEGRATION_GUIDE.md` written for non-SC clarity; pending marketing teammate review before final submission. | — |
+| Marketing teammate reviewed integration guide for clarity | aicee (marketing) reviewed docs on 2026-06-18. Initial reaction: "kok aku bingung ih bacanyaaa" — expected, docs target developers not marketers. After context explanation confirmed she can access and navigate the docs. Will do a formal review and wants a walkthrough meeting; formal sign-off pending. | aicee chat, 2026-06-18 |
 
 ---
 
@@ -277,6 +277,7 @@ Up from 569 (Week 8) — 3 new tests added for BigInt arithmetic edge cases in `
 | BE route tests need Postgres | 🟡 Pending | Staged in `tests/api/**`; not runnable in CI without Postgres service |
 | Mollusk 4 handlers blocked (init_if_needed) | 🟡 External | Waiting on Mollusk 0.14 upstream release (Lana's scope) |
 | `errors.ts` missing 6041 PerLeafCapExceeded | ✅ Fixed | Added in `5a3a277` (post-review); `VESTING_ERROR_CODES` and `USER_MESSAGES` both updated |
+| Marketing formal sign-off | 🟡 Pending | aicee reviewed docs 2026-06-18; wants walkthrough meeting besok/lusa (2026-06-21) — **deadline is 2026-06-20**. Recommend async text confirmation today before submission. |
 
 ---
 
@@ -291,7 +292,7 @@ Up from 569 (Week 8) — 3 new tests added for BigInt arithmetic edge cases in `
 | E2E signing spec files | **10** | In `tests/e2e/signing/` |
 | Bankrun integration spec files | **15** | In `tests/` root |
 | Docs written this week (FE) | **14 new files, ~3,100 lines** | FE_INTEGRATION_GUIDE (625+) + FE_HOOKS_REFERENCE (546+) + FE_ARCHITECTURE (349) + FE_COMPONENT_REFERENCE (568) + FE_BUG_LOG (311) + FE_E2E_GUIDE (258) + FE_DOCUMENTATION_REVIEW (270) + FE_TESTING_STATUS (354) + 5 FE ADRs (263) + FE_CHANGELOG (266) |
-| FE ADRs authored | **5** | ADR-FE-001 through ADR-FE-005 |
+| FE ADRs authored | **7** | ADR-FE-001 through ADR-FE-007 |
 | Documentation gaps identified | **7** | Documented in FE_DOCUMENTATION_REVIEW.md §6 |
 | Bug fix tasks completed (cumulative) | **9 / 10** | Tasks 1, 2, 3, 4, 6, 7, 8, 9, 10 fully done |
 | Bug fix tasks partial | **1 / 10** | Task 5 — FE/API guard done; Rust on-chain guard deferred |
@@ -326,6 +327,50 @@ State of the core user flows as of end of Week 9. Mock wallet used for chromium 
 | Dashboard Needs Action tab | ✅ Pass | Settled/instant-refunded campaigns no longer listed |
 | Allocations edit (BigInt amounts) | ✅ Pass | Float precision bug fixed; 9-decimal tokens compute correctly |
 | Mobile layout (≤375px) | ✅ Pass | Campaign list uses native `<select>`; tabs on desktop |
+
+---
+
+## §12: Post-Week-9 Bug Fixes (2026-06-21, commit `a4ce589`)
+
+Four additional bugs found and fixed after the main Week 9 submission, during live devnet testing.
+
+### FE-BUG-18 — Duplicate Schedule card on cliff/linear create pages
+
+Lana's `09e49a8` added campaign-level schedule fields (shared Start/Cliff/End) on cliff/linear create pages, but the original per-stream schedule fields inside each stream card were not removed. Both UIs were active simultaneously, creating a confusing duplicate. CSV bulk mode also had a stale `sharedSchedule` override injected into `parseBulkCsv()` calls — CSVs have per-row date columns and don't need an override.
+
+**Fix (`a4ce589`):** Removed the campaign-level Schedule card entirely from `cliff/page.tsx` and `linear/page.tsx`. Removed dead state, dead functions, and the `sharedSchedule` injection from `bulk.ts`. Per-stream fields inside each stream card are the single source of truth.
+
+### FE-BUG-19 — Native SOL claim fails with AccountNotFound when beneficiary wallet has 0 SOL
+
+On Solana, a wallet with 0 lamports does not exist in the account database. RPC rejects the transaction at pre-flight (`AccountNotFound`) before BPF execution — simulation logs are empty (`logs: []`), making the error invisible to the generic handler. The SPL token path already had a balance pre-check; the native SOL path did not.
+
+**Fix (`a4ce589`, `ClaimWithProofButton.tsx`):** Added a balance pre-check before building the native SOL claim instruction: `getBalance(publicKey)` + `getMinimumBalanceForRentExemption(240)` in parallel. If `beneficiaryLamports < minRequired`, shows: *"Insufficient SOL for transaction fees and claim account rent. Wallet has X SOL, needs ~Y SOL. Fund your wallet first."* Added `AccountNotFound` detection in the simulation catch block as a second-layer fallback.
+
+### FE-BUG-20 — close_claim_record fails with AccountNotInitialized (3012) after final native SOL claim
+
+**Root cause (protocol):** `claim.rs` and `withdraw.rs` drain ALL VestingTree lamports on final claim — including rent — zeroing the PDA. Solana deletes zero-lamport accounts at end of transaction. `close_claim_record` requires `vesting_tree` as a non-optional Anchor account; Anchor throws 3012 when the account is gone. This means beneficiaries of fully-claimed native SOL campaigns permanently lose claim record rent (~0.002 SOL each).
+
+`withdraw_unvested.rs` (SC-FIND-02) and `instant_refund_campaign.rs` already preserve `rent_min` correctly. SC-FIND-07 tracks the required fix to `claim.rs` + `withdraw.rs` (requires redeploy).
+
+**FE workaround (`a4ce589`, `CloseClaimRecordButton.tsx`):** Added `mint: PublicKey` prop. Fetches both `claimRecord` and `vestingTree` account infos in parallel before building the instruction. If VestingTree is gone and `isNativeSol(mint)`, shows: *"This campaign's SOL vault was fully claimed. The campaign account was destroyed — this is a known limitation of native SOL campaigns — claim record rent (~0.002 SOL) cannot be reclaimed on-chain."* Improved simulation error routing through `formatVestingError` with explicit `AccountNotInitialized` detection.
+
+### FE-BUG-21 — PendingFundingsPanel text invisible in light mode
+
+The "Unfunded Campaigns" panel used `text-amber-100` and `text-amber-200/80` — near-white, invisible on light backgrounds.
+
+**Fix (`a4ce589`, `PendingFundingsPanel.tsx`):** `text-amber-800 dark:text-amber-100` and `text-amber-700/80 dark:text-amber-200/80`.
+
+---
+
+### Protocol finding — SC-FIND-07 (VestingTree PDA destruction on final native SOL claim)
+
+Discovered during debugging of FE-BUG-20. Four instructions audited:
+- `claim.rs` ❌ destroys VestingTree on final claim (all lamports drained)
+- `withdraw.rs` ❌ destroys VestingTree on final single-stream withdraw
+- `withdraw_unvested.rs` ✅ SC-FIND-02 fix already preserves `rent_min`
+- `instant_refund_campaign.rs` ✅ correctly preserves `rent_min`
+
+Documented in `docs/PENDING_WORK.md` as SC-FIND-07. FE workaround in place. SC fix (preserve `rent_min` in `claim.rs` + `withdraw.rs` final drain) requires redeploy.
 
 ---
 

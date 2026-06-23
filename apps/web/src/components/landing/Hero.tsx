@@ -1,7 +1,8 @@
+import Link from "next/link";
 import { SmoothScrollLink } from "@/components/landing/SmoothScrollLink";
 
-const repoUrl = "https://github.com/Ah-Riz/mancerxsuperteam-token-vesting";
-const docsUrl = `${repoUrl}/tree/test/docs/PROGRAM.md`;
+const repoUrl = "https://github.com/Ah-Riz/velthoryn";
+const docsUrl = `${repoUrl}/tree/main/docs`;
 
 /**
  * Hero - Landing page hero section with animated Aperture brand mark.
@@ -26,6 +27,9 @@ export function Hero() {
               <SmoothScrollLink href="#waitlist" className="lp-btn primary">
                 Join waitlist <span className="arrow">&rarr;</span>
               </SmoothScrollLink>
+              <Link href="/dashboard" className="lp-btn ghost">
+                Open app <span className="arrow">&rarr;</span>
+              </Link>
               <a
                 href={docsUrl}
                 className="lp-btn ghost"

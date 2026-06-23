@@ -298,13 +298,22 @@ export function ClaimWithProofButton({
       let namedAccounts: Record<string, string>;
 
       if (nativeSol) {
-        // For native SOL campaigns the program transfers lamports directly via
-        // SystemProgram — there is no SPL token account involved. vault_authority
-        // and vault are declared as optional Token accounts in the Anchor IDL; if
-        // we pass the real vaultAuthority PDA (owned by SystemProgram) Anchor
-        // validates its owner against the Token program and throws
-        // AccountOwnedByWrongProgram (3007). Passing program.programId as the
-        // None sentinel causes Anchor to skip ownership and type checks entirely.
+        const [beneficiaryLamports, claimRecordRent] = await Promise.all([
+          connection.getBalance(publicKey),
+          connection.getMinimumBalanceForRentExemption(240),
+        ]);
+        const claimRecordExists = await connection.getAccountInfo(claimRecord);
+        const minRequired = (claimRecordExists ? 0 : claimRecordRent) + 10_000;
+        if (beneficiaryLamports < minRequired) {
+          toast(
+            `Insufficient SOL for transaction fees${!claimRecordExists ? " and claim account rent" : ""}. ` +
+            `Wallet has ${(beneficiaryLamports / 1e9).toFixed(4)} SOL, needs ~${(minRequired / 1e9).toFixed(4)} SOL. ` +
+            `Fund your wallet first.`,
+            "error",
+          );
+          return;
+        }
+
         const noneMarker = program.programId;
         namedAccounts = {
           beneficiary: publicKey.toBase58(),
@@ -432,6 +441,18 @@ export function ClaimWithProofButton({
         console.dir(simErr);
         console.error("[ClaimWithProofButton] simulation logs:", simLogs);
         console.error("[ClaimWithProofButton] simulation err:", programErr);
+
+        if (
+          programErr === "AccountNotFound" ||
+          (typeof message === "string" && message.includes("AccountNotFound"))
+        ) {
+          toast(
+            "Transaction failed: wallet account not found on-chain. " +
+            "Ensure your wallet has SOL for transaction fees.",
+            "error",
+          );
+          return;
+        }
 
         const logsStr = simLogs?.join("\n") ?? "";
         const fullStr = [

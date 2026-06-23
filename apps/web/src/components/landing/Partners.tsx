@@ -22,12 +22,10 @@ function PartnerItem({
   hidden?: boolean;
 }) {
   return (
-    <a
+    <div
       className={`lp-partner-item${boxed ? " boxed" : ""}`}
-      href="#"
       aria-label={hidden ? undefined : name}
       aria-hidden={hidden || undefined}
-      tabIndex={hidden ? -1 : undefined}
     >
       <Image
         src={src}
@@ -35,7 +33,7 @@ function PartnerItem({
         width={width}
         height={height}
       />
-    </a>
+    </div>
   );
 }
 

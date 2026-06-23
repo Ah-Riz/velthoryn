@@ -149,7 +149,7 @@ export function formatVestingError(err: unknown): string {
     return `Your wallet does not have a token account for this mint. Create one with: spl-token create-account <MINT> --url ${cliUrlFlag()}`;
   }
   if (raw.includes("AccountNotInitialized")) {
-    return "A required account is missing on-chain. The stream may not exist or was not funded.";
+    return "A required account is not initialized on-chain. It may have been closed, or the campaign was not fully set up.";
   }
   if (raw.includes("InsufficientFunds")) {
     return `Insufficient SOL for transaction fees. Try: solana airdrop 2 --url ${cliUrlFlag()}`;

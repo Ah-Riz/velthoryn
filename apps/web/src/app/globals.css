@@ -103,6 +103,7 @@ body[data-vesting-tx-pending="true"] [data-sidebar-nav] {
 
 :root {
   /* Velthoryn — Elegant Light (violet-700 primary for AA contrast) */
+  --donut-locked: #cbd5e1;
   --background: #fafbfd;
   --foreground: #0f172a;
   --card: #ffffff;
@@ -146,6 +147,7 @@ body[data-vesting-tx-pending="true"] [data-sidebar-nav] {
 
 .dark {
   /* Velthoryn — Refined Dark (deep black hierarchy) */
+  --donut-locked: rgba(255, 255, 255, 0.12);
   --background: #06070a;
   --foreground: #e5e7eb;
   --card: #0c0e14;

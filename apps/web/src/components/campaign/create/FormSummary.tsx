@@ -81,7 +81,7 @@ export function FormSummary({
           <path fill="url(#sol-g)" d="M333.1 120.1c-2.4-2.4-5.7-3.8-9.2-3.8H6.5c-5.8 0-8.7 7-4.6 11.1L64.6 189c2.4 2.4 5.7 3.8 9.2 3.8h317.4c5.8 0 8.7-7 4.6-11.1L333.1 120.1z" />
         </svg>
         <span className="text-[13px] font-medium text-foreground">Solana</span>
-        <span className="ml-auto rounded-full border border-foreground/[0.08] px-2 py-0.5 text-[10px] text-muted-foreground">Devnet</span>
+        <span className="ml-auto rounded-full border border-foreground/[0.08] px-2 py-0.5 text-[10px] text-muted-foreground">Solana</span>
       </div>
 
       {/* Bulk campaign review — shown when in bulk mode with parsed data */}

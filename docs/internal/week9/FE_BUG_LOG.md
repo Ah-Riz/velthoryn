@@ -369,6 +369,98 @@ Use `@solana/spl-token` `getMint()` which validates owner automatically.
 
 ---
 
+---
+
+## FE-BUG-18 — Duplicate Schedule card on cliff/linear create pages
+
+| Field | Value |
+|---|---|
+| **ID** | FE-BUG-18 |
+| **Severity** | P1 |
+| **Status** | ✅ Fixed |
+| **Week discovered** | Week 9 |
+| **Week fixed** | Week 9 (commit `a4ce589`) |
+| **Files** | `apps/web/src/app/(app)/campaign/create/cliff/page.tsx`, `apps/web/src/app/(app)/campaign/create/linear/page.tsx`, `apps/web/src/lib/campaign/bulk.ts` |
+
+**Root cause**: A campaign-level Schedule card (shared Start/Cliff/End for all streams) was added on top of the existing per-stream schedule fields inside each stream card. This was the result of Lana's Week 9 `09e49a8` commit that moved schedule to campaign-level — the per-stream fields were not removed, leaving both UIs active simultaneously. CSV bulk mode was also affected: it had a Schedule card even though CSV rows already contain per-row date columns parsed by `parseBulkCsv`.
+
+**Fix**: Removed the campaign-level Schedule card entirely from cliff and linear create pages. Per-stream schedule fields (inside each stream card) are the source of truth. Updated `buildManualCampaignRows()` and `handleSubmit()` to read from per-stream fields. Removed `sharedSchedule` override from `parseBulkCsv()` calls — CSV rows provide their own dates. Removed dead state (`startTime`, `cliffTime`, `endTime`, `scheduleError`) and dead functions (`resolveSchedule`, `validateScheduleField`, `updateScheduleField`).
+
+**Prevention**: When SC/BE changes the schedule model (per-leaf vs campaign-level), FE must pick exactly one source of truth and remove the other. Review both manual and CSV paths in the same PR.
+
+---
+
+## FE-BUG-19 — Native SOL claim fails with AccountNotFound when beneficiary wallet has 0 SOL
+
+| Field | Value |
+|---|---|
+| **ID** | FE-BUG-19 |
+| **Severity** | P1 |
+| **Status** | ✅ Fixed |
+| **Week discovered** | Week 9 |
+| **Week fixed** | Week 9 (commit `a4ce589`) |
+| **Files** | `apps/web/src/components/campaign/detail/ClaimWithProofButton.tsx` |
+
+**Root cause**: On Solana, a wallet with 0 lamports does not exist in the account database — `getAccountInfo` returns `null`. When such a wallet tries to claim from a native SOL campaign, the RPC rejects the transaction at the pre-flight stage (`AccountNotFound`) before the BPF program executes. This produces an empty simulation log (`logs: []`), making the error invisible to the generic error handler. The SPL token path already had a lamport balance pre-check; the native SOL path did not.
+
+**Fix**: Added a balance pre-check before building the native SOL claim instruction. Calls `getBalance(publicKey)` and `getMinimumBalanceForRentExemption(240)` (claim record size) in parallel. If `beneficiaryLamports < minRequired`, toasts a clear actionable message: *"Insufficient SOL for transaction fees and claim account rent. Wallet has X SOL, needs ~Y SOL. Fund your wallet first."* Also added `AccountNotFound` detection in the simulation error handler as a second-layer fallback.
+
+**Prevention**: Any Solana transaction where the fee payer might be a fresh wallet (e.g., campaign recipients) needs a balance pre-check. The threshold must account for both tx fees and any PDA rent the tx will pay.
+
+---
+
+## FE-BUG-20 — close_claim_record fails with AccountNotInitialized (3012) after final native SOL claim
+
+| Field | Value |
+|---|---|
+| **ID** | FE-BUG-20 |
+| **Severity** | P1 |
+| **Status** | ✅ FE workaround; SC fix pending |
+| **Week discovered** | Week 9 |
+| **Week fixed** | Week 9 — FE pre-check (commit `a4ce589`); SC fix requires redeploy |
+| **Files** | `apps/web/src/components/campaign/detail/CloseClaimRecordButton.tsx` |
+
+**Root cause (protocol-level)**: In `claim.rs` (and `withdraw.rs`), the final claim on a native SOL campaign drains **all lamports including rent** from the VestingTree PDA (`pda_info.lamports()`, not `pda_info.lamports() - rent_min`). Solana deletes accounts with 0 lamports at the end of the transaction. In subsequent transactions, `close_claim_record` requires `vesting_tree: Account<'info, VestingTree>` as a non-optional account — Anchor throws `AccountNotInitialized (3012)` because the account no longer exists.
+
+This means **all beneficiaries of a fully-claimed native SOL campaign can never reclaim their claim record rent (~0.002 SOL)**. The pattern is inconsistent with `withdraw_unvested.rs` (fixed in SC-FIND-02) and `instant_refund_campaign.rs`, both of which preserve `rent_min` to keep VestingTree alive.
+
+**FE workaround**: Before calling `close_claim_record`, fetch both `claimRecord` and `vestingTree` account infos in parallel. If VestingTree is gone or not owned by the program, show a clear message: *"This campaign's SOL vault was fully claimed. The campaign account was destroyed — this is a known limitation of native SOL campaigns — claim record rent (~0.002 SOL) cannot be reclaimed on-chain."*
+
+**SC fix needed**: Change `claim.rs` and `withdraw.rs` final-drain logic to preserve `rent_min`, consistent with `withdraw_unvested.rs`:
+```rust
+// Current (destroys VestingTree):
+let transfer_amount = if is_final { pda_info.lamports() } else { claimable };
+
+// Fix (consistent with withdraw_unvested SC-FIND-02):
+let transfer_amount = if is_final {
+    pda_info.lamports().saturating_sub(rent_min)
+} else { claimable };
+```
+This requires SC redeploy. After the fix, a separate `close_vesting_tree` instruction for the creator to reclaim VestingTree rent after all claim records are closed would complete the lifecycle.
+
+**Prevention**: Any native SOL PDA drain must decide: drain ALL (account destroyed) or drain-minus-rent (account stays alive). The choice must be consistent with downstream instructions that need the account. Document the choice in a comment at the drain site.
+
+---
+
+## FE-BUG-21 — PendingFundingsPanel text invisible in light mode
+
+| Field | Value |
+|---|---|
+| **ID** | FE-BUG-21 |
+| **Severity** | P2 |
+| **Status** | ✅ Fixed |
+| **Week discovered** | Week 9 |
+| **Week fixed** | Week 9 (commit `a4ce589`) |
+| **Files** | `apps/web/src/components/campaign/create/PendingFundingsPanel.tsx` |
+
+**Root cause**: The "Unfunded Campaigns" panel used `text-amber-100` and `text-amber-200/80` for the tree address and total-to-fund text. These near-white amber colors are readable against the dark amber card background in dark mode, but are nearly invisible in light mode where the background is white/light-gray.
+
+**Fix**: Added dark-mode suffixes: `text-amber-800 dark:text-amber-100` and `text-amber-700/80 dark:text-amber-200/80`. Dark text in light mode, light text in dark mode.
+
+**Prevention**: Any hardcoded text color that assumes a dark background must use `dark:` variants. Test all colored text components in both light and dark mode before merging.
+
+---
+
 ## Summary Table
 
 | ID | Severity | Status | Area | Week |
@@ -390,5 +482,7 @@ Use `@solana/spl-token` `getMint()` which validates owner automatically.
 | FE-BUG-15 | P1 | ✅ Fixed | Node 26 test runner | Week 9 |
 | FE-BUG-16 | P0 | ✅ Fixed | Stale campaign list | Week 5–6 |
 | FE-BUG-17 | P1 | ✅ Fixed | Token metadata security | Week 5 |
-| FE-BUG-14 | P1 | ✅ Fixed | CSP WebSocket | Week 5 |
-| FE-BUG-15 | P1 | ✅ Fixed | Node 26 test runner | Week 9 |
+| FE-BUG-18 | P1 | ✅ Fixed | Duplicate schedule card | Week 9 |
+| FE-BUG-19 | P1 | ✅ Fixed | Native SOL claim 0-balance wallet | Week 9 |
+| FE-BUG-20 | P1 | ✅ FE / ⏳ SC | close_claim_record VestingTree destroyed | Week 9 |
+| FE-BUG-21 | P2 | ✅ Fixed | PendingFundingsPanel light mode | Week 9 |
