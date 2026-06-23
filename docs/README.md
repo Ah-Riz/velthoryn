@@ -1,74 +1,98 @@
-# Velthoryn Documentation Index
+# Velthoryn — Token Distribution Protocol
 
-Quick map of `docs/` — start at the repo [`README.md`](../README.md) for setup and status.
+Solana token-distribution protocol combining **Merkle-tree compression** with full vesting schedules, **per-recipient clawback**, and native SOL support.
 
-## Load testing (k6)
+|                    |                                                              |
+| ------------------ | ------------------------------------------------------------ |
+| **Program ID**     | `G6iaigUdi2btFwUc2N65twfxwA8Ew5uKKhKJ5RJa8wvu`             |
+| **Network**        | Devnet                                                       |
+| **Framework**      | Anchor 0.32.1                                                |
+| **Live App**       | [velthoryn.site](https://velthoryn.site/)                    |
+| **Source**         | [GitHub](https://github.com/Ah-Riz/mancerxsuperteam-token-vesting) |
 
-Scripts: `apps/web/tests/load/` (`api-load.js`, `prepare-load.js`, `proof-load.js`, `spike-load.js`). Orchestrator: `apps/web/tests/load/run-load-test.sh`. Baselines and per-route rate limits: [`TESTING.md`](TESTING.md) §k6.
+## Schedule Types
 
-## Getting started
+| Type              | Behavior                                                                 |
+| ----------------- | ------------------------------------------------------------------------ |
+| **Linear**        | Tokens unlock continuously from `start_time` to `end_time`              |
+| **Cliff**         | All tokens unlock at once at `cliff_time`                                |
+| **Cliff + Linear**| Cliff portion unlocks at `cliff_time`, remainder vests linearly          |
+| **Milestone**     | Tokens unlock when the creator releases each milestone flag              |
 
-| Doc | Audience | Contents |
-|-----|----------|----------|
-| [`LOCAL_DEV.md`](LOCAL_DEV.md) | All | Keypair, validator, first green test |
-| [`TESTING.md`](TESTING.md) | All | SC + web + E2E commands, **k6 load tests**, SC benchmarks, CI matrix |
-| [`INTEGRATION.md`](INTEGRATION.md) | FE/BE | Program ID, PDAs, Merkle, sample calls |
-| [`FE_INTEGRATION.md`](FE_INTEGRATION.md) | FE | Full frontend guide, file map, flows |
+## What It Does
 
-## Program & on-chain
+**Merkle Compression** — Store thousands of recipients in a single on-chain Merkle root. Recipients prove their allocation with a Merkle proof at claim time. No per-recipient account needed — cost drops from ~$0.37 to ~$0.005 per recipient.
 
-| Doc | Contents |
-|-----|----------|
-| [`PROGRAM.md`](PROGRAM.md) | Instructions, state layouts, file map |
-| [`STREAM_MODEL.md`](STREAM_MODEL.md) | Stream PDA vs campaign model |
-| [`ERROR_MAP.md`](ERROR_MAP.md) | Error code reference |
-| [`NATIVE_SOL_VESTING.md`](NATIVE_SOL_VESTING.md) | Native SOL dual-path design |
-| [`CREATE_CAMPAIGN_VS_CREATE_STREAM.md`](CREATE_CAMPAIGN_VS_CREATE_STREAM.md) | When to use each entry point |
-| [`ROOT_ROTATION_GUIDE.md`](ROOT_ROTATION_GUIDE.md) | Merkle root rotation |
-| [`CU_BUDGET.md`](CU_BUDGET.md) | Mollusk CU measurements + client `ComputeBudget` guidance |
+**Multi-Schedule Vesting** — Support linear, cliff, cliff+linear, and milestone schedules in a single protocol. Campaign-level scheduling ensures all recipients follow the same unlock cadence.
 
-## Backend & API
+**Per-Recipient Clawback** — Rotate the Merkle root via `update_root` to add, remove, or adjust individual recipients without affecting others. Campaign-wide `cancel_campaign` initiates a 7-day grace period for beneficiaries to claim before funds return to the creator.
 
-| Doc | Contents |
-|-----|----------|
-| [`BACKEND_API.md`](BACKEND_API.md) | Schema, routes, data flows |
-| [`API_TRUST_BOUNDARIES.md`](API_TRUST_BOUNDARIES.md) | **Canonical** auth tier per route |
-| [`API_ROUTE_TRUST_BOUNDARIES.md`](API_ROUTE_TRUST_BOUNDARIES.md) | Legacy P0.2 scoping note (superseded) |
-| [`BE-SC-MERKLE-ACCEPTANCE-STATUS.md`](BE-SC-MERKLE-ACCEPTANCE-STATUS.md) | Bootcamp acceptance checklist |
-| [`E2E_BE_VERIFICATION.md`](E2E_BE_VERIFICATION.md) | BE verification matrix |
+**Native SOL Support** — Vest raw SOL without wrapping to wSOL. The campaign PDA holds lamports directly. All 18 instructions support both SPL and native SOL paths.
 
-## Features (F1–F4)
+## Where to Start
 
-| Doc | Feature |
-|-----|---------|
-| [`TRANSPARENCY_DASHBOARD.md`](TRANSPARENCY_DASHBOARD.md) | F2 dashboard + portfolio |
-| [`AUTOMATIC_CLAWBACK.md`](AUTOMATIC_CLAWBACK.md) | F3 clawback UI + APIs |
-| [`roadmap/README.md`](roadmap/README.md) | Full roadmap specs (requirements, design, tasks) |
+| You want to…                         | Start here                                           |
+| ------------------------------------ | ---------------------------------------------------- |
+| Integrate the on-chain program       | [Program Integration Guide](guides/integration.md)   |
+| Build a frontend                     | [Frontend Integration Guide](guides/frontend-integration.md) |
+| Understand the architecture          | [Accounts & State](reference/accounts-and-state.md)  |
+| Look up an instruction               | [Instruction Reference](reference/instructions.md)   |
+| Deploy to mainnet                    | [Mainnet Checklist](operations/mainnet-checklist.md)  |
+| Review security                      | [Threat Model](security/threat-model.md)             |
 
-## Security & operations
+## At a Glance
 
-| Doc | Contents |
-|-----|----------|
-| [`SECURITY.md`](SECURITY.md) | Program security notes |
-| [`MAINNET_CHECKLIST.md`](MAINNET_CHECKLIST.md) | Pre-mainnet gates |
-| [`operations/backup-restore.md`](operations/backup-restore.md) | DB backup & restore |
-| [`operations/multisig-setup.md`](operations/multisig-setup.md) | Multisig runbook |
-| [`AUDIT_REPORT.md`](AUDIT_REPORT.md) | Internal audit findings |
-| [`MATURITY_REPORT.md`](MATURITY_REPORT.md) | Maturity assessment |
+| Metric                    | Value                                        |
+| ------------------------- | -------------------------------------------- |
+| Instruction handlers      | 18 (14 SPL + 3 native SOL + instant refund)  |
+| Error code variants       | 42                                           |
+| Event types               | 12                                           |
+| SC tests passing          | 127+                                         |
+| Web Vitest passing        | 572                                          |
+| FE components             | 68                                           |
+| FE hooks                  | 21                                           |
+| API routes                | 25+                                          |
 
-## Planning & known issues
+## Instruction Set
 
-| Doc | Contents |
-|-----|----------|
-| [`DEVNET_TEST_RESULTS.md`](DEVNET_TEST_RESULTS.md) | **Live** SC integration test counts (devnet RPC + bankrun breakdown) |
-| [`PENDING_WORK.md`](PENDING_WORK.md) | Prioritized backlog from spec audit |
-| [`KNOWN_ISSUE_29_DESIGN.md`](KNOWN_ISSUE_29_DESIGN.md) | Multi-leaf `claimed_amount` undercount — BE enforcement active (prepare + import) |
-| [`WEEK8_KNOWN_ISSUES.md`](WEEK8_KNOWN_ISSUES.md) | Week 8 bug sweep log |
-| [`SHIP-PATH-NEXT.md`](SHIP-PATH-NEXT.md) | Ship path notes |
+| Instruction               | Description                                                        |
+| ------------------------- | ------------------------------------------------------------------ |
+| `create_campaign`         | Initialize a vesting tree (Merkle root, supply, authorities)       |
+| `create_stream`           | Atomic single-recipient campaign + SPL funding in one tx           |
+| `fund_campaign`           | Deposit SPL tokens into the campaign vault                         |
+| `claim`                   | Claim vested portion against a Merkle proof                        |
+| `withdraw`                | Simplified claim for single-recipient streams                      |
+| `cancel_campaign`         | Freeze curve, start 7-day grace period                             |
+| `update_root`             | Rotate Merkle root (add/remove/adjust recipients)                  |
+| `withdraw_unvested`       | Sweep unvested tokens after grace window                           |
+| `pause_campaign`          | Temporarily block claims                                           |
+| `unpause_campaign`        | Resume a paused campaign                                           |
+| `set_milestone_released`  | Set milestone flag before unlock                                   |
+| `cancel_stream`           | Single-leaf cancel: vested to beneficiary, rest to creator         |
+| `instant_refund_campaign` | Instant refund for unstarted multi-leaf campaigns                  |
+| `close_claim_record`      | Reclaim rent on fully-claimed ClaimRecord PDA                      |
+| `get_vested_amount`       | Read-only schedule math helper                                     |
 
-## Team-specific (scholarship)
+Native SOL variants: `create_campaign_native`, `create_stream_native`, `fund_campaign_native`
 
-| Doc | Owner |
-|-----|-------|
-| [`PRD_LANA.md`](PRD_LANA.md) / [`PDD_LANA.md`](PDD_LANA.md) / [`TDD_LANA.md`](TDD_LANA.md) | Lana (SC/BE) — Phase 4 complete, BE-SC-Merkle canonical model; test counts in [`DEVNET_TEST_RESULTS.md`](DEVNET_TEST_RESULTS.md) |
-| [`PRD_GERAL.md`](PRD_GERAL.md) / [`PDD_GERAL.md`](PDD_GERAL.md) / [`TDD_GERAL.md`](TDD_GERAL.md) / [`SECURITY_GERAL.md`](SECURITY_GERAL.md) | Geral (FE) |
+## Architecture
+
+```
+velthoryn/
+├── programs/vesting/   # Anchor program (Rust)
+├── clients/ts/         # TypeScript client (leaf encoding, Merkle tree)
+├── apps/web/           # Next.js dApp + API routes + Merkle pipeline
+├── tests/              # ts-mocha integration tests
+└── .github/workflows/  # CI: build + test + lint
+```
+
+| Area             | Stack                                         |
+| ---------------- | --------------------------------------------- |
+| Smart Contract   | Rust, Anchor 0.32.1                           |
+| Backend API      | Next.js API routes, Drizzle ORM, Supabase     |
+| Frontend UI      | Next.js 15, shadcn/ui, TanStack Query         |
+| Merkle Pipeline  | TypeScript, keccak-256, domain separation      |
+
+{% hint style="info" %}
+**Status:** Fully implemented — features F1–F4 complete. Deployed on devnet. See the [Mainnet Checklist](operations/mainnet-checklist.md) for production readiness gates.
+{% endhint %}
