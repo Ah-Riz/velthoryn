@@ -98,7 +98,7 @@ export function CommonFields({
           checked={cancellable}
           onChange={onCancellableChange}
           title="Cancellable"
-          body="Creator can cancel and reclaim unvested tokens after a 7-day grace period."
+          body="Creator can cancel and reclaim unvested tokens after a 7-day grace period. Already-vested tokens remain permanently claimable by recipients."
         />
       </div>
     </div>

@@ -9,6 +9,7 @@ import { useLocalCampaigns } from "@/hooks/useLocalCampaigns";
 import { useVestingProgressSummary } from "@/hooks/useVestingProgress";
 import { ActivityFeed } from "@/components/dashboard/ActivityFeed";
 import { StatCard } from "@/components/ui/StatCard";
+import { PortfolioDonut, type DonutSegment } from "@/components/ui/PortfolioDonut";
 import { GracePeriodCountdown } from "@/components/campaign/detail/GracePeriodCountdown";
 import { getRecipientStreamStatus, getSenderStreamStatus, isGracePeriodVisible } from "@/lib/vesting/list";
 import {
@@ -35,16 +36,18 @@ function ActionCard({
   title,
   description,
   icon,
+  className,
 }: {
   href: string;
   title: string;
   description: string;
   icon: React.ReactNode;
+  className?: string;
 }) {
   return (
     <Link
       href={href}
-      className="group flex items-start gap-3 sm:gap-4 rounded-xl sm:rounded-2xl border border-line bg-muted p-3.5 sm:p-5 transition-all hover:border-primary/30 hover:bg-surface-hover"
+      className={`group flex items-center gap-3 sm:gap-4 rounded-xl sm:rounded-2xl border border-line bg-muted p-3.5 sm:p-5 transition-all hover:border-primary/30 hover:bg-surface-hover${className ? ` ${className}` : ""}`}
     >
       <div className="flex h-8 w-8 sm:h-10 sm:w-10 shrink-0 items-center justify-center rounded-lg sm:rounded-xl border border-primary/20 bg-primary/10 text-accent-light transition-all group-hover:border-primary/40 group-hover:bg-primary/20">
         {icon}
@@ -69,6 +72,8 @@ export default function DashboardPage() {
   const localCampaigns = useLocalCampaigns(walletAddress);
   const { summary: vestingSummary, isLoading: vestingLoading, campaigns: vestingCampaigns } =
     useVestingProgressSummary(walletAddress);
+
+  const [donutView, setDonutView] = useState<"receiving" | "created">("receiving");
 
   const vestingMintAddresses = useMemo(
     () => [...new Set(vestingCampaigns.map((c) => c.mint).filter(Boolean))],
@@ -165,6 +170,8 @@ export default function DashboardPage() {
       creator: string;
       paused: boolean;
       cancelledAt: number | null;
+      instantRefunded?: boolean;
+      streamSettled?: boolean;
       myClaimed: number | string;
       myLeaf: {
         amount: number | string;
@@ -325,21 +332,6 @@ export default function DashboardPage() {
     return { tvlValue: formatUsd(totalUsd), tvlSub: sub };
   }, [mintTvlSums, pricesMap, decimalsMap]);
 
-  const portfolioValueUsd = useMemo(() => {
-    if (!vestingSummary || vestingSummary.mintSums.size === 0) return null;
-    let total = 0;
-    let hasPriced = false;
-    for (const [mint, sums] of vestingSummary.mintSums) {
-      const dec = decimalsMap.get(mint);
-      const price = pricesMap.get(mint);
-      if (dec === undefined || price == null || price === 0) continue;
-      const div = Math.pow(10, dec);
-      total += (Number(sums.entitled) / div - Number(sums.claimed) / div) * price;
-      hasPriced = true;
-    }
-    return hasPriced ? total : null;
-  }, [vestingSummary, decimalsMap, pricesMap]);
-
   const claimableValueUsd = useMemo(() => {
     if (!vestingSummary || vestingSummary.mintSums.size === 0) return null;
     let total = 0;
@@ -354,6 +346,57 @@ export default function DashboardPage() {
     return hasPriced ? total : null;
   }, [vestingSummary, decimalsMap, pricesMap]);
 
+  const ONGOING_COLOR   = "#7c3aed";
+  const SCHEDULED_COLOR = "#E8B84B";
+  const COMPLETED_COLOR = "#22c55e";
+  const CANCELED_COLOR  = "#f87171";
+
+  const receivingStatusData = useMemo(() => {
+    let ongoing = 0, scheduled = 0, completed = 0, canceled = 0;
+    for (const [, row] of rows) {
+      if (!row.recipientStatus) continue;
+      switch (row.recipientStatus) {
+        case "Claimable": case "Paused": ongoing++; break;
+        case "Scheduled": scheduled++; break;
+        case "Claimed": case "Settled": completed++; break;
+        case "Cancelled": canceled++; break;
+      }
+    }
+    const total = ongoing + scheduled + completed + canceled;
+    return {
+      segments: [
+        { proportion: total > 0 ? ongoing / total : 0,   color: ONGOING_COLOR,   label: "Ongoing",   amount: String(ongoing) },
+        { proportion: total > 0 ? scheduled / total : 0, color: SCHEDULED_COLOR, label: "Scheduled", amount: String(scheduled) },
+        { proportion: total > 0 ? completed / total : 0, color: COMPLETED_COLOR, label: "Completed", amount: String(completed) },
+        { proportion: total > 0 ? canceled / total : 0,  color: CANCELED_COLOR,  label: "Canceled",  amount: String(canceled) },
+      ] as DonutSegment[],
+      centerValue: claimableValueUsd !== null ? formatUsd(claimableValueUsd) : claimableFormatted,
+      centerSub: "Claimable Now",
+    };
+  }, [rows, claimableValueUsd, claimableFormatted]);
+
+  const createdStatusData = useMemo(() => {
+    let ongoing = 0, completed = 0, canceled = 0;
+    for (const [, row] of rows) {
+      if (!row.senderStatus) continue;
+      switch (row.senderStatus) {
+        case "Active": case "Paused": ongoing++; break;
+        case "Claimed": case "Settled": completed++; break;
+        case "Cancelled": case "Grace Period": case "Refunded": canceled++; break;
+      }
+    }
+    const total = ongoing + completed + canceled;
+    return {
+      segments: [
+        { proportion: total > 0 ? ongoing / total : 0,   color: ONGOING_COLOR,   label: "Ongoing",   amount: String(ongoing) },
+        { proportion: total > 0 ? completed / total : 0, color: COMPLETED_COLOR, label: "Completed", amount: String(completed) },
+        { proportion: total > 0 ? canceled / total : 0,  color: CANCELED_COLOR,  label: "Canceled",  amount: String(canceled) },
+      ] as DonutSegment[],
+      centerValue: tvlValue,
+      centerSub: "TVL Locked",
+    };
+  }, [rows, tvlValue]);
+
   // Count-based stats only need sender/recipient DB queries to resolve.
   // localCampaigns is a fallback (only used on DB error) — don't block counts on its slow RPC fetch.
   const countLoading = senderQuery.isLoading || recipientQuery.isLoading;
@@ -362,7 +405,9 @@ export default function DashboardPage() {
   // Portfolio hero needs vesting progress + decimals + prices.
   const portfolioLoading = vestingLoading || (vestingMintAddresses.length > 0 && (decimalsLoading || pricesLoading));
 
-  const claimableAmount = vestingSummary?.totalClaimable ?? 0n;
+  const activeDonutData    = donutView === "receiving" ? receivingStatusData : createdStatusData;
+  const activeDonutLoading = donutView === "receiving" ? portfolioLoading    : tvlLoading;
+
   const claimableStreams = vestingSummary?.claimableCampaigns ?? counts.claimableCount;
 
   return (
@@ -391,65 +436,116 @@ export default function DashboardPage() {
         </div>
       ) : (
         <>
-          {/* Hero Portfolio Summary */}
+          {/* Hero: Portfolio donut (left) + Quick Actions (right) */}
           <div className="grid gap-3 sm:grid-cols-[2fr_1fr]">
-            {/* Claimable Now — Primary Hero */}
+            {/* Portfolio Donut Card */}
             <Link
               href="/portfolio"
-              className="group relative flex flex-col justify-between overflow-hidden rounded-2xl border border-violet/25 bg-violet/[0.04] p-5 transition-all hover:border-violet/40 hover:bg-violet/[0.07] min-h-[120px]"
+              className="group relative overflow-hidden rounded-2xl border border-violet/25 bg-violet/[0.04] p-5 transition-all hover:border-violet/40 hover:bg-violet/[0.07]"
             >
               <div className="pointer-events-none absolute inset-0 rounded-2xl" style={{ background: "radial-gradient(ellipse at top left, rgba(124,58,237,0.13), transparent 60%)" }} />
-              <div className="relative">
-                <div className="flex items-center justify-between gap-2">
-                  <span className="font-mono text-[10px] font-medium uppercase tracking-[0.18em] text-violet/70">Claimable Now</span>
+
+              {/* Header */}
+              <div className="relative flex items-center justify-between gap-2 mb-5">
+                <span className="font-mono text-[10px] font-medium uppercase tracking-[0.18em] text-violet/70">Portfolio</span>
+                <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-0.5 rounded-full border border-violet/20 bg-violet/[0.06] p-0.5">
+                    {(["receiving", "created"] as const).map((view) => (
+                      <button
+                        key={view}
+                        type="button"
+                        onClick={(e) => { e.preventDefault(); e.stopPropagation(); setDonutView(view); }}
+                        className={`rounded-full px-2.5 py-0.5 font-mono text-[9px] font-medium uppercase tracking-[0.1em] transition-all ${
+                          donutView === view
+                            ? "bg-violet/20 text-violet"
+                            : "text-muted-foreground hover:text-foreground"
+                        }`}
+                      >
+                        {view === "receiving" ? "Receiving" : "Created"}
+                      </button>
+                    ))}
+                  </div>
                   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="text-muted-foreground/60 transition-transform group-hover:translate-x-0.5 group-hover:text-muted-foreground">
                     <polyline points="9 18 15 12 9 6" />
                   </svg>
                 </div>
-                {portfolioLoading ? (
-                  <div className="mt-4 h-10 w-36 animate-pulse rounded-xl bg-foreground/10" />
+              </div>
+
+              {/* Centered body: donut + horizontal legend */}
+              <div className="relative flex flex-col items-center gap-4 pb-1">
+                <PortfolioDonut
+                  segments={activeDonutData.segments}
+                  centerValue={activeDonutData.centerValue}
+                  centerSub={activeDonutData.centerSub}
+                  size={148}
+                  showLegend={false}
+                  isLoading={activeDonutLoading}
+                />
+
+                {activeDonutLoading ? (
+                  <div className="flex items-center gap-5 sm:gap-8">
+                    {[0, 1, 2].map((i) => (
+                      <div key={i} className="flex flex-col items-center gap-1.5">
+                        <div className="h-3 w-12 animate-pulse rounded bg-foreground/10" />
+                        <div className="h-[20px] w-16 animate-pulse rounded-lg bg-foreground/10" />
+                      </div>
+                    ))}
+                  </div>
                 ) : (
-                  <div className="mt-3 text-[38px] sm:text-[50px] font-semibold leading-none tracking-tight text-accent-light">
-                    {claimableValueUsd !== null ? formatUsd(claimableValueUsd) : claimableFormatted}
+                  <div className="flex items-start justify-center gap-5 sm:gap-8 flex-wrap">
+                    {activeDonutData.segments.filter((seg) => seg.proportion > 0).map((seg) => (
+                      <div key={seg.label} className="flex flex-col items-center gap-0.5">
+                        <div className="flex items-center gap-1.5">
+                          <div className="shrink-0 rounded-full" style={{ width: 6, height: 6, backgroundColor: seg.color }} />
+                          <span className="font-mono text-[9px] font-medium uppercase tracking-[0.14em] text-muted-foreground">
+                            {seg.label}
+                          </span>
+                        </div>
+                        <span className="text-[13px] sm:text-[14px] font-semibold leading-tight tracking-tight text-foreground tabular-nums">
+                          {seg.amount}
+                        </span>
+                      </div>
+                    ))}
                   </div>
                 )}
-              </div>
-              <div className="relative mt-4 font-mono text-[11px] text-muted-foreground">
-                {claimableSub
-                  ? claimableSub
-                  : claimableStreams > 0
-                    ? `${claimableStreams} stream${claimableStreams > 1 ? "s" : ""} ready to claim`
-                    : "Nothing available to claim right now"}
+
+                {!activeDonutLoading && (
+                  <div className="font-mono text-[10px] text-muted-foreground/70">
+                    {counts.active > 0
+                      ? `${counts.active} active stream${counts.active > 1 ? "s" : ""}`
+                      : "No active streams"}
+                  </div>
+                )}
               </div>
             </Link>
 
-            {/* Right column: Portfolio Value + Active Streams */}
-            <div className="grid gap-3 grid-rows-2">
-              <div className="relative overflow-hidden rounded-2xl border border-line bg-muted px-4 py-4 transition-colors hover:border-line-hover">
-                <div className="font-mono text-[9px] sm:text-[10px] font-medium uppercase tracking-[0.16em] text-muted-foreground">Portfolio Value</div>
-                {portfolioLoading ? (
-                  <div className="mt-2 h-5 sm:h-6 w-20 animate-pulse rounded-lg bg-foreground/10" />
-                ) : (
-                  <div className="mt-1.5 text-[18px] sm:text-[22px] font-semibold leading-none tracking-tight text-foreground">
-                    {portfolioValueUsd !== null ? formatUsd(portfolioValueUsd) : "—"}
-                  </div>
-                )}
-                <div className="mt-1 font-mono text-[10px] text-muted-foreground truncate">Current unclaimed value</div>
-              </div>
-
-              <div className="relative overflow-hidden rounded-2xl border border-line bg-muted px-4 py-4 transition-colors hover:border-line-hover">
-                <div className="font-mono text-[9px] sm:text-[10px] font-medium uppercase tracking-[0.16em] text-muted-foreground">Active Streams</div>
-                {countLoading ? (
-                  <div className="mt-2 h-5 sm:h-6 w-10 animate-pulse rounded-lg bg-foreground/10" />
-                ) : (
-                  <div className="mt-1.5 text-[18px] sm:text-[22px] font-semibold leading-none tracking-tight text-foreground">
-                    {counts.active}
-                  </div>
-                )}
-                <div className="mt-1 font-mono text-[10px] text-muted-foreground truncate">
-                  {counts.active > 0 ? "Currently vesting" : "No active vesting schedules"}
-                </div>
-              </div>
+            {/* Quick Actions — right column */}
+            <div className="flex flex-col gap-3">
+              <ActionCard
+                className="flex-1"
+                href="/campaign/create"
+                title="Create New Stream"
+                description="Set up a new vesting stream for token distribution"
+                icon={
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <circle cx="12" cy="12" r="10" />
+                    <line x1="12" y1="8" x2="12" y2="16" />
+                    <line x1="8" y1="12" x2="16" y2="12" />
+                  </svg>
+                }
+              />
+              <ActionCard
+                className="flex-1"
+                href="/campaigns"
+                title="View My Campaigns"
+                description="Monitor and manage your existing vesting streams"
+                icon={
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+                    <polyline points="14 2 14 8 20 8" />
+                  </svg>
+                }
+              />
             </div>
           </div>
 
@@ -540,38 +636,6 @@ export default function DashboardPage() {
               })}
             </div>
           )}
-
-          {/* Quick Actions */}
-          <div>
-            <h2 className="mb-3 font-mono text-[11px] font-medium uppercase tracking-[0.18em] text-muted-foreground">
-              Quick Actions
-            </h2>
-            <div className="grid gap-3 sm:grid-cols-2">
-              <ActionCard
-                href="/campaign/create"
-                title="Create New Stream"
-                description="Set up a new vesting stream for token distribution"
-                icon={
-                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <circle cx="12" cy="12" r="10" />
-                    <line x1="12" y1="8" x2="12" y2="16" />
-                    <line x1="8" y1="12" x2="16" y2="12" />
-                  </svg>
-                }
-              />
-              <ActionCard
-                href="/campaigns"
-                title="View My Campaigns"
-                description="Monitor and manage your existing vesting streams"
-                icon={
-                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
-                    <polyline points="14 2 14 8 20 8" />
-                  </svg>
-                }
-              />
-            </div>
-          </div>
 
           {/* Summary Stats */}
           <div className="grid grid-cols-2 gap-2 sm:gap-4 lg:grid-cols-3">

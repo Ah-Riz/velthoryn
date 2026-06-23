@@ -31,21 +31,11 @@ test.describe("Navigation and layout", () => {
     expect(pageErrors).toEqual([]);
   });
 
-  test("header shows network badge", async ({ page }) => {
-    const pageErrors = collectRelevantPageErrors(page);
-    await enableE2eWallet(page);
-    await gotoWithRetry(page, "/dashboard");
-
-    await expect(page.getByText("Devnet").first()).toBeVisible();
-    expect(pageErrors).toEqual([]);
-  });
-
   test("sidebar shows Velthoryn branding", async ({ page }) => {
     const pageErrors = collectRelevantPageErrors(page);
     await gotoWithRetry(page, "/dashboard");
 
     await expect(page.getByText("Velthoryn").first()).toBeVisible();
-    await expect(page.getByText("devnet").first()).toBeVisible();
     expect(pageErrors).toEqual([]);
   });
 

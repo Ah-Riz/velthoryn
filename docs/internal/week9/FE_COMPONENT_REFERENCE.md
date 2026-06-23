@@ -304,7 +304,17 @@ Primary claim button for beneficiaries. Uses `useProofLookup` (Merkle proof) and
 ### `CloseClaimRecordButton`
 **Path**: `campaign/detail/CloseClaimRecordButton.tsx`
 
-Allows beneficiary to close their on-chain `ClaimRecord` PDA after full claim + grace period expiry to recover rent. Uses `useClaimRecord` to verify eligibility.
+Allows the beneficiary (not the creator) to close their on-chain `ClaimRecord` PDA after full claim or post-grace-period, recovering ~0.002 SOL rent.
+
+**Props:** `program`, `publicKey`, `treePubkey`, `mint: PublicKey`, `totalEntitled`, `claimedAmount`, `cancelledAt`, `nowTs`, `onSuccess`, `toast`.
+
+**Pre-checks (before building the instruction):**
+1. Fetches `claimRecord` and `vestingTree` account infos in parallel.
+2. If `claimRecord` is missing or not owned by the program → toast "already closed" (info).
+3. If `vestingTree` is missing or not owned by the program → shows a native-SOL-specific error: the final claim on a native SOL campaign drains all PDA lamports, destroying the VestingTree account. This is a known SC-level limitation (see FE-BUG-20); beneficiaries of fully-claimed native SOL campaigns cannot reclaim their claim record rent until `claim.rs` is updated to preserve `rent_min` on final drain.
+4. Simulation errors are routed through `formatVestingError` with specific `AccountNotInitialized` detection as a fallback.
+
+**Renders:** `null` unless `fullyClaimed || postGrace`.
 
 ---
 

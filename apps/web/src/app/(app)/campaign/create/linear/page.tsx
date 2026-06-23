@@ -76,12 +76,6 @@ export default function LinearCreatePage() {
   const [cancellable, setCancellable] = useState(false);
   const [baseCampaignId, setBaseCampaignId] = useState(() => Math.floor(Date.now() / 1000) % 1000000);
 
-  // Campaign-level schedule — applies to every recipient so all unlock on the same window
-  const [startTime, setStartTime] = useState("");
-  const [cliffTime, setCliffTime] = useState("");
-  const [endTime, setEndTime] = useState("");
-  const [scheduleError, setScheduleError] = useState<string | null>(null);
-
   // Stream entries (manual mode)
   const [streams, setStreams] = useState<StreamEntry[]>([newStream()]);
   const [formErrors, setFormErrors] = useState<Record<string, string | null>>({});
@@ -160,41 +154,8 @@ export default function LinearCreatePage() {
     setStreams((prev) => prev.filter((_, i) => i !== index));
   }
 
-  function resolveSchedule() {
-    const startUnix = startTime ? datetimeLocalToUnix(startTime) : Math.floor(Date.now() / 1000);
-    const cliffUnix = cliffTime ? datetimeLocalToUnix(cliffTime) : startUnix;
-    const endUnix = datetimeLocalToUnix(endTime);
-    return { startTime: startUnix, cliffTime: cliffUnix, endTime: endUnix };
-  }
-
-  function validateScheduleField() {
-    const { startTime: s, cliffTime: c, endTime: e } = resolveSchedule();
-    setScheduleError(!endTime ? "End time is required." : validateSchedule(s, c, e, 1));
-  }
-
-  function updateScheduleField(field: "start" | "cliff" | "end", value: string) {
-    if (field === "start") setStartTime(value);
-    else if (field === "cliff") setCliffTime(value);
-    else setEndTime(value);
-    // A schedule change invalidates any previously parsed bulk payload.
-    if (mode === "bulk") {
-      setCsvResult(null);
-      setTxState({ type: "idle" });
-    }
-  }
-
   function runBulkParse(text: string, decimals: number | null) {
-    const sched = resolveSchedule();
-    const schedErr = !endTime
-      ? "End time is required."
-      : validateSchedule(sched.startTime, sched.cliffTime, sched.endTime, 1);
-    setScheduleError(schedErr);
-    if (schedErr) {
-      setCsvResult(null);
-      setTxState({ type: "idle" });
-      return;
-    }
-    const result = parseBulkCsv(text, decimals, 1, sched);
+    const result = parseBulkCsv(text, decimals, 1);
     setCsvResult(result);
     if (result.issues.length === 0 && result.rows.length > 0) {
       setTxState({ type: "bulk-ready", prepared: prepareBulkCampaign(result.rows) });
@@ -204,29 +165,27 @@ export default function LinearCreatePage() {
   }
 
   function buildManualCampaignRows(): BulkCsvRow[] {
-    const { startTime: s, cliffTime: c, endTime: e } = resolveSchedule();
-    return streams.map((stream, index) => ({
-      rowNumber: index + 1,
-      beneficiary: stream.recipient.trim(),
-      amountInput: stream.amount.trim(),
-      amountRaw: effectiveMintDecimals !== null ? toRawAmount(stream.amount.trim(), effectiveMintDecimals) : stream.amount.trim(),
-      releaseType: 1,
-      startTime: s,
-      cliffTime: c,
-      endTime: e,
-      milestoneIdx: 0,
-    }));
+    return streams.map((stream, index) => {
+      const eUnix = datetimeLocalToUnix(stream.endTime);
+      const sUnix = stream.startTime ? datetimeLocalToUnix(stream.startTime) : Math.floor(Date.now() / 1000);
+      const cUnix = stream.cliffTime ? datetimeLocalToUnix(stream.cliffTime) : sUnix;
+      return {
+        rowNumber: index + 1,
+        beneficiary: stream.recipient.trim(),
+        amountInput: stream.amount.trim(),
+        amountRaw: effectiveMintDecimals !== null ? toRawAmount(stream.amount.trim(), effectiveMintDecimals) : stream.amount.trim(),
+        releaseType: 1,
+        startTime: sUnix,
+        cliffTime: cUnix,
+        endTime: eUnix,
+        milestoneIdx: 0,
+      };
+    });
   }
 
   async function handleSubmit() {
     if (!publicKey || !mintAddress) return;
 
-    // Validate the campaign-level schedule once (shared by every recipient).
-    const { startTime: sStart, cliffTime: sCliff, endTime: sEnd } = resolveSchedule();
-    const schedErr = !endTime ? "End time is required." : validateSchedule(sStart, sCliff, sEnd, 1);
-    setScheduleError(schedErr);
-
-    // Validate recipients (wallet + amount only; schedule is shared).
     const errors: Record<string, string | null> = {};
     const recipientRows = new Map<string, number[]>();
     for (let i = 0; i < streams.length; i++) {
@@ -239,6 +198,15 @@ export default function LinearCreatePage() {
       }
       const amtErr = validateAmountWithDecimals(s.amount, effectiveMintDecimals);
       if (amtErr) errors[`amount_${i}`] = amtErr;
+      if (!s.endTime) {
+        errors[`end_${i}`] = "End time is required.";
+      } else {
+        const eUnix = datetimeLocalToUnix(s.endTime);
+        const sUnix = s.startTime ? datetimeLocalToUnix(s.startTime) : Math.floor(Date.now() / 1000);
+        const cUnix = s.cliffTime ? datetimeLocalToUnix(s.cliffTime) : sUnix;
+        const schedErr = validateSchedule(sUnix, cUnix, eUnix, 1);
+        if (schedErr) errors[`end_${i}`] = schedErr;
+      }
     }
     for (const indexes of recipientRows.values()) {
       if (indexes.length > 1) {
@@ -248,7 +216,7 @@ export default function LinearCreatePage() {
       }
     }
     setFormErrors(errors);
-    if (hasErrors(errors) || schedErr) return;
+    if (hasErrors(errors)) return;
 
     if (streams.length > 1) {
       setTxState({ type: "loading", label: `Creating campaign for ${streams.length} recipients...` });
@@ -276,7 +244,7 @@ export default function LinearCreatePage() {
           setTxState({ type: "bulk-funded", sig: funded.sig, treeAddress: created.treeAddress, prepared });
           setStreams([newStream()]);
           setFormErrors({});
-          setScheduleError(null);
+
           setBaseCampaignId(Math.floor(Date.now() / 1000) % 1000000);
         } catch (error: unknown) {
           if (error instanceof Error && /User rejected|Connection rejected/i.test(error.message)) {
@@ -311,6 +279,9 @@ export default function LinearCreatePage() {
         setTxState({ type: "loading", label: `Creating stream ${i + 1} of ${streams.length}...` });
         const s = streams[i];
         const cid = String(baseCampaignId * 100 + i);
+        const sEnd = datetimeLocalToUnix(s.endTime);
+        const sStart = s.startTime ? datetimeLocalToUnix(s.startTime) : Math.floor(Date.now() / 1000);
+        const sCliff = s.cliffTime ? datetimeLocalToUnix(s.cliffTime) : sStart;
 
         const result = await createStream({
           beneficiary: s.recipient, mintAddress, amount: s.amount, mintDecimals: effectiveMintDecimals,
@@ -323,7 +294,6 @@ export default function LinearCreatePage() {
       setTxState({ type: "success", results });
       setStreams([newStream()]);
       setFormErrors({});
-      setScheduleError(null);
       setBaseCampaignId(Math.floor(Date.now() / 1000) % 1000000);
     } catch (error: unknown) {
       if (error instanceof Error && /User rejected|Connection rejected/i.test(error.message)) {
@@ -525,50 +495,6 @@ export default function LinearCreatePage() {
 
             {/* Cancellation */}
             <ToggleCard checked={cancellable} onChange={setCancellable} title="Allow cancellation?" body="Creator can cancel and reclaim unvested tokens after a 7-day grace period." />
-          </div>
-
-          {/* Campaign Schedule — shared by every recipient so all unlock on the same window */}
-          <div className={`${CARD} space-y-4 p-5`}>
-            <SectionHeader title="Schedule" caption="Applies to every recipient in this campaign" />
-            <div className="grid gap-4 sm:grid-cols-3">
-              <Field
-                label="Start Time (optional)"
-                input={
-                  <input
-                    type="datetime-local"
-                    value={startTime}
-                    onChange={(e) => updateScheduleField("start", e.target.value)}
-                    className={INPUT}
-                  />
-                }
-                hint="Defaults to now if empty"
-              />
-              <Field
-                label="Cliff Time (optional)"
-                input={
-                  <input
-                    type="datetime-local"
-                    value={cliffTime}
-                    onChange={(e) => updateScheduleField("cliff", e.target.value)}
-                    className={INPUT}
-                  />
-                }
-                hint="No tokens vest before this. Defaults to start."
-              />
-              <Field
-                label="End Time (Full Unlock)"
-                input={
-                  <input
-                    type="datetime-local"
-                    value={endTime}
-                    onChange={(e) => updateScheduleField("end", e.target.value)}
-                    onBlur={validateScheduleField}
-                    className={`${INPUT} ${scheduleError ? INPUT_ERR : ""}`}
-                  />
-                }
-                error={scheduleError}
-              />
-            </div>
           </div>
 
           {/* Manual Mode: Stream Cards */}
@@ -781,7 +707,7 @@ export default function LinearCreatePage() {
           loading={txState.type === "loading"}
           disabled={
             mode === "single"
-              ? !mintAddress || !endTime || streams.some((s) => !s.amount || !s.recipient)
+              ? !mintAddress || streams.some((s) => !s.amount || !s.recipient || !s.endTime)
               : txState.type !== "bulk-ready"
           }
           onSubmit={

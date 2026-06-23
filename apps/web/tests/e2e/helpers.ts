@@ -115,14 +115,14 @@ export function datetimeLocalOffset(msFromNow: number): string {
   return new Date(Date.now() + msFromNow).toISOString().slice(0, 16);
 }
 
-/** Cliff create: Schedule card has Start (optional) then Cliff Date (required). */
+/** Cliff create: per-stream fields — Cliff Date (nth 0), Start Time optional (nth 1). */
 export async function fillCliffSchedule(page: Page, cliffDate?: string) {
   const cliffStr = cliffDate ?? datetimeLocalOffset(86400_000 * 30);
   const inputs = page.locator("input[type='datetime-local']");
-  await inputs.nth(1).fill(cliffStr);
+  await inputs.nth(0).fill(cliffStr);
 }
 
-/** Linear create: Schedule card has Start, Cliff (optional), End (required). */
+/** Linear create: per-stream fields — Start (nth 0), End (nth 1), Cliff optional (nth 2). */
 export async function fillLinearSchedule(
   page: Page,
   opts?: { startDate?: string; endDate?: string },
@@ -131,7 +131,7 @@ export async function fillLinearSchedule(
   const endStr = opts?.endDate ?? datetimeLocalOffset(86400_000 * 31);
   const inputs = page.locator("input[type='datetime-local']");
   await inputs.nth(0).fill(startStr);
-  await inputs.nth(2).fill(endStr);
+  await inputs.nth(1).fill(endStr);
 }
 
 export async function openCsvMode(page: Page, label = /use csv|csv campaign/i) {

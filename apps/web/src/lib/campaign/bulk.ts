@@ -534,8 +534,6 @@ export function bulkCsvTemplateForType(type: "cliff" | "linear" | "milestone"): 
   const addr3 = "DzAME3MtzP5N3NDPuMEMWPVdEJLLT3gfnxc7CmPdPLzR";
 
   if (type === "cliff") {
-    // Schedule (start/cliff) is set in the UI and applies to every recipient;
-    // the CSV only carries wallet + amount (+ releaseType).
     return [
       "beneficiary,amount,releaseType,startTime,cliffTime",
       `${addr1},1000,Cliff,${start},${cliff}`,
@@ -543,8 +541,6 @@ export function bulkCsvTemplateForType(type: "cliff" | "linear" | "milestone"): 
     ].join("\n");
   }
   if (type === "linear") {
-    // Schedule (start/cliff/end) is set in the UI and applies to every recipient;
-    // the CSV only carries wallet + amount (+ releaseType).
     return [
       header,
       `${addr1},1000,Linear,${start},${start},${end},0`,

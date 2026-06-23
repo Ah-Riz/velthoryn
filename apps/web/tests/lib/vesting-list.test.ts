@@ -63,7 +63,7 @@ describe("getSenderStreamStatus", () => {
     ).toBe("Settled");
   });
 
-  it("returns Settled when instantRefunded is true", () => {
+  it("returns Refunded when instantRefunded is true", () => {
     expect(
       getSenderStreamStatus({
         totalSupply: "1000",
@@ -72,7 +72,7 @@ describe("getSenderStreamStatus", () => {
         cancelledAt: 1700000000,
         instantRefunded: true,
       }),
-    ).toBe("Settled");
+    ).toBe("Refunded");
   });
 
   it("returns Claimed when fully claimed", () => {

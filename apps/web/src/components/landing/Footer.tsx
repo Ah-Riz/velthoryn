@@ -2,8 +2,8 @@ import Image from "next/image";
 import Link from "next/link";
 import { SmoothScrollLink } from "@/components/landing/SmoothScrollLink";
 
-const repoUrl = "https://github.com/Ah-Riz/mancerxsuperteam-token-vesting";
-const docsBase = `${repoUrl}/tree/test/docs`;
+const repoUrl = "https://github.com/Ah-Riz/velthoryn";
+const docsBase = `${repoUrl}/tree/main/docs`;
 
 export function Footer() {
   return (
@@ -56,16 +56,16 @@ export function Footer() {
           </div>
           <div className="fcol">
             <h5>Resources</h5>
-            <a href={`${docsBase}/PROGRAM.md`} target="_blank" rel="noopener noreferrer">Documentation</a>
+            <a href={docsBase} target="_blank" rel="noopener noreferrer">Documentation</a>
             <a href={`${docsBase}/INTEGRATION.md`} target="_blank" rel="noopener noreferrer">Integration Guide</a>
             <a href={`${docsBase}/BACKEND_API.md`} target="_blank" rel="noopener noreferrer">Backend API</a>
             <a href={repoUrl} target="_blank" rel="noopener noreferrer">GitHub</a>
           </div>
           <div className="fcol">
             <h5>Trust</h5>
+            <a href={`${docsBase}/AUDIT_REPORT.md`} target="_blank" rel="noopener noreferrer">Audit Report</a>
             <a href={`${docsBase}/SECURITY.md`} target="_blank" rel="noopener noreferrer">Security Notes</a>
-            <a href={`${docsBase}/DEVNET_TEST_RESULTS.md`} target="_blank" rel="noopener noreferrer">Devnet Results</a>
-            <a href={`${docsBase}/PROGRAM.md`} target="_blank" rel="noopener noreferrer">Program Internals</a>
+            <a href={`${docsBase}/DEVNET_TEST_RESULTS.md`} target="_blank" rel="noopener noreferrer">Test Results</a>
             <a href={repoUrl} target="_blank" rel="noopener noreferrer">Open Source</a>
           </div>
           <div className="fcol">

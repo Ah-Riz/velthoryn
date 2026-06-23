@@ -41,6 +41,10 @@ const STATUS_CONFIG: Record<
     label: "Settled",
     classes: "border-slate-500/20 bg-slate-500/[0.07] text-slate-400",
   },
+  Refunded: {
+    label: "Refunded",
+    classes: "border-rose-500/20 bg-rose-500/[0.07] text-rose-400",
+  },
 };
 
 const TYPE_CONFIG: Record<
