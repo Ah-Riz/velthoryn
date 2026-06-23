@@ -77,7 +77,7 @@ _No open high-priority BE items from the original audit._
 
 | # | Task | Source | What's needed |
 |---|------|--------|---------------|
-| 12 | Sentry DSN in Vercel production | B1 | Scaffolding done. Ops needs to set `NEXT_PUBLIC_SENTRY_DSN` in Vercel; production deploy appears down (`velthoryn.vercel.app` returns DEPLOYMENT_NOT_FOUND). |
+| 12 | Sentry DSN in Vercel production | B1 | Scaffolding done. Ops needs to set `NEXT_PUBLIC_SENTRY_DSN` in Vercel; production is live at `www.velthoryn.site` (legacy `velthoryn.vercel.app` subdomain returns DEPLOYMENT_NOT_FOUND). |
 
 ---
 
@@ -185,4 +185,4 @@ Batch-verified and marked `[x]` in `.claude/specs/{production-security-ops,bulk-
 | **Ops** | 1 | 1 | 0 | 5 |
 | **Total** | **~4** | **~17** | **0** (batch done) | **8** |
 
-**86 total items audited.** Last refresh 2026-06-16. Remaining real work: remove the obsolete Issue #29 BE guards (post-deploy PR), FE E2E/clawback, Ops Sentry DSN + production redeploy. **8** externally blocked. Prod deployment at `velthoryn.vercel.app` is currently down — redeploy needed before smoke tests or Sentry verification can complete.
+**86 total items audited.** Last refresh 2026-06-23. Remaining real work: remove the obsolete Issue #29 BE guards (post-deploy PR), FE E2E/clawback, Ops Sentry DSN. **8** externally blocked. Production is live at `www.velthoryn.site` (BE+Merkle pipeline + smoke tests pass 2026-06-23); the legacy `velthoryn.vercel.app` subdomain returns DEPLOYMENT_NOT_FOUND.

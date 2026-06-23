@@ -45,7 +45,7 @@
 - [x] Update `apps/web/next.config.ts`
   - **NOTE:** `headers()` function already exists with X-Frame-Options, X-Content-Type-Options, Referrer-Policy, Permissions-Policy, and CSP. Only ADD `Strict-Transport-Security: max-age=63072000; includeSubDomains; preload` to the existing array. Do NOT replace the existing headers.
 - [x] Add `ALLOWED_ORIGIN` to `.env.example`
-- [x] **Verify:** `curl -H "Origin: http://evil.com"` rejected; `curl -H "Origin: https://velthoryn.vercel.app"` accepted; security headers present on all responses
+- [x] **Verify:** `curl -H "Origin: http://evil.com"` rejected; `curl -H "Origin: https://www.velthoryn.site"` accepted; security headers present on all responses
 
 ### P0.4 — Request body size limits
 - [x] Create helper in `apps/web/src/lib/api/body-limit.ts`
@@ -190,8 +190,8 @@ After all tasks complete:
 
 - [x] `pnpm test` passes in `apps/web/` (existing + new tests)
 - [ ] `pnpm test:localnet` passes (86/86 SC tests unchanged)
-- [ ] `curl https://velthoryn.vercel.app/api/health` returns 200
-- [ ] `curl -X POST https://velthoryn.vercel.app/api/campaigns` (no auth) returns 401
+- [ ] `curl https://www.velthoryn.site/api/health` returns 200
+- [ ] `curl -X POST https://www.velthoryn.site/api/campaigns` (no auth) returns 401
 - [ ] `curl -X POST` with invalid signature returns 401
 - [ ] Rate limit triggers after threshold (429 with Retry-After)
 - [ ] Security headers present on all responses

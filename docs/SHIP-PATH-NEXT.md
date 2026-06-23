@@ -27,7 +27,7 @@ Backend hardening (all-leaf verify, u64 strings, strict SSL) may not be on produ
 # After Vercel deploy from merged branch / manual promote
 pnpm tsx scripts/test-be-merkle-parity.ts
 pnpm tsx scripts/test-be-merkle-pipeline.ts \
-  --url https://velthoryn.vercel.app \
+  --url https://www.velthoryn.site \
   --timeout 120000
 ```
 

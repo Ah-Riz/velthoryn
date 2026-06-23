@@ -4,7 +4,7 @@
 
 **Last updated:** 2026-05-28
 **Branch / PR:** `dev_lana` → `test` — [PR #30](https://github.com/Ah-Riz/velthoryn/pull/30)  
-**Deployed API:** [velthoryn.vercel.app](https://velthoryn.vercel.app) (redeploy after BE hardening merge)
+**Deployed API:** [www.velthoryn.site](https://www.velthoryn.site) (redeploy after BE hardening merge)
 
 ---
 
@@ -37,7 +37,7 @@
 
 ```bash
 pnpm tsx scripts/test-merkle-parity.ts
-pnpm tsx scripts/test-be-merkle-pipeline.ts --url https://velthoryn.vercel.app --timeout 120000
+pnpm tsx scripts/test-be-merkle-pipeline.ts --url https://www.velthoryn.site --timeout 120000
 pnpm test:localnet   # 118 SC (2 pending)
 DATABASE_URL=postgresql://ci:ci@127.0.0.1:5432/ci pnpm --filter @velthoryn/web test
 ```
@@ -151,7 +151,7 @@ pnpm test:localnet
 
 # BE–SC Merkle
 pnpm tsx scripts/test-merkle-parity.ts
-pnpm tsx scripts/test-be-merkle-pipeline.ts --url https://velthoryn.vercel.app --timeout 120000
+pnpm tsx scripts/test-be-merkle-pipeline.ts --url https://www.velthoryn.site --timeout 120000
 
 # Web API (Postgres)
 export DATABASE_URL=postgresql://ci:ci@127.0.0.1:5432/ci

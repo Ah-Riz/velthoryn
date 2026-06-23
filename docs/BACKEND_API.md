@@ -1,6 +1,6 @@
 # Backend API + Database Architecture — Phase 2 Design
 
-**Status:** Implemented, deployed at [velthoryn.vercel.app](https://velthoryn.vercel.app/)
+**Status:** Implemented, deployed at [www.velthoryn.site](https://www.velthoryn.site/)
 **Owner:** Lana
 **Companion docs:** `PRD_LANA.md`, `INTEGRATION.md`, `PROGRAM.md`, [`API_TRUST_BOUNDARIES.md`](API_TRUST_BOUNDARIES.md) (auth tier per route)
 

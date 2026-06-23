@@ -134,7 +134,7 @@ flows only from indexed on-chain events (the old `PATCH …/status` route is **R
 
 ## E. Use the API
 
-Base URL: `https://velthoryn.vercel.app` (or your own BE origin). All routes return `X-API-Version: 1`.
+Base URL: `https://www.velthoryn.site` (or your own BE origin). All routes return `X-API-Version: 1`.
 u64/i64 values serialize as **decimal strings** (`serializeBigInt()` in `apps/web/src/lib/api/serialize.ts`).
 
 ### Auth tiers (3)
@@ -165,7 +165,7 @@ u64/i64 values serialize as **decimal strings** (`serializeBigInt()` in `apps/we
 ### Example 1 — fetch a proof (Public read)
 
 ```bash
-curl "https://velthoryn.vercel.app/api/campaigns/<treeAddress>/proof?beneficiary=<base58>"
+curl "https://www.velthoryn.site/api/campaigns/<treeAddress>/proof?beneficiary=<base58>"
 # → { leaf: { leafIndex, beneficiary, amount, releaseType, startTime, cliffTime, endTime, milestoneIdx },
 #     proof: number[][], merkleRoot, treeAddress }
 ```
