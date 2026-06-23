@@ -73,6 +73,8 @@ export default function DashboardPage() {
   const { summary: vestingSummary, isLoading: vestingLoading, campaigns: vestingCampaigns } =
     useVestingProgressSummary(walletAddress);
 
+  const [donutView, setDonutView] = useState<"receiving" | "created">("receiving");
+
   const vestingMintAddresses = useMemo(
     () => [...new Set(vestingCampaigns.map((c) => c.mint).filter(Boolean))],
     [vestingCampaigns],
@@ -168,6 +170,8 @@ export default function DashboardPage() {
       creator: string;
       paused: boolean;
       cancelledAt: number | null;
+      instantRefunded?: boolean;
+      streamSettled?: boolean;
       myClaimed: number | string;
       myLeaf: {
         amount: number | string;
@@ -328,21 +332,6 @@ export default function DashboardPage() {
     return { tvlValue: formatUsd(totalUsd), tvlSub: sub };
   }, [mintTvlSums, pricesMap, decimalsMap]);
 
-  const portfolioValueUsd = useMemo(() => {
-    if (!vestingSummary || vestingSummary.mintSums.size === 0) return null;
-    let total = 0;
-    let hasPriced = false;
-    for (const [mint, sums] of vestingSummary.mintSums) {
-      const dec = decimalsMap.get(mint);
-      const price = pricesMap.get(mint);
-      if (dec === undefined || price == null || price === 0) continue;
-      const div = Math.pow(10, dec);
-      total += (Number(sums.entitled) / div - Number(sums.claimed) / div) * price;
-      hasPriced = true;
-    }
-    return hasPriced ? total : null;
-  }, [vestingSummary, decimalsMap, pricesMap]);
-
   const claimableValueUsd = useMemo(() => {
     if (!vestingSummary || vestingSummary.mintSums.size === 0) return null;
     let total = 0;
@@ -357,97 +346,56 @@ export default function DashboardPage() {
     return hasPriced ? total : null;
   }, [vestingSummary, decimalsMap, pricesMap]);
 
-  const claimedValueUsd = useMemo(() => {
-    if (!vestingSummary || vestingSummary.mintSums.size === 0) return null;
-    let total = 0;
-    let hasPriced = false;
-    for (const [mint, sums] of vestingSummary.mintSums) {
-      const dec = decimalsMap.get(mint);
-      const price = pricesMap.get(mint);
-      if (dec === undefined || price == null || price === 0) continue;
-      total += (Number(sums.claimed) / Math.pow(10, dec)) * price;
-      hasPriced = true;
-    }
-    return hasPriced ? total : null;
-  }, [vestingSummary, decimalsMap, pricesMap]);
+  const ONGOING_COLOR   = "#7c3aed";
+  const SCHEDULED_COLOR = "#E8B84B";
+  const COMPLETED_COLOR = "#22c55e";
+  const CANCELED_COLOR  = "#f87171";
 
-  const lockedValueUsd = useMemo(() => {
-    if (!vestingSummary || vestingSummary.mintSums.size === 0) return null;
-    let total = 0;
-    let hasPriced = false;
-    for (const [mint, sums] of vestingSummary.mintSums) {
-      const dec = decimalsMap.get(mint);
-      const price = pricesMap.get(mint);
-      if (dec === undefined || price == null || price === 0) continue;
-      const locked = sums.entitled > sums.vested ? sums.entitled - sums.vested : 0n;
-      total += (Number(locked) / Math.pow(10, dec)) * price;
-      hasPriced = true;
-    }
-    return hasPriced ? total : null;
-  }, [vestingSummary, decimalsMap, pricesMap]);
-
-  const donutData = useMemo(() => {
-    const LOCKED_COLOR = "rgba(255,255,255,0.12)";
-    const CLAIMABLE_COLOR = "#E8B84B";
-    const CLAIMED_COLOR = "#22c55e";
-
-    if (!vestingSummary || vestingSummary.totalEntitled === 0n) {
-      return {
-        segments: [
-          { proportion: 1, color: LOCKED_COLOR, label: "Locked", amount: "—" },
-          { proportion: 0, color: CLAIMABLE_COLOR, label: "Claimable", amount: "—" },
-          { proportion: 0, color: CLAIMED_COLOR, label: "Claimed", amount: "—" },
-        ] as DonutSegment[],
-        centerValue: "—",
-      };
-    }
-
-    const allUsd =
-      claimedValueUsd !== null && claimableValueUsd !== null && lockedValueUsd !== null;
-
-    let lockedProp: number, claimableProp: number, claimedProp: number;
-    let lockedAmt: string, claimableAmt: string, claimedAmt: string;
-
-    if (allUsd) {
-      const totalUsd = (lockedValueUsd ?? 0) + (claimableValueUsd ?? 0) + (claimedValueUsd ?? 0);
-      lockedProp = totalUsd > 0 ? (lockedValueUsd ?? 0) / totalUsd : 1;
-      claimableProp = totalUsd > 0 ? (claimableValueUsd ?? 0) / totalUsd : 0;
-      claimedProp = totalUsd > 0 ? (claimedValueUsd ?? 0) / totalUsd : 0;
-      lockedAmt = formatUsd(lockedValueUsd ?? 0);
-      claimableAmt = formatUsd(claimableValueUsd ?? 0);
-      claimedAmt = formatUsd(claimedValueUsd ?? 0);
-    } else {
-      const total = Number(vestingSummary.totalEntitled);
-      const lockedRaw =
-        vestingSummary.totalEntitled > vestingSummary.totalVested
-          ? vestingSummary.totalEntitled - vestingSummary.totalVested
-          : 0n;
-      lockedProp = total > 0 ? Number(lockedRaw) / total : 1;
-      claimableProp = total > 0 ? Number(vestingSummary.totalClaimable) / total : 0;
-      claimedProp = total > 0 ? Number(vestingSummary.totalClaimed) / total : 0;
-
-      if (!isMixedTokens) {
-        const mintAddr = [...vestingSummary.mintSums.keys()][0];
-        const dec = mintAddr ? (decimalsMap.get(mintAddr) ?? null) : null;
-        lockedAmt = formatTokenAmount(lockedRaw, dec);
-        claimableAmt = formatTokenAmount(vestingSummary.totalClaimable, dec);
-        claimedAmt = formatTokenAmount(vestingSummary.totalClaimed, dec);
-      } else {
-        lockedAmt = "—";
-        claimableAmt = "Mixed";
-        claimedAmt = "Mixed";
+  const receivingStatusData = useMemo(() => {
+    let ongoing = 0, scheduled = 0, completed = 0, canceled = 0;
+    for (const [, row] of rows) {
+      if (!row.recipientStatus) continue;
+      switch (row.recipientStatus) {
+        case "Claimable": case "Paused": ongoing++; break;
+        case "Scheduled": scheduled++; break;
+        case "Claimed": case "Settled": completed++; break;
+        case "Cancelled": canceled++; break;
       }
     }
-
+    const total = ongoing + scheduled + completed + canceled;
     return {
       segments: [
-        { proportion: lockedProp, color: LOCKED_COLOR, label: "Locked", amount: lockedAmt },
-        { proportion: claimableProp, color: CLAIMABLE_COLOR, label: "Claimable", amount: claimableAmt },
-        { proportion: claimedProp, color: CLAIMED_COLOR, label: "Claimed", amount: claimedAmt },
+        { proportion: total > 0 ? ongoing / total : 0,   color: ONGOING_COLOR,   label: "Ongoing",   amount: String(ongoing) },
+        { proportion: total > 0 ? scheduled / total : 0, color: SCHEDULED_COLOR, label: "Scheduled", amount: String(scheduled) },
+        { proportion: total > 0 ? completed / total : 0, color: COMPLETED_COLOR, label: "Completed", amount: String(completed) },
+        { proportion: total > 0 ? canceled / total : 0,  color: CANCELED_COLOR,  label: "Canceled",  amount: String(canceled) },
       ] as DonutSegment[],
       centerValue: claimableValueUsd !== null ? formatUsd(claimableValueUsd) : claimableFormatted,
+      centerSub: "Claimable Now",
     };
-  }, [vestingSummary, claimedValueUsd, claimableValueUsd, lockedValueUsd, isMixedTokens, decimalsMap, claimableFormatted]);
+  }, [rows, claimableValueUsd, claimableFormatted]);
+
+  const createdStatusData = useMemo(() => {
+    let ongoing = 0, completed = 0, canceled = 0;
+    for (const [, row] of rows) {
+      if (!row.senderStatus) continue;
+      switch (row.senderStatus) {
+        case "Active": case "Paused": ongoing++; break;
+        case "Claimed": case "Settled": completed++; break;
+        case "Cancelled": case "Grace Period": case "Refunded": canceled++; break;
+      }
+    }
+    const total = ongoing + completed + canceled;
+    return {
+      segments: [
+        { proportion: total > 0 ? ongoing / total : 0,   color: ONGOING_COLOR,   label: "Ongoing",   amount: String(ongoing) },
+        { proportion: total > 0 ? completed / total : 0, color: COMPLETED_COLOR, label: "Completed", amount: String(completed) },
+        { proportion: total > 0 ? canceled / total : 0,  color: CANCELED_COLOR,  label: "Canceled",  amount: String(canceled) },
+      ] as DonutSegment[],
+      centerValue: tvlValue,
+      centerSub: "TVL Locked",
+    };
+  }, [rows, tvlValue]);
 
   // Count-based stats only need sender/recipient DB queries to resolve.
   // localCampaigns is a fallback (only used on DB error) — don't block counts on its slow RPC fetch.
@@ -456,6 +404,9 @@ export default function DashboardPage() {
   const tvlLoading = countLoading || (senderMintAddresses.length > 0 && (decimalsLoading || pricesLoading));
   // Portfolio hero needs vesting progress + decimals + prices.
   const portfolioLoading = vestingLoading || (vestingMintAddresses.length > 0 && (decimalsLoading || pricesLoading));
+
+  const activeDonutData    = donutView === "receiving" ? receivingStatusData : createdStatusData;
+  const activeDonutLoading = donutView === "receiving" ? portfolioLoading    : tvlLoading;
 
   const claimableStreams = vestingSummary?.claimableCampaigns ?? counts.claimableCount;
 
@@ -497,23 +448,41 @@ export default function DashboardPage() {
               {/* Header */}
               <div className="relative flex items-center justify-between gap-2 mb-5">
                 <span className="font-mono text-[10px] font-medium uppercase tracking-[0.18em] text-violet/70">Portfolio</span>
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="text-muted-foreground/60 transition-transform group-hover:translate-x-0.5 group-hover:text-muted-foreground">
-                  <polyline points="9 18 15 12 9 6" />
-                </svg>
+                <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-0.5 rounded-full border border-violet/20 bg-violet/[0.06] p-0.5">
+                    {(["receiving", "created"] as const).map((view) => (
+                      <button
+                        key={view}
+                        type="button"
+                        onClick={(e) => { e.preventDefault(); e.stopPropagation(); setDonutView(view); }}
+                        className={`rounded-full px-2.5 py-0.5 font-mono text-[9px] font-medium uppercase tracking-[0.1em] transition-all ${
+                          donutView === view
+                            ? "bg-violet/20 text-violet"
+                            : "text-muted-foreground hover:text-foreground"
+                        }`}
+                      >
+                        {view === "receiving" ? "Receiving" : "Created"}
+                      </button>
+                    ))}
+                  </div>
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="text-muted-foreground/60 transition-transform group-hover:translate-x-0.5 group-hover:text-muted-foreground">
+                    <polyline points="9 18 15 12 9 6" />
+                  </svg>
+                </div>
               </div>
 
               {/* Centered body: donut + horizontal legend */}
               <div className="relative flex flex-col items-center gap-4 pb-1">
                 <PortfolioDonut
-                  segments={donutData.segments}
-                  centerValue={donutData.centerValue}
-                  centerSub="Claimable Now"
+                  segments={activeDonutData.segments}
+                  centerValue={activeDonutData.centerValue}
+                  centerSub={activeDonutData.centerSub}
                   size={148}
                   showLegend={false}
-                  isLoading={portfolioLoading}
+                  isLoading={activeDonutLoading}
                 />
 
-                {portfolioLoading ? (
+                {activeDonutLoading ? (
                   <div className="flex items-center gap-5 sm:gap-8">
                     {[0, 1, 2].map((i) => (
                       <div key={i} className="flex flex-col items-center gap-1.5">
@@ -524,7 +493,7 @@ export default function DashboardPage() {
                   </div>
                 ) : (
                   <div className="flex items-start justify-center gap-5 sm:gap-8 flex-wrap">
-                    {donutData.segments.map((seg) => (
+                    {activeDonutData.segments.filter((seg) => seg.proportion > 0).map((seg) => (
                       <div key={seg.label} className="flex flex-col items-center gap-0.5">
                         <div className="flex items-center gap-1.5">
                           <div className="shrink-0 rounded-full" style={{ width: 6, height: 6, backgroundColor: seg.color }} />
@@ -540,7 +509,7 @@ export default function DashboardPage() {
                   </div>
                 )}
 
-                {!portfolioLoading && (
+                {!activeDonutLoading && (
                   <div className="font-mono text-[10px] text-muted-foreground/70">
                     {counts.active > 0
                       ? `${counts.active} active stream${counts.active > 1 ? "s" : ""}`

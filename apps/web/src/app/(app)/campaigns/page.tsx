@@ -55,6 +55,7 @@ type RecipientCampaign = {
   createdAt: number;
   metadata: { name?: string; description?: string; logoUri?: string } | null;
   myClaimed: number | string;
+  instantRefunded?: boolean;
   streamSettled?: boolean;
   myLeaf: {
     leafIndex: number;
@@ -134,6 +135,7 @@ function getReleaseTypeLabel(releaseType: number): string {
 function getReleaseStateText(campaign: RecipientCampaign, nowTs: bigint): string {
   const status = getRecipientStreamStatus(campaign, nowTs);
   if (status === "Claimed") return "Fully claimed";
+  if (status === "Settled") return "Settled";
   if (status === "Claimable") return "Claim available";
   if (status === "Paused") return "Paused";
   if (status === "Cancelled") return "Cancelled";
@@ -155,6 +157,7 @@ function getSenderStateText(campaign: SenderCampaign): string {
   if (status === "Claimed") return "Fully claimed";
   if (status === "Paused") return "Paused";
   if (status === "Settled") return "Settled";
+  if (status === "Refunded") return "Instant refunded";
   if (status === "Grace Period") return "Grace period";
   if (status === "Cancelled") return "Cancelled";
   return `${campaign.leafCount} ${campaign.leafCount === 1 ? "recipient" : "recipients"}`;
@@ -369,6 +372,7 @@ export default function CampaignsPage() {
 
       const releaseStateText = isMultiLeaf
         ? (status === "Claimed" ? "Fully claimed"
+          : status === "Settled" ? "Settled"
           : status === "Claimable" ? "Claim available"
           : status === "Paused" ? "Paused"
           : status === "Cancelled" ? "Cancelled"
@@ -751,9 +755,11 @@ export default function CampaignsPage() {
                     ? senderCampaigns.find((c) => c.treeAddress === row.treeAddress)
                     : undefined;
                 const actionNote =
-                  senderMatch && getSenderStreamStatus(senderMatch) === "Grace Period" ? (
+                  senderMatch &&
+                  getSenderStreamStatus(senderMatch) === "Grace Period" &&
+                  senderMatch.cancelledAt !== null ? (
                     <GracePeriodCountdown
-                      cancelledAt={BigInt(senderMatch.cancelledAt!)}
+                      cancelledAt={BigInt(senderMatch.cancelledAt)}
                       className="text-[12px]"
                     />
                   ) : undefined;

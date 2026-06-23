@@ -34,10 +34,12 @@ export function PortfolioDonut({ segments, centerValue, centerSub, size = 108, i
     );
   }
 
-  const gap = 3;
   const valueFontSize = centerValue.length <= 6 ? 13 : centerValue.length <= 9 ? 10.5 : 8.5;
 
-  const segmentData = segments.reduce<Array<DonutSegment & { start: number; arcLen: number }>>(
+  const activeSegments = segments.filter((s) => s.proportion > 0);
+  const gap = activeSegments.length > 1 ? 3 : 0;
+
+  const segmentData = activeSegments.reduce<Array<DonutSegment & { start: number; arcLen: number }>>(
     (arr, seg) => {
       const prev = arr.at(-1);
       const start = prev ? prev.start + prev.proportion : 0;
@@ -50,18 +52,37 @@ export function PortfolioDonut({ segments, centerValue, centerSub, size = 108, i
     <div className="flex flex-col items-center gap-3">
       <svg width={size} height={size} viewBox="0 0 100 100">
         <g transform="rotate(-90 50 50)">
-          {/* Background track */}
-          <circle
-            cx="50"
-            cy="50"
-            r="40"
-            fill="none"
-            stroke="rgba(255,255,255,0.06)"
-            strokeWidth="12"
-          />
+          {/* Background track — only when no active segments (empty/loading state) */}
+          {activeSegments.length === 0 && (
+            <circle
+              cx="50"
+              cy="50"
+              r="40"
+              fill="none"
+              stroke="var(--foreground)"
+              strokeOpacity="0.07"
+              strokeWidth="12"
+            />
+          )}
           {segmentData.map((seg, i) => {
             const { start, arcLen } = seg;
             if (arcLen <= 0) return null;
+            // Single active segment: arcLen = C causes the entire circle to fall in the
+            // dasharray "skip" zone (offset=C puts us at the exact gap boundary).
+            // Render as a plain circle instead — true 360°, no dasharray needed.
+            if (activeSegments.length === 1) {
+              return (
+                <circle
+                  key={i}
+                  cx="50"
+                  cy="50"
+                  r="40"
+                  fill="none"
+                  stroke={seg.color}
+                  strokeWidth="12"
+                />
+              );
+            }
             return (
               <circle
                 key={i}
@@ -71,7 +92,7 @@ export function PortfolioDonut({ segments, centerValue, centerSub, size = 108, i
                 fill="none"
                 stroke={seg.color}
                 strokeWidth="12"
-                strokeDasharray={`${arcLen} ${C}`}
+                strokeDasharray={`${arcLen} ${C - arcLen}`}
                 strokeDashoffset={C * (1 - start)}
                 strokeLinecap="butt"
               />
@@ -98,7 +119,7 @@ export function PortfolioDonut({ segments, centerValue, centerSub, size = 108, i
           textAnchor="middle"
           dominantBaseline="middle"
           fontSize="6"
-          fill="rgba(255,255,255,0.4)"
+          fill="var(--muted-foreground)"
           style={{ fontFamily: "monospace", letterSpacing: "0.1em" }}
         >
           {centerSub.toUpperCase()}
@@ -108,7 +129,7 @@ export function PortfolioDonut({ segments, centerValue, centerSub, size = 108, i
       {/* Legend (horizontal, compact) */}
       {showLegend && (
         <div className="flex items-start gap-5">
-          {segments.map((seg, i) => (
+          {segments.filter((s) => s.proportion > 0).map((seg, i) => (
             <div key={i} className="flex flex-col items-center gap-0.5">
               <div className="flex items-center gap-1">
                 <div
