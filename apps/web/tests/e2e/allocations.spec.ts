@@ -13,6 +13,7 @@ import {
   enableE2eWallet,
   gotoWithRetry,
   mockCampaignApi,
+  mockLeavesApi,
   mockProofApi,
   mockSolanaRpcGetAccountInfoNull,
   creatorWallet,
@@ -29,8 +30,7 @@ const pastCliff = () => now() - 86400 * 7;
 
 async function setupAuthorizedEditor(page: Parameters<typeof mockCampaignApi>[0]) {
   await enableE2eWallet(page);
-  await mockProofApi(page, ADDR, [{
-    leafIndex: 0,
+  const leafData = {
     beneficiary: creatorWallet,
     amount: 1000000000,
     releaseType: 0,
@@ -38,7 +38,9 @@ async function setupAuthorizedEditor(page: Parameters<typeof mockCampaignApi>[0]
     cliffTime: pastCliff(),
     endTime: pastCliff(),
     milestoneIdx: 0,
-  }]);
+  };
+  await mockLeavesApi(page, ADDR, [leafData]);
+  await mockProofApi(page, ADDR, [{ leafIndex: 0, ...leafData }]);
   await mockCampaignApi(page, ADDR, {
     leafCount: 3,
     cancellable: true,

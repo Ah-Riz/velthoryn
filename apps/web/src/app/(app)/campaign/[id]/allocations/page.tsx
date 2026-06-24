@@ -20,6 +20,7 @@ type OnChainTreeState = {
   cancellable: boolean;
   cancelAuthority: PublicKey | null;
   cancelledAt: BN | null;
+  totalClaimed: BN;
 };
 
 const ONCHAIN_TREE_FETCH_TIMEOUT_MS = 8000;
@@ -96,6 +97,7 @@ export default function CampaignAllocationsPage({
         cancellable: account.cancellable,
         cancelAuthority: account.cancelAuthority ?? null,
         cancelledAt: account.cancelledAt ?? null,
+        totalClaimed: account.totalClaimed ?? new BN(0),
       });
     } catch {
       // On-chain fetch failed — will attempt fallback to indexed API data below.
@@ -120,6 +122,7 @@ export default function CampaignAllocationsPage({
         cancellable: d.cancellable,
         cancelAuthority: d.cancelAuthority ? new PublicKey(d.cancelAuthority) : null,
         cancelledAt: d.cancelledAt !== null ? new BN(d.cancelledAt) : null,
+        totalClaimed: new BN(String(d.totalClaimed ?? "0")),
       });
     } catch {
       setError("Failed to load campaign state.");
@@ -155,31 +158,39 @@ export default function CampaignAllocationsPage({
     setFullLeaves([]);
     setLeavesFetched(false);
 
-    if (!detail?.recipients?.length) {
+    if (!detail?.leafCount) {
       setLeavesFetched(true);
       return;
     }
 
     async function fetchLeaves() {
       try {
-        const allLeaves: typeof fullLeaves = [];
-        for (const r of detail!.recipients) {
-          const res = await fetch(`/api/campaigns/${treeAddress}/proof?beneficiary=${r.beneficiary}&all=true`);
-          if (!res.ok) continue;
-          const data = await res.json() as { leaves: Array<{ leaf: { beneficiary: string; amount: string | number; releaseType: number; startTime: string | number; cliffTime: string | number; endTime: string | number; milestoneIdx: number } }> };
-          for (const l of data.leaves) {
-            allLeaves.push({
-              beneficiary: l.leaf.beneficiary,
-              amount: String(l.leaf.amount),
-              releaseType: l.leaf.releaseType,
-              startTime: String(l.leaf.startTime),
-              cliffTime: String(l.leaf.cliffTime),
-              endTime: String(l.leaf.endTime),
-              milestoneIdx: l.leaf.milestoneIdx,
-            });
-          }
+        const res = await fetch(`/api/campaigns/${treeAddress}/leaves`);
+        if (!res.ok) return;
+        const data = await res.json() as {
+          leaves: Array<{
+            beneficiary: string;
+            amount: string | number;
+            releaseType: number;
+            startTime: string | number;
+            cliffTime: string | number;
+            endTime: string | number;
+            milestoneIdx: number;
+          }>;
+        };
+        if (!cancelled) {
+          setFullLeaves(
+            data.leaves.map((l) => ({
+              beneficiary: l.beneficiary,
+              amount: String(l.amount),
+              releaseType: l.releaseType,
+              startTime: String(l.startTime),
+              cliffTime: String(l.cliffTime),
+              endTime: String(l.endTime),
+              milestoneIdx: l.milestoneIdx,
+            })),
+          );
         }
-        if (!cancelled) setFullLeaves(allLeaves);
       } catch { /* ignore */ }
       finally {
         if (!cancelled) setLeavesFetched(true);
@@ -189,7 +200,7 @@ export default function CampaignAllocationsPage({
     return () => {
       cancelled = true;
     };
-  }, [detail?.recipients, treeAddress]);
+  }, [treeAddress, detail?.leafCount]);
 
   const canRotate = canRotateRoot({
     viewer: publicKey,
@@ -200,7 +211,11 @@ export default function CampaignAllocationsPage({
     leafCount: treeState?.leafCount ?? detail?.leafCount ?? 0,
   });
 
-  const hasAnyClaim = (detail?.analytics.claimCount ?? 0) > 0;
+  // Primary: on-chain total_claimed (immune to indexer lag).
+  // Secondary: DB claimCount as fallback when on-chain fetch failed.
+  const hasAnyClaim =
+    (treeState?.totalClaimed?.gtn(0) ?? false) ||
+    (detail?.analytics.claimCount ?? 0) > 0;
   const allVested =
     detail !== undefined &&
     Number(detail.totalSupply) > 0 &&
@@ -242,6 +257,22 @@ export default function CampaignAllocationsPage({
     const submittingStartedAt = Date.now();
     setSubmitting(true);
     try {
+      // Guard 0: re-fetch on-chain total_claimed right before submitting to close
+      // the race window where a claim lands after page load but before this submit.
+      if (program) {
+        try {
+          const freshTree = await (program.account as any).vestingTree.fetch(new PublicKey(treeAddress));
+          const freshClaimed = new BN(freshTree.totalClaimed?.toString() ?? "0");
+          if (freshClaimed.gtn(0)) {
+            toast("Cannot update allocations — a claim was made after this page loaded. Please refresh.", "error");
+            setSubmitting(false);
+            return;
+          }
+        } catch {
+          // On-chain re-check failed — fall through, the UI-level guard already ran.
+        }
+      }
+
       // Step 1: Call prepare API to build new Merkle tree
       const recipients = rows.map((r) => ({
         beneficiary: r.beneficiary,

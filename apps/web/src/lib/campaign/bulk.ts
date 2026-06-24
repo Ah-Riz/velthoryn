@@ -253,8 +253,13 @@ export function parseBulkCsv(
   });
 
   const issues: BulkCsvIssue[] = [];
+  // Milestone rows carry per-row unlock dates as optional — startTime is ignored
+  // in the vesting math and cliffTime defaults to 0 (immediate, purely creator-gated)
+  // when omitted. Cliff/Linear still require explicit dates.
   const requiredHeaders: BulkHeader[] = useSharedSchedule
     ? ["beneficiary", "amount"]
+    : expectedReleaseType === 2
+    ? ["beneficiary", "amount", "releaseType"]
     : ["beneficiary", "amount", "releaseType", "startTime", "cliffTime"];
 
   for (const header of requiredHeaders) {
@@ -304,12 +309,18 @@ export function parseBulkCsv(
       );
     }
 
-    const startTime = useSharedSchedule ? sharedSchedule!.startTime : parseTimestamp(startTimeRaw);
-    let cliffTime = useSharedSchedule ? sharedSchedule!.cliffTime : parseTimestamp(cliffTimeRaw);
+    // For milestone rows, time fields are optional: startTime is ignored by vested(),
+    // cliffTime defaults to 0 (no time gate — purely creator-released), endTime mirrors cliffTime.
+    const isMilestoneRow = expectedReleaseType === 2;
+    const startTime = useSharedSchedule ? sharedSchedule!.startTime
+      : (isMilestoneRow && !startTimeRaw.trim() ? 0 : parseTimestamp(startTimeRaw));
+    let cliffTime = useSharedSchedule ? sharedSchedule!.cliffTime
+      : (isMilestoneRow && !cliffTimeRaw.trim() ? 0 : parseTimestamp(cliffTimeRaw));
     if (!useSharedSchedule && releaseType === 1 && (!cliffTimeRaw.trim() || cliffTimeRaw.trim() === "0")) {
       cliffTime = startTime;
     }
-    const endTime = useSharedSchedule ? sharedSchedule!.endTime : parseTimestamp(endTimeRaw);
+    const endTime = useSharedSchedule ? sharedSchedule!.endTime
+      : (isMilestoneRow && !endTimeRaw.trim() ? cliffTime : parseTimestamp(endTimeRaw));
     // The shared schedule is validated once by the caller (per-campaign); per-row
     // schedule validation only runs when each row carries its own dates.
     const scheduleError = useSharedSchedule
@@ -542,15 +553,18 @@ export function bulkCsvTemplateForType(type: "cliff" | "linear" | "milestone"): 
   }
   if (type === "linear") {
     return [
-      header,
-      `${addr1},1000,Linear,${start},${start},${end},0`,
-      `${addr2},2500,Linear,${start},${start},${end},0`,
+      "beneficiary,amount,releaseType,startTime,cliffTime,endTime",
+      `${addr1},1000,Linear,${start},${start},${end}`,
+      `${addr2},2500,Linear,${start},${start},${end}`,
     ].join("\n");
   }
+  // Milestone: startTime and endTime are omitted — startTime is ignored in vesting math,
+  // endTime must equal cliffTime and is inferred by the parser. cliffTime is optional
+  // (leave empty for no time gate; claim opens whenever creator releases the milestone).
   return [
-    header,
-    `${addr1},1000,Milestone,${start},${ms1},${ms1},0`,
-    `${addr2},2500,Milestone,${start},${ms2},${ms2},1`,
-    `${addr3},5000,Milestone,${start},${ms3},${ms3},2`,
+    "beneficiary,amount,releaseType,cliffTime,milestoneIdx",
+    `${addr1},1000,Milestone,${ms1},0`,
+    `${addr2},2500,Milestone,${ms2},1`,
+    `${addr3},5000,Milestone,${ms3},2`,
   ].join("\n");
 }
