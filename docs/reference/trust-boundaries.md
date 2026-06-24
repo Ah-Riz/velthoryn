@@ -33,7 +33,7 @@ This reference documents the authentication and authorization model for every AP
 | `/api/campaigns/:treeAddress/proof` | GET | 60/min | Merkle proof lookup by beneficiary |
 | `/api/campaigns/:treeAddress/claims` | GET | 60/min | Claim history for a campaign |
 | `/api/campaigns/:treeAddress/timeline` | GET | 60/min | Event timeline for dashboard |
-| `/api/campaigns/prepare` | POST | 60/min | Server-side Merkle tree construction (stateless) |
+| `/api/campaigns/prepare` | POST | 10/min | Server-side Merkle tree construction (stateless) |
 | `/api/beneficiary/:address/campaigns` | GET | 60/min | Campaigns where address is a beneficiary |
 | `/api/beneficiary/:address/vesting-progress` | GET | 60/min | Aggregated vesting progress |
 | `/api/activity/:address` | GET | 60/min | Cross-campaign activity feed |
@@ -76,6 +76,10 @@ All wallet-authenticated routes require the `Authorization` header with an ed255
 
 {% hint style="warning" %}
 The `PATCH /status` endpoint previously allowed direct writes of `paused` and `cancelledAt` to the database, creating a trust gap with on-chain state. Status now flows exclusively from indexed events (`CampaignPaused`, `CampaignUnpaused`, `CampaignCancelled`).
+{% endhint %}
+
+{% hint style="danger" %}
+**Known divergence (as of 2026-06-24):** despite the "Removed" status above, the `PATCH /status` handler **still exists in code** (`apps/web/src/app/api/campaigns/[treeAddress]/status/route.ts`) and remains callable — public, no auth, 10/min. Until it is deleted (or honestly re-documented), the "indexer-only" boundary described here is aspirational, not enforced. Tracked in `docs/internal/tracking/PENDING_WORK.md`.
 {% endhint %}
 
 ---

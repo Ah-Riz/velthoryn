@@ -8,7 +8,7 @@ Set up your local environment and run the test suite in under 10 minutes.
 | --------------- | ------------ | ------------------------------------------- |
 | Rust            | stable       | [rustup.rs](https://rustup.rs/)             |
 | Solana CLI      | >= 2.1       | `sh -c "$(curl -sSfL https://release.anza.xyz/stable/install)"` |
-| Anchor CLI      | 1.0.0        | `cargo install --git https://github.com/coral-xyz/anchor --tag v0.32.1 anchor-cli` |
+| Anchor CLI      | 1.0.0        | `cargo install --git https://github.com/coral-xyz/anchor avm --locked --force && avm install 1.0.0 && avm use 1.0.0` |
 | Node.js         | >= 20        | [nodejs.org](https://nodejs.org/)           |
 | pnpm            | >= 10        | `corepack enable && corepack prepare pnpm@latest --activate` |
 

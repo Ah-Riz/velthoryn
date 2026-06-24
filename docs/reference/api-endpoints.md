@@ -19,7 +19,7 @@ The Velora backend API is built as Next.js Route Handlers running on Vercel serv
 
 ## Database Schema
 
-The backend uses four PostgreSQL tables managed by Drizzle ORM.
+The backend uses PostgreSQL tables managed by Drizzle ORM. The complete schema (13 tables, RLS, indexes, migrations) is documented in [Database Schema](database-schema.md); the four most-referenced tables are summarized below as a quick reference.
 
 ### `campaigns`
 
@@ -58,6 +58,7 @@ Merkle root history for tracking root rotations.
 | `campaign_id` | `INTEGER FK` | References `campaigns`, `ON DELETE CASCADE` |
 | `merkle_root` | `TEXT NOT NULL` | Hex, 64 chars |
 | `leaf_count` | `INTEGER NOT NULL` | Leaf count for this version |
+| `min_cliff_time` | `BIGINT NOT NULL` | Minimum leaf `cliff_time` for this version |
 | `ipfs_cid` | `TEXT` | Pinata CID for full leaf+proof JSON |
 | `version` | `INTEGER NOT NULL` | 1-based, increments per rotation |
 | `created_at` | `BIGINT NOT NULL` | Unix timestamp |
@@ -136,7 +137,7 @@ All routes return an `X-API-Version: 1` header. All `u64`/`i64` values are seria
 
 | Method | Path | Auth | Description |
 |--------|------|------|-------------|
-| `POST` | `/api/campaigns/prepare` | Public | Build Merkle tree server-side. Returns `merkleRoot`, `leafCount`, `minCliffTime`, and per-leaf proofs. Rate limit: 60/min. |
+| `POST` | `/api/campaigns/prepare` | Public | Build Merkle tree server-side. Returns `merkleRoot`, `leafCount`, `minCliffTime`, and per-leaf proofs. Rate limit: 10/min. |
 | `POST` | `/api/campaigns/import` | Wallet | CSV bulk recipient import. |
 
 ### Beneficiary
@@ -164,6 +165,7 @@ All routes return an `X-API-Version: 1` header. All `u64`/`i64` values are seria
 | `GET` | `/api/health` | Public | Liveness check (DB + RPC). Returns 503 when degraded. |
 | `POST` | `/api/simulate-vesting` | Public | Pure math vesting curve simulation. Rate limit: 30/min. |
 | `GET` | `/api/schedule-templates` | Public | Preset vesting schedule templates for the creation UI. |
+| `GET` | `/api/prices` | Public | Token price lookup via CoinGecko (native SOL, wSOL, SPL mints). 60s server-side cache. Rate limit: 20/min. |
 | `POST` | `/api/waitlist` | Public | Email signup. Rate limit: 5/min. |
 | `GET` | `/api/waitlist` | Admin | Export waitlist (JSON or CSV). Requires `x-admin-key`. |
 
@@ -172,6 +174,10 @@ All routes return an `X-API-Version: 1` header. All `u64`/`i64` values are seria
 | Method | Path | Status | Notes |
 |--------|------|--------|-------|
 | `PATCH` | `/api/campaigns/:treeAddress/status` | **Removed** | Previously wrote `paused`/`cancelledAt` directly to DB. Status must now come from the on-chain indexer. Do not call this endpoint. |
+
+{% hint style="danger" %}
+**Known divergence (as of 2026-06-24):** this route is documented as Removed, but the handler **still exists in code** at `apps/web/src/app/api/campaigns/[treeAddress]/status/route.ts` — it is public (no auth, 10/min rate limit) and writes `paused` / `cancelledAt` / `totalClaimed` / `instantRefunded` directly to the database. The "status flows only from the indexer" boundary is therefore **not yet enforced by code**. Resolution — remove the route to match this boundary, or re-document it as a live endpoint — is pending. See `docs/internal/tracking/PENDING_WORK.md`.
+{% endhint %}
 
 ---
 

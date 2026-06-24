@@ -17,6 +17,7 @@
 * [Schedule Types](reference/schedule-types.md)
 * [Error Codes](reference/error-codes.md)
 * [API Endpoints](reference/api-endpoints.md)
+* [Database Schema](reference/database-schema.md)
 * [Compute Budget](reference/compute-budget.md)
 * [Trust Boundaries](reference/trust-boundaries.md)
 
