@@ -310,3 +310,24 @@ export async function mockProofApi(
     });
   });
 }
+
+export async function mockLeavesApi(
+  page: Page,
+  treeAddress: string,
+  leaves: Array<{
+    beneficiary: string;
+    amount: number | string;
+    releaseType: number;
+    startTime: number | string;
+    cliffTime: number | string;
+    endTime: number | string;
+    milestoneIdx: number;
+  }>,
+) {
+  await page.route(`/api/campaigns/${treeAddress}/leaves`, async (route) => {
+    await route.fulfill({
+      json: { leaves },
+      status: 200,
+    });
+  });
+}
