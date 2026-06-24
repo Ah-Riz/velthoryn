@@ -36,6 +36,9 @@
 | [G-06](#g-06) | 7-day grace period too short | 🟡 OPEN | Yes |
 | [G-07](#g-07) | Linear `cliffTime` naming misleading | 🟡 OPEN | No (docs+UI) |
 | [G-08](#g-08) | `total_supply` immutable — no top-up | 🟡 OPEN | Yes |
+| [G-09](#g-09) | Root rotation trust model undocumented to recipients | 🟡 OPEN | No (docs + UI) |
+| [G-10](#g-10) | Allocation Editor: schedule fields invisible / uneditable | 🟡 OPEN | No |
+| [G-11](#g-11) | Allocation Editor: new rows allow release type mismatch | 🟡 OPEN | No |
 | [G-C1](#g-c1) | PER_LEAF_CAP = 8 cliff/linear leaves max | ⚪ CAP | — |
 | [G-C2](#g-c2) | Max 256 milestones per beneficiary | ⚪ CAP | — |
 | [G-C3](#g-c3) | No bulk claim instruction | ⚪ CAP | — |
@@ -380,6 +383,107 @@ this. It exists only in the leaf byte layout for potential future use.
 
 ---
 
+### G-09
+**Root rotation trust model undocumented to recipients** — 🟡 OPEN (docs + UI)
+
+**Description:**
+When a campaign has `cancellable = true`, a recipient's allocation is **not guaranteed on-chain
+until the first claim is made** (or until G-M1's `total_claimed == 0` guard is added on-chain).
+Before that event, the cancel authority can silently change any recipient's wallet, amount, or
+remove them entirely from the Merkle tree. Neither the campaign detail page, the allocation editor,
+nor any public documentation communicates this trust boundary to recipients.
+
+**Connection to user research (Week 2 BD validation):**
+Ferdinand's pain point: *"Ga dibilang ada vesting dan tiba-tiba ada vesting jadi kecewa aja"* —
+recipients are already upset about undisclosed vesting terms. Undisclosed mutability is the same
+class of problem, but worse: the allocation itself (not just the schedule) can change without
+notification. The BD report's core finding is that *"both project teams and contributors are
+operating on faith rather than verifiable on-chain guarantees"* — G-09 is the gap between that
+promise and reality.
+
+**Comparison with Sablier / Streamflow:**
+Sablier guarantees allocation from block 0 of stream creation — no editability window.
+Velthoryn's `cancellable = true` model is closer to a *pre-launch allocation proposal*
+than a *finalized vesting grant* until the first claim locks the tree.
+
+**Required fix (no on-chain change needed):**
+1. **Campaign detail page:** Add disclosure banner for `cancellable = true` campaigns:
+   > *"Allocations for this campaign may be updated by the cancel authority until the first
+   > claim is made. After any recipient claims, the allocation list is permanently frozen."*
+2. **Campaign creation wizard:** Add a "What does Cancellable mean?" tooltip that includes
+   the above disclosure alongside the cancel authority field.
+3. **Public docs:** Add a "Trust Model" section to `docs/operations/root-rotation.md` that
+   explicitly states the pre-first-claim mutability window and compares it to Sablier's model.
+
+**Note:** G-09 becomes partially self-healing once G-M1's on-chain fix is in place, because the
+UI disclosure will match reality more precisely. But documentation is independently valuable
+regardless of G-M1 status.
+
+---
+
+### G-10
+**Allocation Editor — per-recipient schedule fields invisible and uneditable** — 🟡 OPEN
+
+**Description:**
+The Allocation Editor table renders three columns: Recipient Wallet, Amount, Type. The per-leaf
+schedule fields (`cliffTime`, `endTime`, `startTime`) are loaded from the DB (`/leaves` endpoint)
+and silently passed through when rebuilding the Merkle root — they are never displayed and cannot
+be modified through the editor.
+
+**Consequences:**
+1. **Cannot fix wrong dates:** If a recipient was created with the wrong cliff date (e.g.,
+   `2025-06-01` instead of `2026-06-01`), there is no path to correct it via the Allocation
+   Editor. The admin must cancel the entire campaign and recreate it.
+2. **Blind signing:** The cancel authority performing a root rotation cannot verify each
+   recipient's schedule before submitting the new root. They could unknowingly re-commit
+   stale or incorrect schedule data alongside the intended allocation changes.
+3. **Partial coverage:** The root rotation use case (fix typos, add team members) is
+   well-served for wallet + amount edits but is architecturally blind to schedule errors.
+   This asymmetry is invisible to users.
+
+**Architecture note:** Schedule fields ARE hashed into the leaf, so changing them via root
+rotation is fully supported by the program — this is a UI omission, not a protocol limitation.
+
+**Required fix (UI only, no on-chain change):**
+- Add a collapsible sub-row or tooltip per table row showing `cliffTime` and `endTime` as
+  human-readable dates (read-only for existing rows).
+- For new rows: allow editing all schedule fields with validation (`startTime ≤ cliffTime ≤ endTime`).
+- For existing rows: show schedule read-only with a tooltip explaining "to change the schedule,
+  remove this row and add it again with the correct dates" — mirrors the existing `releaseType`
+  lock pattern (G-S4).
+
+---
+
+### G-11
+**Allocation Editor — new rows allow release type mismatch with existing campaign** — 🟡 OPEN
+
+**Description:**
+When adding a new recipient row in the Allocation Editor, the `releaseType` select shows all
+three options (Cliff / Linear / Milestone) regardless of the original campaign type. A campaign
+created as "Cliff" can have a new "Linear" recipient added through the editor. The prepare API
+does not validate cross-leaf type consistency.
+
+**Consequences:**
+1. **Mixed-type trees:** A tree with Cliff + Linear recipients has semantically conflicting
+   schedule fields. For Cliff, `endTime` should equal `cliffTime` (instantaneous release).
+   For Linear, `endTime` is the stream end date. A mixed tree has no coherent type identity.
+2. **Silent Milestone failure:** Adding a `releaseType = 2` (Milestone) leaf to a non-milestone
+   campaign requires the creator to call `set_milestone_released` before the recipient can claim.
+   For a campaign not designed as milestone-based, this step is almost certainly missed,
+   leaving the new recipient permanently unable to claim.
+3. **Recipient confusion:** Campaign pages surface a single "type" label. A mixed-type tree
+   has no correct label.
+
+**Required fix (frontend only):**
+In `AllocationEditor`: when `existingRowIds` is non-empty, infer the dominant `releaseType`
+from existing rows. For new rows:
+- Default the type selector to the dominant type.
+- If a different type is selected: show an inline warning explaining the risk.
+- If `releaseType = 2` (Milestone) is selected in a non-milestone campaign: show a blocking
+  error explaining that `set_milestone_released` must be called before the recipient can claim.
+
+---
+
 ### G-08
 **`total_supply` is immutable — no top-up after creation** — 🟡 OPEN
 
@@ -499,10 +603,13 @@ zero. The `cancel_campaign` instruction has no path to skip the grace period for
 
 | ID | Effort | Impact | Recommended Priority |
 |----|--------|--------|----------------------|
-| G-M1 (rug pull) | Low (1 line Rust) | Critical | P0 — before mainnet |
+| G-M1 (rug pull on-chain guard) | Low (1 line Rust + error + test) | Critical | **P0 — fix now, before any public campaign** |
+| G-09 (trust model docs) | Trivial (docs + UI text) | High | **P0 — fix now, no risk, high trust value** |
 | G-04 (cancel cooldown) | Low | High | P1 |
 | G-06 (grace period duration) | Trivial | High | P1 |
 | G-02 (cancel_stream notice) | Medium | High | P1 |
+| G-11 (mixed release types) | Low (frontend only) | Medium | P2 |
+| G-10 (schedule fields in editor) | Medium (frontend only) | Medium | P2 |
 | G-05 (grace inconsistency) | Follows G-02 | Medium | P2 |
 | G-03 (milestone trust) | High | High | P2 (design first) |
 | G-08 (top-up) | Medium | Medium | P3 |
