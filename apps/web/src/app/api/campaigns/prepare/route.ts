@@ -8,6 +8,7 @@ import { ValidationError } from "@/lib/api/errors";
 import { withRoute } from "@/lib/api/route-wrapper";
 import { prepareCampaignRequestSchema } from "@/lib/api/validators";
 import { derivePda } from "@/lib/anchor/client";
+import { MAX_CLIFF_LINEAR_LEAVES_PER_BENEFICIARY } from "@/lib/campaign/limits";
 import { getRequestId } from "@/lib/api/request-id";
 import { logger } from "@/lib/api/logger";
 
@@ -67,20 +68,34 @@ async function postPrepareHandler(request: NextRequest) {
     }
   }
 
-  // Known Issue #29: reject multiple cliff/linear leaves per beneficiary.
+  // Per-leaf cap (ADR-003): the on-chain ClaimRecord tracks up to
+  // PER_LEAF_CAP=8 cliff/linear leaves per beneficiary. Allow up to that cap;
+  // reject more so the campaign doesn't build off-chain only to fail with
+  // PerLeafCapExceeded at claim time. Milestone leaves (release_type 2) use a
+  // bitmap and don't consume ledger slots, so they're exempt.
   const cliffLinearSeen = new Map<string, number[]>();
   for (let i = 0; i < data.recipients.length; i++) {
     const r = data.recipients[i];
     if (r.releaseType !== 2) {
       const prev = cliffLinearSeen.get(r.beneficiary) ?? [];
-      if (prev.length > 0) {
-        throw new ValidationError(
-          `Known Issue #29: beneficiary ${r.beneficiary} has multiple cliff/linear leaves ` +
-            `(indices [${prev.join(", ")}, ${i}]). Use separate campaigns instead.`,
-        );
-      }
       cliffLinearSeen.set(r.beneficiary, [...prev, i]);
     }
+  }
+  const overCap: string[] = [];
+  for (const [beneficiary, indices] of cliffLinearSeen) {
+    if (indices.length > MAX_CLIFF_LINEAR_LEAVES_PER_BENEFICIARY) {
+      overCap.push(
+        `beneficiary=${beneficiary} has ${indices.length} cliff/linear leaves (indices [${indices.join(", ")}])`,
+      );
+    }
+  }
+  if (overCap.length > 0) {
+    throw new ValidationError(
+      `Too many cliff/linear leaves for one beneficiary. ` +
+        `The on-chain per-leaf ledger supports at most ${MAX_CLIFF_LINEAR_LEAVES_PER_BENEFICIARY} cliff/linear leaves per beneficiary per campaign. ` +
+        `Move the extra leaves to a separate campaign. ` +
+        `Over cap: ${overCap.join("; ")}`,
+    );
   }
 
   let recipients: CampaignRecipient[];

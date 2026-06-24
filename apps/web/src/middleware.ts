@@ -9,7 +9,7 @@ function resolveAllowedOrigin(): string | null {
   const configured = process.env.ALLOWED_ORIGIN?.trim();
   if (configured && configured !== "*") return configured;
   if (process.env.NODE_ENV === "production") {
-    return "https://velthoryn.site";
+    return "https://www.velthoryn.site";
   }
   return configured ?? "*";
 }
