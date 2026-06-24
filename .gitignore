@@ -63,6 +63,8 @@ Thumbs.db
 # Playwright MCP
 .playwright-mcp/
 apps/web/test-results/
+# Generated measurement output from pnpm test:compression (regenerable)
+tests/results/
 .mcp.json
 
 # Private working docs

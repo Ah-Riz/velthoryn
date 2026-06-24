@@ -13,6 +13,8 @@
     "test": "bash scripts/test-localnet.sh",
     "test:localnet": "bash scripts/test-localnet.sh",
     "test:devnet": "bash scripts/test-devnet.sh",
+    "test:compression": "COMPRESSION_RUN=1 ANCHOR_TEST_GLOB='tests/merkle-fee-compression.spec.ts' bash scripts/test-localnet.sh",
+    "test:compression:devnet": "COMPRESSION_RUN=1 ANCHOR_TEST_GLOB='tests/merkle-fee-compression.spec.ts' bash scripts/test-devnet.sh",
     "lint": "pnpm -r --if-present lint",
     "vercel:link": "vercel link --cwd apps/web",
     "deploy:web": "vercel deploy --prod --cwd apps/web"
