@@ -3,7 +3,7 @@ import Link from "next/link";
 import { SmoothScrollLink } from "@/components/landing/SmoothScrollLink";
 
 const repoUrl = "https://github.com/Ah-Riz/velthoryn";
-const docsBase = `${repoUrl}/tree/main/docs`;
+const docsBase = "https://docs.velthoryn.site";
 
 export function Footer() {
   return (
