@@ -29,7 +29,7 @@ export function GracePeriodCountdown({
     const isUrgent = graceState.remaining < 86400n;
     return (
       <span
-        className={`text-sm font-medium ${isUrgent ? "text-red-400" : "text-amber-400"} ${className ?? ""}`}
+        className={`text-sm font-medium ${isUrgent ? "text-red-700 dark:text-red-400" : "text-amber-700 dark:text-amber-400"} ${className ?? ""}`}
       >
         {graceState.countdown} remaining
       </span>
@@ -37,7 +37,7 @@ export function GracePeriodCountdown({
   }
 
   return (
-    <span className={`text-sm font-medium text-red-400 ${className ?? ""}`}>
+    <span className={`text-sm font-medium text-red-700 dark:text-red-400 ${className ?? ""}`}>
       Grace period expired
     </span>
   );

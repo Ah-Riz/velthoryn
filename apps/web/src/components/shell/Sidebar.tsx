@@ -82,14 +82,14 @@ function SidebarContent({
   return (
     <>
       {/* Header */}
-      <div className={`flex h-16 items-center border-b border-[#1c2130] ${collapsed ? "justify-center" : "gap-2.5 px-4"}`}>
+      <div className={`flex h-16 items-center border-b border-border ${collapsed ? "justify-center" : "gap-2.5 px-4"}`}>
         {collapsed ? (
           /* Collapsed: whole logo area = clickable expand button, hover reveals icon */
           <button
             type="button"
             onClick={onToggleCollapse}
             aria-label="Expand sidebar"
-            className="group relative flex h-11 w-11 items-center justify-center rounded-xl transition-all duration-150 hover:bg-[#13161f] active:scale-95"
+            className="group relative flex h-11 w-11 items-center justify-center rounded-xl transition-all duration-150 hover:bg-muted active:scale-95"
           >
             <img
               src="/brand/velthoryn-logo-sm.svg"
@@ -97,7 +97,7 @@ function SidebarContent({
               className="h-7 w-7 shrink-0 transition-opacity duration-150 group-hover:opacity-0"
             />
             <span className="absolute inset-0 flex items-center justify-center opacity-0 transition-opacity duration-150 group-hover:opacity-100">
-              <svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#a78bfa" strokeWidth="2.25" strokeLinecap="round" strokeLinejoin="round">
+              <svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--accent-light)" strokeWidth="2.25" strokeLinecap="round" strokeLinejoin="round">
                 <path d="M13 7l5 5-5 5" />
                 <path d="M6 7l5 5-5 5" />
               </svg>
@@ -107,13 +107,12 @@ function SidebarContent({
           /* Expanded: logo + text + collapse/close button */
           <>
             <img src="/brand/velthoryn-logo-sm.svg" alt="Velthoryn" className="h-8 w-8 shrink-0" />
-            <span className="text-[15px] font-semibold tracking-tight text-[#e5e7eb]">Velthoryn</span>
-            <span className="rounded-full border border-purple-500/20 bg-purple-500/10 px-1.5 py-0.5 text-[9px] font-medium uppercase tracking-wider text-purple-400">Devnet</span>
+            <span className="text-[15px] font-semibold tracking-tight text-foreground">Velthoryn</span>
             <button
               type="button"
               onClick={onNavClick ?? onToggleCollapse}
               aria-label={onNavClick ? "Close sidebar" : "Collapse sidebar"}
-              className="ml-auto flex h-8 w-8 items-center justify-center rounded-lg text-[#64748b] transition-all duration-150 hover:bg-[#13161f] hover:text-[#a78bfa] active:scale-95"
+              className="ml-auto flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground transition-all duration-150 hover:bg-muted hover:text-accent-light active:scale-95"
             >
               {onNavClick ? (
                 /* Mobile: X close */
@@ -157,11 +156,11 @@ function SidebarContent({
                       : "gap-3 px-3 py-2.5 text-[13px] font-medium"
                   } ${
                     isActive
-                      ? "border border-[#7c3aed]/25 bg-[#7c3aed]/12 text-[#a78bfa]"
-                      : "border border-transparent text-[#64748b] hover:border-[#222838] hover:bg-[#13161f] hover:text-[#b4b9c5]"
+                      ? "border border-primary/25 bg-primary/12 text-accent-light"
+                      : "border border-transparent text-muted-foreground hover:border-line-hover hover:bg-muted hover:text-secondary-foreground"
                   }`}
                 >
-                  <span className={`relative shrink-0 ${isActive ? "text-[#a78bfa]" : "text-[#64748b]"}`}>
+                  <span className={`relative shrink-0 ${isActive ? "text-accent-light" : "text-muted-foreground"}`}>
                     {item.icon}
                     {showBadge && collapsed && (
                       <span className="absolute -right-0.5 -top-0.5 h-1.5 w-1.5 rounded-full bg-amber-400 shadow-[0_0_6px_rgba(251,191,36,0.5)]" />
@@ -207,7 +206,7 @@ export function Sidebar({
     <>
       {/* Desktop sidebar */}
       <aside
-        className={`fixed left-0 top-0 z-30 hidden h-screen flex-col border-r border-[#1c2130] bg-[#0b0d12] transition-[width] duration-200 ease-in-out lg:flex ${
+        className={`fixed left-0 top-0 z-30 hidden h-screen flex-col border-r border-border bg-background transition-[width] duration-200 ease-in-out lg:flex ${
           collapsed ? "w-[64px]" : "w-[240px]"
         }`}
       >
@@ -224,7 +223,7 @@ export function Sidebar({
             className="fixed inset-0 z-40 bg-black/60 backdrop-blur-sm lg:hidden"
             onClick={onMobileClose}
           />
-          <aside className="fixed left-0 top-0 z-50 flex h-screen w-[280px] flex-col border-r border-[#1c2130] bg-[#0b0d12] lg:hidden">
+          <aside className="fixed left-0 top-0 z-50 flex h-screen w-[280px] flex-col border-r border-border bg-background lg:hidden">
             <SidebarContent onNavClick={onMobileClose} />
           </aside>
         </>

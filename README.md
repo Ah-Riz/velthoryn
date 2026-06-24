@@ -48,7 +48,7 @@ velthoryn/
 
 **Campaign-level schedule (cliff/linear):** recipients with different amounts (e.g. 0.5 SOL vs 1 SOL) now unlock at the same instant. The schedule (Start/Cliff/End for linear, Start/Cliff for cliff) is **campaign-level** — one shared schedule stamped on every leaf — instead of per-recipient. The on-chain schedule math was already correct; the fix is FE-only: the create flow (Manual + CSV) and the linear/cliff CSV templates now carry wallet + amount per recipient and one schedule per campaign. Milestone leaves keep their per-row unlock times. **No on-chain, prepare-route, or client-SDK changes.** Regression tests in `apps/web/tests/lib/bulk-campaign.test.ts` cover the 0.5-vs-1-SOL identical-schedule guarantee and milestone isolation.
 
-**Test results: 127+ SC tests PASS** (`pnpm test:localnet`); **569 web Vitest PASS** (API routes use Postgres in CI)
+**Test results: 127+ SC tests PASS** (`pnpm test:localnet`); **572 web Vitest PASS** (API routes use Postgres in CI)
 **BE–SC Merkle pipeline verified end-to-end**: 3-leaf campaigns (Cliff/Linear/Milestone) through prepare → POST (all leaves verified) → GET proof → verify. RLS on all Supabase tables. **Bootcamp acceptance: 8/8** — see [`docs/BE-SC-MERKLE-ACCEPTANCE-STATUS.md`](docs/BE-SC-MERKLE-ACCEPTANCE-STATUS.md).
 - Devnet + bankrun (`pnpm test:devnet`): **98 passing, 1 pending** — live breakdown in [`docs/DEVNET_TEST_RESULTS.md`](docs/DEVNET_TEST_RESULTS.md) (devnet RPC 75 + bankrun 24; T68 pending on RPC, covered by clock suite)
 - Native SOL tests: `tests/vesting-native-sol.spec.ts` via **solana-bankrun** (12 tests covering full SOL lifecycle)
@@ -94,10 +94,21 @@ For deeper reads:
 - [`docs/API_TRUST_BOUNDARIES.md`](docs/API_TRUST_BOUNDARIES.md) — every API route: public / wallet-auth / admin classification.
 - [`docs/PENDING_WORK.md`](docs/PENDING_WORK.md) — prioritized backlog from spec audit (updated as items land).
 - [`docs/KNOWN_ISSUE_29_DESIGN.md`](docs/KNOWN_ISSUE_29_DESIGN.md) — multi-leaf `claimed_amount` undercount — ✅ **fixed on-chain** 2026-06-16 (per-leaf ledger; ADR-003 superseded).
-- [`docs/week9/INSTRUCTION_REFERENCE.md`](docs/week9/INSTRUCTION_REFERENCE.md) — **every instruction**: accounts + constraints, args, behavior, full error-code table (6000–6040), events, TS examples.
+- [`docs/week9/INSTRUCTION_REFERENCE.md`](docs/week9/INSTRUCTION_REFERENCE.md) — **every instruction**: accounts + constraints, args, behavior, full error-code table (6000–6041), events, TS examples.
 - [`docs/week9/INTEGRATION_GUIDE.md`](docs/week9/INTEGRATION_GUIDE.md) — end-to-end creator + beneficiary walkthrough (prepare → create → fund → register → claim) with runnable TS snippets; SPL + native SOL.
 - [`docs/week9/ADRs/`](docs/week9/ADRs/) — Merkle-compressed vesting, keccak-256 + domain separation, Issue #29 on-chain fix (ADR-003, superseded — shipped).
 - [`docs/week9/BUG_LIST.md`](docs/week9/BUG_LIST.md) — Week 9 detection findings, fixes applied, and documented limitations.
+- [`docs/week9/FE_DOCUMENTATION_REVIEW.md`](docs/week9/FE_DOCUMENTATION_REVIEW.md) — FE-perspective review of instruction reference + integration guide; 4 FE ADRs; FE-SC interface matrix; error code coverage (6000–6041).
+- [`docs/week9/FE_TESTING_STATUS.md`](docs/week9/FE_TESTING_STATUS.md) — FE test suite status: Vitest 572/572, E2E 23 chromium specs + 10 signing specs, CI pipeline status.
+- [`docs/week9/FE_ARCHITECTURE.md`](docs/week9/FE_ARCHITECTURE.md) — FE tech stack, directory structure, data flow, state management, wallet integration, 8-state lifecycle, env vars.
+- [`docs/week9/FE_INTEGRATION_GUIDE.md`](docs/week9/FE_INTEGRATION_GUIDE.md) — **FE developer integration guide**: hooks + tx-builder walkthrough (create → claim → admin ops); code-first, abstraction-layer focused (vs raw Anchor SDK in INTEGRATION_GUIDE.md).
+- [`docs/week9/FE_HOOKS_REFERENCE.md`](docs/week9/FE_HOOKS_REFERENCE.md) — complete reference for all 21 hooks + tx-builder functions: params, return types, TanStack Query keys, usage snippets.
+- [`docs/week9/FE_COMPONENT_REFERENCE.md`](docs/week9/FE_COMPONENT_REFERENCE.md) — all 68 FE components with props, purpose, and usage examples.
+- [`docs/week9/FE_BUG_LOG.md`](docs/week9/FE_BUG_LOG.md) — 15 FE bugs (FE-BUG-01 to FE-BUG-15): root cause, fix status, prevention.
+- [`docs/week9/FE_E2E_GUIDE.md`](docs/week9/FE_E2E_GUIDE.md) — E2E quick start, mock wallet architecture, env setup, writing tests, debugging, CI.
+
+> **E2E setup note:** Set `NEXT_PUBLIC_E2E_MOCK_WALLET=1` in `.env.test.local` to run the Playwright chromium suite without a browser wallet extension. See [`docs/week9/FE_E2E_GUIDE.md`](docs/week9/FE_E2E_GUIDE.md) for full setup.
+- [`docs/FE_CHANGELOG.md`](docs/FE_CHANGELOG.md) — per-week FE changelog (Week 3–9) based on actual commit diffs.
 
 ## Prerequisites
 

@@ -55,18 +55,18 @@ export function RecipientListModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 px-4 backdrop-blur-sm">
-      <div className="w-full max-w-2xl rounded-3xl border border-white/[0.08] bg-[#0d1117] p-6 shadow-2xl">
+      <div className="w-full max-w-2xl rounded-3xl border border-foreground/[0.08] bg-card p-6 shadow-2xl">
         <div className="flex items-start justify-between gap-4">
           <div>
-            <h3 className="text-[20px] font-semibold text-white">Recipients</h3>
-            <p className="mt-1 text-[13px] text-[#8b92a5]">
+            <h3 className="text-[20px] font-semibold text-foreground">Recipients</h3>
+            <p className="mt-1 text-[13px] text-muted-foreground">
               Latest recipient list from the current campaign root.
             </p>
           </div>
           <button
             type="button"
             onClick={onClose}
-            className="rounded-xl border border-white/[0.08] bg-white/[0.03] px-3 py-2 text-[12px] font-medium text-white transition hover:bg-white/[0.06]"
+            className="rounded-xl border border-foreground/[0.08] bg-foreground/[0.03] px-3 py-2 text-[12px] font-medium text-foreground transition hover:bg-foreground/[0.06]"
           >
             Close
           </button>
@@ -78,7 +78,7 @@ export function RecipientListModal({
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Search recipient wallet"
-            className="w-full rounded-2xl border border-white/[0.08] bg-[#11161f] px-4 py-3 text-[13px] text-white outline-none transition focus:border-white/20"
+            className="w-full rounded-2xl border border-foreground/[0.08] bg-muted px-4 py-3 text-[13px] text-foreground outline-none transition focus:border-foreground/20"
           />
         </div>
 
@@ -92,59 +92,59 @@ export function RecipientListModal({
             return (
             <div
               key={recipient.beneficiary}
-              className="rounded-2xl border border-white/[0.06] bg-white/[0.02] px-4 py-4"
+              className="rounded-2xl border border-foreground/[0.06] bg-foreground/[0.02] px-4 py-4"
             >
               <div className="flex items-start justify-between gap-4">
                 <div className="min-w-0">
                   <div className="flex flex-wrap items-center gap-2">
-                    <p className="truncate font-mono text-[13px] text-white" title={recipient.beneficiary}>
+                    <p className="truncate font-mono text-[13px] text-foreground" title={recipient.beneficiary}>
                       {recipient.beneficiary}
                     </p>
                     {viewer === recipient.beneficiary && (
-                      <span className="inline-flex items-center rounded-full border border-violet-500/20 bg-violet-500/10 px-2 py-0.5 text-[10px] font-medium text-violet-300">
+                      <span className="inline-flex items-center rounded-full border border-violet-500/20 bg-violet-500/10 px-2 py-0.5 text-[10px] font-medium text-violet-700 dark:text-violet-300">
                         You
                       </span>
                     )}
                     <span
                       className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-medium ${
                         fullyClaimed
-                          ? "border border-emerald-500/20 bg-emerald-500/10 text-emerald-300"
+                          ? "border border-emerald-500/20 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300"
                           : partiallyClaimed
-                            ? "border border-amber-500/20 bg-amber-500/10 text-amber-300"
-                            : "border border-white/[0.08] bg-white/[0.03] text-[#8b92a5]"
+                            ? "border border-amber-500/20 bg-amber-500/10 text-amber-700 dark:text-amber-300"
+                            : "border border-foreground/[0.08] bg-foreground/[0.03] text-muted-foreground"
                       }`}
                     >
                       {fullyClaimed ? "Fully claimed" : partiallyClaimed ? "Partially claimed" : "Unclaimed"}
                     </span>
                   </div>
-                  <p className="mt-2 text-[11px] text-[#6f7c95]">
+                  <p className="mt-2 text-[11px] text-muted-foreground">
                     {recipient.leafCount} {recipient.leafCount === 1 ? "allocation" : "allocations"}
                   </p>
                 </div>
                 <button
                   type="button"
                   onClick={() => handleCopy(recipient.beneficiary)}
-                  className="shrink-0 rounded-xl border border-white/[0.08] bg-white/[0.03] px-3 py-2 text-[11px] font-medium text-white transition hover:bg-white/[0.06]"
+                  className="shrink-0 rounded-xl border border-foreground/[0.08] bg-foreground/[0.03] px-3 py-2 text-[11px] font-medium text-foreground transition hover:bg-foreground/[0.06]"
                 >
                   {copied === recipient.beneficiary ? "Copied" : "Copy"}
                 </button>
               </div>
 
               <div className="mt-4 grid gap-3 sm:grid-cols-2">
-                <div className="rounded-xl border border-white/[0.06] bg-[#11161f] px-3 py-3">
-                  <p className="text-[10px] uppercase tracking-[0.14em] text-[#6f7c95]">Allocation</p>
-                  <p className="mt-1.5 text-[14px] font-medium text-white">{formatAmount(recipient.allocation)}</p>
+                <div className="rounded-xl border border-foreground/[0.06] bg-muted px-3 py-3">
+                  <p className="text-[10px] uppercase tracking-[0.14em] text-muted-foreground">Allocation</p>
+                  <p className="mt-1.5 text-[14px] font-medium text-foreground">{formatAmount(recipient.allocation)}</p>
                 </div>
-                <div className="rounded-xl border border-white/[0.06] bg-[#11161f] px-3 py-3">
-                  <p className="text-[10px] uppercase tracking-[0.14em] text-[#6f7c95]">Claimed</p>
-                  <p className="mt-1.5 text-[14px] font-medium text-white">{formatAmount(recipient.claimedAmount)}</p>
+                <div className="rounded-xl border border-foreground/[0.06] bg-muted px-3 py-3">
+                  <p className="text-[10px] uppercase tracking-[0.14em] text-muted-foreground">Claimed</p>
+                  <p className="mt-1.5 text-[14px] font-medium text-foreground">{formatAmount(recipient.claimedAmount)}</p>
                 </div>
               </div>
             </div>
           )})}
 
           {filteredRecipients.length === 0 && (
-            <div className="rounded-2xl border border-white/[0.06] bg-white/[0.02] px-4 py-8 text-center text-[13px] text-[#8b92a5]">
+            <div className="rounded-2xl border border-foreground/[0.06] bg-foreground/[0.02] px-4 py-8 text-center text-[13px] text-muted-foreground">
               No recipient matched that wallet.
             </div>
           )}

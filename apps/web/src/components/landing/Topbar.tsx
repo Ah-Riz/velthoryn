@@ -5,6 +5,7 @@
 "use client";
 
 import Image from "next/image";
+import Link from "next/link";
 import { useState } from "react";
 import { SmoothScrollLink } from "./SmoothScrollLink";
 
@@ -46,6 +47,9 @@ export function Topbar() {
           ))}
         </nav>
         <div className="lp-topbar-actions">
+          <Link href="/dashboard" className="lp-btn ghost">
+            Open app
+          </Link>
           <SmoothScrollLink
             href="#waitlist"
             className="lp-btn waitlist-cta"
@@ -77,6 +81,13 @@ export function Topbar() {
               {link.label}
             </SmoothScrollLink>
           ))}
+          <Link
+            href="/dashboard"
+            className="lp-mobile-cta"
+            onClick={() => setMenuOpen(false)}
+          >
+            Open app <span className="arrow">&rarr;</span>
+          </Link>
           <SmoothScrollLink
             href="#waitlist"
             className="lp-mobile-cta"

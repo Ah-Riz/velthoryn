@@ -192,11 +192,191 @@ jobs:
         run: cd apps/web && pnpm db:migrate
 
       - name: Run Playwright E2E
-        run: cd apps/web && pnpm exec playwright test
+        run: cd apps/web && pnpm exec playwright test --project chromium
 
       - uses: actions/upload-artifact@v4
         if: failure()
         with:
           name: playwright-traces
+          path: apps/web/test-results/
+          retention-days: 7
+
+  playwright-signing-e2e:
+    name: Playwright Signing E2E (localnet)
+    if: false
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_USER: ci
+          POSTGRES_PASSWORD: ci
+          POSTGRES_DB: ci
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    env:
+      DATABASE_URL: "postgresql://ci:ci@127.0.0.1:5432/ci"
+      ADMIN_API_KEY: "ci-test-key"
+      NEXT_PUBLIC_E2E_MOCK_WALLET: "true"
+      CI: "true"
+      CARGO_INCREMENTAL: 0
+      CARGO_TERM_COLOR: always
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust stable
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@v2
+
+      - name: Cache Solana
+        uses: actions/cache@v4
+        id: solana-cache
+        with:
+          path: |
+            ~/.cache/solana
+            ~/.local/share/solana/install
+          key: solana-${{ runner.os }}-2.1.6
+          restore-keys: |
+            solana-${{ runner.os }}-
+
+      - name: Install Solana CLI 2.1.6
+        if: steps.solana-cache.outputs.cache-hit != 'true'
+        run: sh -c "$(curl -sSfL https://release.anza.xyz/v2.1.6/install)"
+
+      - name: Ensure Solana dirs and PATH
+        run: |
+          echo "$HOME/.local/share/solana/install/active_release/bin" >> $GITHUB_PATH
+          mkdir -p "$HOME/.cache/solana"
+          mkdir -p "$HOME/.config/solana"
+          SOLANA_BIN="$HOME/.local/share/solana/install/active_release/bin"
+          if [ ! -f "$HOME/.config/solana/id.json" ]; then
+            "$SOLANA_BIN/solana-keygen" new \
+              --no-bip39-passphrase --silent -o "$HOME/.config/solana/id.json"
+          fi
+
+      - name: Cache Anchor (avm)
+        uses: actions/cache@v4
+        id: anchor-cache
+        with:
+          path: |
+            ~/.avm
+            ~/.cargo/bin/avm
+            ~/.cargo/bin/anchor
+          key: anchor-avm-${{ runner.os }}-1.0.0
+
+      - name: Install Anchor CLI 1.0.0
+        if: steps.anchor-cache.outputs.cache-hit != 'true'
+        run: |
+          cargo install --git https://github.com/coral-xyz/anchor avm --locked --force
+          avm install 1.0.0
+          avm use 1.0.0
+
+      - name: Ensure Anchor CLI on PATH
+        run: |
+          echo "$HOME/.cargo/bin" >> $GITHUB_PATH
+          avm use 1.0.0
+          anchor --version
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: "pnpm"
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: Build Anchor program
+        env:
+          PROGRAM_KEYPAIR_JSON: ${{ secrets.PROGRAM_KEYPAIR_JSON }}
+          CARGO_TARGET_DIR: ${{ github.workspace }}/target
+        run: |
+          mkdir -p target/deploy
+          echo "$PROGRAM_KEYPAIR_JSON" > target/deploy/vesting-keypair.json
+          if [ ! -s target/deploy/vesting-keypair.json ]; then
+            echo "ERROR: PROGRAM_KEYPAIR_JSON secret is empty — add it under Settings → Secrets → Actions"
+            exit 1
+          fi
+          EXPECTED_ID="G6iaigUdi2btFwUc2N65twfxwA8Ew5uKKhKJ5RJa8wvu"
+          ACTUAL_ID=$(solana-keygen pubkey target/deploy/vesting-keypair.json)
+          if [ "$ACTUAL_ID" != "$EXPECTED_ID" ]; then
+            echo "ERROR: keypair generates $ACTUAL_ID but program expects $EXPECTED_ID"
+            exit 1
+          fi
+          anchor build
+
+      - name: Apply DB migrations
+        run: cd apps/web && pnpm db:migrate
+
+      - name: Install Playwright browsers
+        run: cd apps/web && pnpm exec playwright install --with-deps chromium
+
+      - name: Start solana-test-validator with vesting program
+        env:
+          PROGRAM_ID: "G6iaigUdi2btFwUc2N65twfxwA8Ew5uKKhKJ5RJa8wvu"
+          CARGO_TARGET_DIR: ${{ github.workspace }}/target
+        run: |
+          solana-test-validator \
+            --bpf-program $PROGRAM_ID target/deploy/vesting.so \
+            --reset \
+            --quiet &
+
+          echo "Waiting for solana-test-validator to be ready..."
+          for i in $(seq 1 30); do
+            if solana --url http://127.0.0.1:8899 slot > /dev/null 2>&1; then
+              echo "Validator ready (attempt $i)"
+              break
+            fi
+            echo "  attempt $i/30..."
+            sleep 2
+          done
+
+          if ! solana --url http://127.0.0.1:8899 slot > /dev/null 2>&1; then
+            echo "ERROR: solana-test-validator did not start within 60s"
+            exit 1
+          fi
+
+      - name: Start Next.js dev server (localnet RPC)
+        run: |
+          cd apps/web
+          NEXT_PUBLIC_RPC_ENDPOINT=http://127.0.0.1:8899 \
+          NEXT_PUBLIC_E2E_MOCK_WALLET=true \
+          nohup pnpm exec next dev -H 127.0.0.1 -p 3200 > /tmp/nextdev-signing.log 2>&1 &
+
+          echo "Waiting for dev server on :3200..."
+          for i in $(seq 1 45); do
+            if curl -sf http://127.0.0.1:3200/api/campaigns > /dev/null 2>&1; then
+              echo "Dev server ready (attempt $i)"
+              break
+            fi
+            echo "  attempt $i/45..."
+            sleep 2
+          done
+
+          if ! curl -sf http://127.0.0.1:3200/api/campaigns > /dev/null 2>&1; then
+            echo "ERROR: dev server did not start in time"
+            cat /tmp/nextdev-signing.log
+            exit 1
+          fi
+
+      - name: Run Playwright signing E2E tests
+        env:
+          PLAYWRIGHT_BASE_URL: "http://127.0.0.1:3200"
+        run: cd apps/web && pnpm exec playwright test --project signing --reporter=line
+
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: playwright-signing-traces
           path: apps/web/test-results/
           retention-days: 7

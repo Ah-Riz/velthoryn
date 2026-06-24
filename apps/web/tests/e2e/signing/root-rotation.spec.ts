@@ -32,6 +32,7 @@
 import { test, expect, type Page } from "@playwright/test";
 import { Keypair, Connection, LAMPORTS_PER_SOL } from "@solana/web3.js";
 import bs58 from "bs58";
+import { datetimeLocalFromNow, expectCampaignLinkReady, selectNativeSol } from "./helpers";
 
 const LOCALNET_RPC = "http://127.0.0.1:8899";
 
@@ -96,17 +97,9 @@ async function createCancellableSolCampaign(
   await injectSigningWallet(page, kp);
   await page.goto("/campaign/create/cliff", { waitUntil: "load" });
 
-  // Wait for the token selector to be ready.
-  const tokenBtn = page.getByRole("button", { name: /select token/i });
-  await tokenBtn.waitFor({ state: "visible", timeout: 20_000 });
+  await selectNativeSol(page);
 
-  // Pick native SOL.
-  await tokenBtn.click();
-  await page.getByRole("button", { name: /SOL.*Native/i }).first().click();
-
-  // Enable cancellable toggle — creator becomes cancelAuthority.
   const cancellableToggle = page.getByText(/allow cancellation/i);
-  await cancellableToggle.waitFor({ state: "visible", timeout: 10_000 });
   await cancellableToggle.click();
 
   // Add a second recipient row so the campaign is bulk-funded (gives us a
@@ -119,8 +112,7 @@ async function createCancellableSolCampaign(
   const amountInputs = page.getByPlaceholder(/e\.g\. 1000/i);
   const cliffInputs = page.locator("input[type='datetime-local']");
 
-  const cliff = new Date(Date.now() + cliffOffsetSeconds * 1000);
-  const cliffValue = cliff.toISOString().slice(0, 16);
+  const cliffValue = datetimeLocalFromNow(cliffOffsetSeconds);
 
   // Recipient 1 — a random throwaway wallet.
   const rec1 = Keypair.generate().publicKey.toBase58();
@@ -130,9 +122,10 @@ async function createCancellableSolCampaign(
 
   // Recipient 2 — another random throwaway wallet.
   const rec2 = Keypair.generate().publicKey.toBase58();
+  // Cliff inputs at nth(2): each recipient row has 2 datetime inputs (cliff + optional start time)
   await recipientInputs.nth(1).fill(rec2);
   await amountInputs.nth(1).fill("0.005");
-  await cliffInputs.nth(1).fill(cliffValue);
+  await cliffInputs.nth(2).fill(cliffValue);
 
   // Submit.
   const submitBtn = page.getByRole("button", { name: /create campaign/i });
@@ -141,15 +134,7 @@ async function createCancellableSolCampaign(
 
   // Wait for the "View campaign" link — indicates the campaign was created and
   // the treeAddress is available.
-  const viewCampaignLink = page.getByRole("link", { name: /view campaign/i });
-  await viewCampaignLink.waitFor({ state: "visible", timeout: 90_000 });
-
-  const href = await viewCampaignLink.getAttribute("href");
-  if (!href) throw new Error("View campaign link has no href");
-  const address = href.split("/campaign/")[1]?.split("?")[0];
-  if (!address) throw new Error(`Could not parse treeAddress from href: ${href}`);
-
-  return address;
+  return expectCampaignLinkReady(page.getByRole("link", { name: /view campaign/i }));
 }
 
 // ---------------------------------------------------------------------------

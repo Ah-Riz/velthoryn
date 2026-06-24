@@ -22,6 +22,7 @@
 import { test, expect, type Page } from "@playwright/test";
 import { Keypair, Connection, LAMPORTS_PER_SOL } from "@solana/web3.js";
 import bs58 from "bs58";
+import { alreadyUnlockedDatetimeLocal, expectCampaignLinkReady, expectClaimActionReady, selectNativeSol } from "./helpers";
 
 const LOCALNET_RPC = "http://127.0.0.1:8899";
 
@@ -115,13 +116,7 @@ test.describe.serial("Real signing E2E — beneficiary claim flow", () => {
     await injectSigningWallet(page);
     await page.goto("/campaign/create/cliff", { waitUntil: "load" });
 
-    // Wait for form to be ready (token picker renders after wallet connection)
-    const tokenBtn = page.getByRole("button", { name: /select token/i });
-    await tokenBtn.waitFor({ state: "visible", timeout: 15_000 });
-
-    // --- Select SOL ---
-    await tokenBtn.click();
-    await page.getByRole("button", { name: /SOL.*Native/i }).first().click();
+    await selectNativeSol(page);
 
     // --- Amount ---
     await page.getByPlaceholder(/e\.g\. 1000/i).first().fill("0.01");
@@ -131,12 +126,7 @@ test.describe.serial("Real signing E2E — beneficiary claim flow", () => {
     const recipientPubkey = keypair.publicKey.toBase58();
     await page.getByPlaceholder(/Solana wallet address/i).first().fill(recipientPubkey);
 
-    // --- Cliff = now + 10 seconds (passes validation, short wait) ---
-    // datetime-local format: "YYYY-MM-DDTHH:MM"
-    // We add a buffer of 10 s so the form's cliff-must-be-future validation passes.
-    const cliffDate = new Date(Date.now() + 10_000);
-    const cliffLocal = cliffDate.toISOString().slice(0, 16); // "YYYY-MM-DDTHH:MM"
-    await page.locator("input[type='datetime-local']").first().fill(cliffLocal);
+    await page.locator("input[type='datetime-local']").first().fill(alreadyUnlockedDatetimeLocal());
 
     // --- Submit ---
     const submitBtn = page.getByRole("button", { name: /create cliff stream/i });
@@ -145,16 +135,7 @@ test.describe.serial("Real signing E2E — beneficiary claim flow", () => {
 
     // --- Wait for success and capture the tree address from the "Open stream" link ---
     // TxResultCard renders an anchor with href="/campaign/<treeAddress>?..."
-    const openStreamLink = page.getByRole("link", { name: /open stream/i });
-    await expect(openStreamLink).toBeVisible({ timeout: 45_000 });
-
-    const href = await openStreamLink.getAttribute("href");
-    expect(href).toBeTruthy();
-
-    // Extract just the treeAddress segment: /campaign/<addr>?...
-    const match = href!.match(/\/campaign\/([^?]+)/);
-    expect(match).toBeTruthy();
-    createdTreeAddress = match![1];
+    createdTreeAddress = await expectCampaignLinkReady(page.getByRole("link", { name: /open stream/i }));
 
     expect(createdTreeAddress).toHaveLength(44); // valid base58 pubkey length
   });
@@ -172,21 +153,9 @@ test.describe.serial("Real signing E2E — beneficiary claim flow", () => {
 
     await injectSigningWallet(page);
 
-    // Wait 15 s to guarantee the cliff (now + 10 s from create time) has passed
-    await page.waitForTimeout(15_000);
-
     await page.goto(`/campaign/${createdTreeAddress}`, { waitUntil: "load" });
 
-    // The single-leaf claim button label is:
-    //   `Claim ${formatTokenAmount(displayClaimable)}`
-    // For 0.01 SOL that is "Claim 0.01".
-    // We use a broad /^claim/i regex to handle minor formatting variations.
-    const claimBtn = page.getByRole("button", { name: /^claim\s+\d/i });
-    await expect(claimBtn).toBeVisible({ timeout: 25_000 });
-    await expect(claimBtn).toBeEnabled({ timeout: 10_000 });
-
-    // Confirm no "Wait for cliff" countdown is shown
-    await expect(page.getByRole("button", { name: /wait for cliff/i })).not.toBeVisible();
+    await expectClaimActionReady(page);
   });
 
   // -------------------------------------------------------------------------
@@ -200,9 +169,7 @@ test.describe.serial("Real signing E2E — beneficiary claim flow", () => {
     await page.goto(`/campaign/${createdTreeAddress}`, { waitUntil: "load" });
 
     // Find and click the enabled Claim button
-    const claimBtn = page.getByRole("button", { name: /^claim\s+\d/i });
-    await expect(claimBtn).toBeVisible({ timeout: 25_000 });
-    await expect(claimBtn).toBeEnabled({ timeout: 10_000 });
+    const claimBtn = await expectClaimActionReady(page);
     await claimBtn.click();
 
     // The mock wallet adapter signs and sends the transaction automatically.
@@ -236,7 +203,7 @@ test.describe.serial("Real signing E2E — beneficiary claim flow", () => {
     // Either the button shows "Claim 0" (nothing claimable) or is disabled
     // under a different label. Both are acceptable — the key check is that
     // the claimable amount is zero, meaning the claim succeeded.
-    const totalClaimedCard = page.getByText(/total claimed/i).first();
+    const totalClaimedCard = page.getByText(/^claimed$/i).first();
     await expect(totalClaimedCard).toBeVisible({ timeout: 15_000 });
 
     // The status badge should now show "Claimed" (fully claimed)

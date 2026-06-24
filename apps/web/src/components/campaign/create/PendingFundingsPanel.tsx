@@ -46,10 +46,10 @@ export function PendingFundingsPanel({
           key={pending.treeAddress}
           className="rounded-xl border border-amber-500/20 bg-amber-500/[0.04] p-4"
         >
-          <p className="break-all font-mono text-[11px] text-amber-100">
+          <p className="break-all font-mono text-[11px] text-amber-800 dark:text-amber-100">
             {pending.treeAddress}
           </p>
-          <p className="mt-2 text-[12px] text-amber-200/80">
+          <p className="mt-2 text-[12px] text-amber-700/80 dark:text-amber-200/80">
             Total to fund: {formatPendingAmount(pending, walletTokens)}
           </p>
           <div className="mt-3 flex flex-wrap gap-2">
@@ -62,7 +62,7 @@ export function PendingFundingsPanel({
             </button>
             <a
               href={`/campaign/${pending.treeAddress}`}
-              className="rounded-lg border border-white/[0.12] px-3 py-2 text-[12px] font-medium text-white"
+              className="rounded-lg border border-foreground/[0.12] px-3 py-2 text-[12px] font-medium text-foreground"
             >
               View campaign
             </a>

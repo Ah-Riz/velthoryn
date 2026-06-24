@@ -10,6 +10,7 @@ test-ledger/
 # Solana keypairs
 *-keypair.json
 !**/programs/**/*-keypair.json.example
+test-wallet.json
 
 # Node / TS
 node_modules/
@@ -67,6 +68,7 @@ apps/web/test-results/
 # Private working docs
 weekly-report-mancer/week8/TASKS.md
 weekly-report-mancer/week8/STATUS_REPORT_LANA.md
+docs/superpowers/plans/
 
 # Vercel CLI project link (project/org IDs only — safe to commit; secrets live in the dashboard,
 # and the .env.* rules above already ignore any local .vercel/.env* files)

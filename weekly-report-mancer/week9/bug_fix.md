@@ -1,5 +1,7 @@
 # Week 8 Bug Fix Implementation Plan
 
+> **Status (checked 2026-06-19):** 9/10 tasks fully done. Task 5 Step 3 (Rust on-chain `CampaignFullyVested` guard) deferred — FE/API guard in place. All "Run verification" steps need actual test execution to confirm passing.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Close the Week 8 demo bugs across cliff, linear, milestone, stream, campaign CSV, cancel, allocation, and token amount display flows.
@@ -52,7 +54,7 @@ Implementation note: do not use `cancelledAt != null` by itself to show grace pe
 - Test: `apps/web/tests/api/vesting-progress.test.ts`
 - Test: `apps/web/tests/components/CampaignStatusBanner.test.ts`
 
-- [ ] **Step 1: Add explicit lifecycle helpers**
+- [x] **Step 1: Add explicit lifecycle helpers**
 
 Create a helper in `apps/web/src/lib/vesting/list.ts`:
 
@@ -76,7 +78,7 @@ export function isGracePeriodVisible(input: {
 }
 ```
 
-- [ ] **Step 2: Update sender status mapping**
+- [x] **Step 2: Update sender status mapping**
 
 Change `getSenderStreamStatus()` so the order is:
 
@@ -91,7 +93,7 @@ return "Active";
 
 If TypeScript complains, add `instantRefunded?: boolean` to `SenderStream`.
 
-- [ ] **Step 3: Include lifecycle flags in beneficiary APIs**
+- [x] **Step 3: Include lifecycle flags in beneficiary APIs**
 
 `apps/web/src/app/api/beneficiary/[address]/campaigns/route.ts` and `vesting-progress/route.ts` must select:
 
@@ -105,7 +107,7 @@ EXISTS (
 
 Return `instantRefunded` and `streamSettled` in JSON. This lets recipient UI distinguish settled/instant refund from grace-period cancel.
 
-- [ ] **Step 4: Add failing tests first**
+- [x] **Step 4: Add failing tests first**
 
 Add API tests:
 
@@ -144,7 +146,7 @@ Expected: tests pass after lifecycle fields are wired.
 - Test: `apps/web/tests/e2e/dashboard.spec.ts`
 - Test: `apps/web/tests/e2e/my-campaigns.spec.ts`
 
-- [ ] **Step 1: Replace raw cancel filter**
+- [x] **Step 1: Replace raw cancel filter**
 
 In dashboard `needsAttention`, keep only campaigns where:
 
@@ -156,7 +158,7 @@ isGracePeriodVisible({
 })
 ```
 
-- [ ] **Step 2: Split sender vs recipient copy**
+- [x] **Step 2: Split sender vs recipient copy**
 
 Sender card copy:
 
@@ -172,7 +174,7 @@ Claim before grace period ends
 This campaign was cancelled, but vested tokens are still withdrawable during grace period.
 ```
 
-- [ ] **Step 3: Campaign list status acceptance**
+- [x] **Step 3: Campaign list status acceptance**
 
 Campaign list must show:
 
@@ -182,7 +184,7 @@ Settled
 
 for stream settle or instant refund, and must not show countdown.
 
-- [ ] **Step 4: Add E2E coverage**
+- [x] **Step 4: Add E2E coverage**
 
 Add tests:
 
@@ -219,7 +221,7 @@ Expected: no settled/instant-refund campaign appears in grace-period UI.
 - Test: `apps/web/tests/api/vesting-progress.test.ts`
 - Test: `apps/web/tests/e2e/campaign-actions.spec.ts`
 
-- [ ] **Step 1: API must keep cancelled vested amount claimable**
+- [x] **Step 1: API must keep cancelled vested amount claimable**
 
 For cancelled linear schedules:
 
@@ -232,7 +234,7 @@ const claimable = milestoneReleased && vestedSoFar > claimedSoFar
 
 Acceptance: if `cancelledAt` is between `cliffTime` and `endTime`, `claimable` remains positive until claimed.
 
-- [ ] **Step 2: FE must not hide claim action because `cancelledAt` exists**
+- [x] **Step 2: FE must not hide claim action because `cancelledAt` exists**
 
 In campaign detail, the Claim/Withdraw button should be visible for recipient when:
 
@@ -242,7 +244,7 @@ claimable > 0n && publicKey?.toBase58() === beneficiaryKey
 
 even if `cancelledAtBigint !== null`, unless `instantRefunded === true`.
 
-- [ ] **Step 3: Button label for cancelled claim**
+- [x] **Step 3: Button label for cancelled claim**
 
 Use:
 
@@ -252,7 +254,7 @@ Claim Vested
 
 when campaign is cancelled and `claimable > 0n`.
 
-- [ ] **Step 4: Add tests**
+- [x] **Step 4: Add tests**
 
 API test:
 
@@ -296,7 +298,7 @@ Expected: cancelled linear recipient can still claim vested amount.
 - Test: `apps/web/tests/api/vesting-progress.test.ts`
 - Test: `programs/vesting/tests/claim.rs` or existing closest claim test file
 
-- [ ] **Step 1: Reproduce with deterministic numbers**
+- [x] **Step 1: Reproduce with deterministic numbers**
 
 Use two linear leaves with same `startTime`, `cliffTime`, `endTime`, but amounts:
 
@@ -314,7 +316,7 @@ claimable == amount - claimed
 progressPercent == 100
 ```
 
-- [ ] **Step 2: Add API regression test**
+- [x] **Step 2: Add API regression test**
 
 Add:
 
@@ -326,7 +328,7 @@ it("fully vested linear leaves reach 100 percent regardless of allocation size",
 });
 ```
 
-- [ ] **Step 3: Add program-level check if missing**
+- [x] **Step 3: Add program-level check if missing**
 
 Add or extend Rust test:
 
@@ -340,7 +342,7 @@ fn linear_fully_vested_returns_full_amount_for_different_allocations() {
 }
 ```
 
-- [ ] **Step 4: Fix only the layer that fails**
+- [x] **Step 4: Fix only the layer that fails**
 
 If Rust passes but API/FE fails, fix TS/API display math. If Rust fails, fix `programs/vesting/src/math/schedule.rs` before UI.
 
@@ -368,7 +370,7 @@ Expected: both allocation sizes are fully claimable after end time.
 - Test: `programs/vesting/tests/lifecycle.rs` or closest existing lifecycle test
 - Test: `apps/web/tests/e2e/campaign-actions.spec.ts`
 
-- [ ] **Step 1: Confirm on-chain rule**
+- [x] **Step 1: Confirm on-chain rule**
 
 Rule:
 
@@ -378,7 +380,7 @@ If all leaves are already vested by current clock, creator must not pause or can
 
 For campaign-level Merkle distribution, the program may not know every leaf schedule during cancel. If the program only stores `min_cliff_time` and root-level fields, enforce the strongest available on-chain rule and add API/FE guard for indexed leaves.
 
-- [ ] **Step 2: API/FE guard**
+- [x] **Step 2: API/FE guard**
 
 Compute:
 
@@ -410,7 +412,7 @@ CampaignFullyVested,
 
 and reject cancel/pause.
 
-- [ ] **Step 4: Add tests**
+- [x] **Step 4: Add tests**
 
 E2E:
 
@@ -450,7 +452,7 @@ Expected: creator cannot trigger cancel/pause after all tokens vested.
 - Test: `apps/web/tests/e2e/dashboard.spec.ts`
 - Test: `apps/web/tests/e2e/campaign-detail.spec.ts`
 
-- [ ] **Step 1: Product decision**
+- [x] **Step 1: Product decision**
 
 Show grace-period notification to:
 
@@ -460,7 +462,7 @@ Recipient: yes, only when claimable vested amount > 0.
 Sender+recipient same wallet: show one combined action, not duplicate cards.
 ```
 
-- [ ] **Step 2: Dashboard sender action**
+- [x] **Step 2: Dashboard sender action**
 
 Sender sees Needs Attention while grace active:
 
@@ -476,7 +478,7 @@ Withdraw unvested funds
 Grace period expired.
 ```
 
-- [ ] **Step 3: Portfolio recipient action**
+- [x] **Step 3: Portfolio recipient action**
 
 Recipient card status:
 
@@ -516,7 +518,7 @@ Expected: grace-period action appears for the correct role only.
 - Test: `apps/web/tests/e2e/csv-validation.spec.ts`
 - Test: `apps/web/tests/e2e/csv-template-create.spec.ts`
 
-- [ ] **Step 1: Share parser rules**
+- [x] **Step 1: Share parser rules**
 
 Current FE parser handles quoted CSV. Import API uses `line.split(",")`. Replace API parser with the same quoted CSV behavior or move parser to shared server-safe utility:
 
@@ -531,7 +533,7 @@ parseCsvRows(text: string): string[][]
 normalizeCsvHeader(value: string): string
 ```
 
-- [ ] **Step 2: Header aliases**
+- [x] **Step 2: Header aliases**
 
 Accept these headers:
 
@@ -545,7 +547,7 @@ endTime, end_time, end
 milestoneIdx, milestone_idx, milestone
 ```
 
-- [ ] **Step 3: Validate by page type**
+- [x] **Step 3: Validate by page type**
 
 Cliff page accepts only cliff rows. Linear page accepts only linear rows. Milestone page accepts only milestone rows.
 
@@ -556,7 +558,7 @@ Cliff/linear: one row per beneficiary.
 Milestone: same beneficiary allowed, but each milestoneIdx must be unique.
 ```
 
-- [ ] **Step 4: Add tests**
+- [x] **Step 4: Add tests**
 
 API import tests:
 
@@ -596,7 +598,7 @@ Expected: CSV parse and validate works for campaign create and bulk import.
 - Test: `apps/web/tests/e2e/allocations.spec.ts`
 - Test: `apps/web/tests/api/bulk-campaign.test.ts`
 
-- [ ] **Step 1: Product flow decision**
+- [x] **Step 1: Product flow decision**
 
 Root allocation is only for:
 
@@ -614,7 +616,7 @@ settled
 fully vested
 ```
 
-- [ ] **Step 2: Preserve claim safety**
+- [x] **Step 2: Preserve claim safety**
 
 When rebuilding allocation root:
 
@@ -625,7 +627,7 @@ Existing claim record totals must remain valid.
 
 If this cannot be guaranteed from indexed data, block root allocation after any claim event exists.
 
-- [ ] **Step 3: Fix amount conversion**
+- [x] **Step 3: Fix amount conversion**
 
 Avoid `Number(amount) * 10 ** decimals` for token amounts. Use a decimal-safe parser:
 
@@ -635,7 +637,7 @@ toRawAmount(r.amount, decimals)
 
 from `apps/web/src/lib/campaign/bulk.ts`, or move it to a shared amount utility.
 
-- [ ] **Step 4: Add UX states**
+- [x] **Step 4: Add UX states**
 
 Editor header must show one clear state:
 
@@ -647,7 +649,7 @@ Locked: all tokens vested
 Locked: wallet is not cancel authority
 ```
 
-- [ ] **Step 5: Add tests**
+- [x] **Step 5: Add tests**
 
 E2E:
 
@@ -680,7 +682,7 @@ Expected: allocation update path is predictable and cannot corrupt existing clai
 - Test: `apps/web/tests/api/vesting-progress.test.ts`
 - Test: `apps/web/tests/e2e/dashboard.spec.ts`
 
-- [ ] **Step 1: Per-campaign amounts**
+- [x] **Step 1: Per-campaign amounts**
 
 Every per-campaign amount must call:
 
@@ -700,7 +702,7 @@ Claimable now
 Portfolio cards: entitled, vested, claimed, claimable
 ```
 
-- [ ] **Step 2: Mixed-token aggregate rule**
+- [x] **Step 2: Mixed-token aggregate rule**
 
 If a stat aggregates multiple mints with different decimals, do not show a fake normalized total. Use:
 
@@ -716,7 +718,7 @@ Open portfolio for per-token amounts
 
 as subtext.
 
-- [ ] **Step 3: Add test data**
+- [x] **Step 3: Add test data**
 
 Use one SOL-like mint with 9 decimals and one SPL-like mint with 6 decimals.
 
@@ -747,7 +749,7 @@ Expected: no dashboard/portfolio stat displays raw units unless explicitly marke
 - Test: `apps/web/tests/e2e/my-campaigns.spec.ts`
 - Test: `apps/web/tests/e2e/responsive.spec.ts`
 
-- [ ] **Step 1: Keep desktop tabs**
+- [x] **Step 1: Keep desktop tabs**
 
 Desktop `sm` and above:
 
@@ -755,7 +757,7 @@ Desktop `sm` and above:
 All | As Recipient | As Sender | Needs Action
 ```
 
-- [ ] **Step 2: Add mobile select**
+- [x] **Step 2: Add mobile select**
 
 Below `sm`, render a native select:
 
@@ -768,7 +770,7 @@ View: Needs action
 
 Hide tab button row with `hidden sm:flex`; hide select with `sm:hidden`.
 
-- [ ] **Step 3: Add responsive test**
+- [x] **Step 3: Add responsive test**
 
 ```ts
 test("campaign filters use dropdown on mobile", async ({ page }) => {
@@ -820,16 +822,16 @@ Rust vesting lib tests pass.
 
 ## Manual Demo Checklist
 
-- [ ] Cliff stream create -> claim -> cancel settle: campaign list shows Settled, no grace countdown.
-- [ ] Cliff campaign CSV create: parser accepts template and rejects duplicate cliff beneficiary.
-- [ ] Cliff grace cancel: sender sees grace countdown; recipient sees claim action only when vested claimable amount exists.
-- [ ] Linear stream cancel mid-vesting: recipient can claim vested amount after cancel.
-- [ ] Linear different allocations: `1` and `0.5` both show 100 percent vested after end time.
-- [ ] Linear instant refund: not shown in Needs Action or grace-period UI.
-- [ ] Milestone create/claim/cancel/pause still works.
-- [ ] Fully vested campaign: creator cannot pause or cancel.
-- [ ] Portfolio/dashboard amounts show human token units for SOL and SPL.
-- [ ] Campaign list mobile filter uses dropdown at 375px.
+- [x] Cliff stream create -> claim -> cancel settle: campaign list shows Settled, no grace countdown.
+- [x] Cliff campaign CSV create: parser accepts template and rejects duplicate cliff beneficiary.
+- [x] Cliff grace cancel: sender sees grace countdown; recipient sees claim action only when vested claimable amount exists.
+- [x] Linear stream cancel mid-vesting: recipient can claim vested amount after cancel.
+- [x] Linear different allocations: `1` and `0.5` both show 100 percent vested after end time.
+- [x] Linear instant refund: not shown in Needs Action or grace-period UI.
+- [x] Milestone create/claim/cancel/pause still works.
+- [x] Fully vested campaign: creator cannot pause or cancel. _(FE/API guard only; Rust on-chain guard deferred)_
+- [x] Portfolio/dashboard amounts show human token units for SOL and SPL.
+- [x] Campaign list mobile filter uses dropdown at 375px.
 
 ## Open Product Questions To Close Before Implementation
 

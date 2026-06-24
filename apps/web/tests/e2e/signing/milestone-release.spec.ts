@@ -21,6 +21,7 @@
 import { test, expect, type Page } from "@playwright/test";
 import { Keypair, Connection, LAMPORTS_PER_SOL } from "@solana/web3.js";
 import bs58 from "bs58";
+import { datetimeLocalFromNow, expectCampaignLinkReady, selectNativeSol } from "./helpers";
 
 const LOCALNET_RPC = "http://127.0.0.1:8899";
 
@@ -89,13 +90,7 @@ test.describe.serial("Real signing E2E — milestone release lifecycle", () => {
     await injectSigningWallet(page, keypair);
     await page.goto("/campaign/create/milestone", { waitUntil: "load" });
 
-    // Wait for the token picker button to appear (form is hydrated)
-    const tokenBtn = page.getByRole("button", { name: /select token/i });
-    await tokenBtn.waitFor({ state: "visible", timeout: 20_000 });
-
-    // Select native SOL
-    await tokenBtn.click();
-    await page.getByRole("button", { name: /SOL.*Native/i }).first().click();
+    await selectNativeSol(page);
 
     // Fill recipient: self (so the same wallet can claim after release)
     const recipientInput = page.getByPlaceholder(/solana wallet address/i).first();
@@ -105,11 +100,7 @@ test.describe.serial("Real signing E2E — milestone release lifecycle", () => {
     // Fill amount
     await page.getByPlaceholder(/e\.g\. 1000/i).first().fill("0.01");
 
-    // Fill earliest unlock time: 10 seconds from now
-    const unlockTime = new Date(Date.now() + 10_000);
-    // datetime-local expects "YYYY-MM-DDTHH:MM" (slice 0..16 drops seconds)
-    const unlockValue = unlockTime.toISOString().slice(0, 16);
-    await page.locator("input[type='datetime-local']").first().fill(unlockValue);
+    await page.locator("input[type='datetime-local']").first().fill(datetimeLocalFromNow(0));
 
     // Submit — single milestone → button reads "Create Milestone Stream"
     const submitBtn = page.getByRole("button", { name: /create milestone stream/i });
@@ -118,16 +109,7 @@ test.describe.serial("Real signing E2E — milestone release lifecycle", () => {
 
     // Wait for the success result card which shows an "Open stream" link
     // The href contains /campaign/<treeAddress>
-    const openLink = page.getByRole("link", { name: /open stream/i }).first();
-    await openLink.waitFor({ state: "visible", timeout: 60_000 });
-
-    const href = await openLink.getAttribute("href");
-    expect(href, "Open stream link must have an href").toBeTruthy();
-
-    // href is like "/campaign/<treeAddress>?rt=2&st=...&ct=...&et=...&mi=0&bf=..."
-    const match = href?.match(/\/campaign\/([A-Za-z0-9]+)/);
-    expect(match, `Could not parse treeAddress from href: ${href}`).toBeTruthy();
-    treeAddress = match![1];
+    treeAddress = await expectCampaignLinkReady(page.getByRole("link", { name: /open stream/i }).first());
     expect(treeAddress.length).toBeGreaterThan(30);
   });
 
@@ -136,9 +118,6 @@ test.describe.serial("Real signing E2E — milestone release lifecycle", () => {
   // -------------------------------------------------------------------------
   test("wait for milestone cliff and verify release button is visible and enabled", async ({ page }) => {
     expect(treeAddress, "treeAddress must be set by the previous test").toBeTruthy();
-
-    // Wait 15s to ensure the 10s cliff has elapsed
-    await page.waitForTimeout(15_000);
 
     await injectSigningWallet(page, keypair);
     await page.goto(`/campaign/${treeAddress}`, { waitUntil: "load" });

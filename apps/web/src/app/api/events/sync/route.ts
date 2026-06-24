@@ -29,9 +29,12 @@ async function postEventsSyncHandler(request: NextRequest) {
   const campaignCache = new Map<string, number>();
 
   for (const signature of uniqueSigs) {
-    const tx = await connection.getTransaction(signature, {
-      maxSupportedTransactionVersion: 0,
-    });
+    let tx: Awaited<ReturnType<typeof connection.getTransaction>> | null = null;
+    for (let attempt = 0; attempt < 4; attempt++) {
+      if (attempt > 0) await new Promise((r) => setTimeout(r, attempt * 1000));
+      tx = await connection.getTransaction(signature, { maxSupportedTransactionVersion: 0 });
+      if (tx?.meta?.logMessages) break;
+    }
     if (!tx?.meta?.logMessages) continue;
 
     const slot = tx.slot;

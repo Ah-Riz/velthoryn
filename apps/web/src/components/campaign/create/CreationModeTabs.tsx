@@ -28,7 +28,7 @@ export function CreationModeTabs({
           className={`rounded-xl border px-4 py-2 text-[13px] font-medium transition ${
             mode === option
               ? `${toneStyles.soft} ${toneStyles.text} ${toneStyles.border}`
-              : "border-white/[0.06] bg-white/[0.02] text-[#8b92a5] hover:border-white/[0.12]"
+              : "border-foreground/[0.06] bg-foreground/[0.02] text-muted-foreground hover:border-foreground/[0.12]"
           }`}
         >
           {option === "single" ? "Manual" : "Use CSV"}

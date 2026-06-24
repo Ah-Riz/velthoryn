@@ -1,4 +1,5 @@
 import { hashLeaf, type VestingLeaf } from "@/lib/merkle/builder";
+import { createAuthHeader, type WalletSigner } from "@/lib/api/client-auth";
 
 export interface StreamSchedule {
   releaseType: number;
@@ -374,9 +375,8 @@ export function buildCreateStreamIndexPayload(params: {
 
 export async function indexCampaign(
   payload: CampaignIndexPayload,
+  walletOrHeader?: WalletSigner | string,
 ): Promise<void> {
-  savePendingCampaignIndexLocal(payload);
-
   const requestId =
     typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
       ? crypto.randomUUID()
@@ -401,12 +401,20 @@ export async function indexCampaign(
       : null,
   });
 
+  const headers: Record<string, string> = {
+    "Content-Type": "application/json",
+    "x-request-id": requestId,
+  };
+
+  if (typeof walletOrHeader === "string") {
+    headers["Authorization"] = walletOrHeader;
+  } else if (walletOrHeader) {
+    headers["Authorization"] = await createAuthHeader(walletOrHeader);
+  }
+
   const res = await fetch("/api/campaigns", {
     method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "x-request-id": requestId,
-    },
+    headers,
     body: JSON.stringify(payload),
   });
 
@@ -431,8 +439,9 @@ export async function indexCampaign(
 
 export async function indexStreamCampaign(
   payload: CreateStreamIndexPayload,
+  walletOrHeader?: WalletSigner | string,
 ): Promise<void> {
-  await indexCampaign(payload);
+  await indexCampaign(payload, walletOrHeader);
 }
 
 export function markStreamSettledLocal(treeAddress: string): void {

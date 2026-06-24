@@ -61,12 +61,12 @@ export function MilestoneCarouselCard({
   const unlocked = effectiveNow >= current.cliffTime;
 
   const statusColor = claimed
-    ? "text-emerald-400"
+    ? "text-emerald-700 dark:text-emerald-400"
     : released && unlocked && !isCreator
-      ? "text-violet-400"
+      ? "text-violet-700 dark:text-violet-400"
       : released
-        ? "text-emerald-400"
-        : "text-[#555d73]";
+        ? "text-emerald-700 dark:text-emerald-400"
+        : "text-muted-foreground";
 
   const statusLabel = claimed
     ? "Claimed"
@@ -82,7 +82,7 @@ export function MilestoneCarouselCard({
       ? "border-violet-500/20"
       : released
         ? "border-emerald-500/20"
-        : "border-white/[0.06]";
+        : "border-foreground/[0.06]";
 
   const statusBgColor = claimed
     ? "bg-emerald-500/5"
@@ -90,20 +90,20 @@ export function MilestoneCarouselCard({
       ? "bg-violet-500/5"
       : released
         ? "bg-emerald-500/5"
-        : "bg-white/[0.02]";
+        : "bg-foreground/[0.02]";
 
   const prev = () => setActiveIdx((i) => (i > 0 ? i - 1 : total - 1));
   const next = () => setActiveIdx((i) => (i < total - 1 ? i + 1 : 0));
 
   return (
-    <div className="rounded-2xl border border-white/[0.06] bg-white/[0.02] p-5">
+    <div className="rounded-2xl border border-foreground/[0.06] bg-foreground/[0.02] p-5">
       {/* Header with navigation */}
       <div className="flex items-center justify-between">
         <div className="min-w-0">
-          <h2 className="text-[15px] font-semibold text-white">
+          <h2 className="text-[15px] font-semibold text-foreground">
             {milestoneUi?.name ?? `Milestone #${current.index}`}
           </h2>
-          <p className="mt-0.5 text-[12px] text-[#6f7c95]">
+          <p className="mt-0.5 text-[12px] text-muted-foreground">
             {total > 1
               ? `${activeIdx + 1} of ${total} milestones`
               : "Milestone release details"}
@@ -115,7 +115,7 @@ export function MilestoneCarouselCard({
             <button
               type="button"
               onClick={prev}
-              className="flex h-7 w-7 items-center justify-center rounded-lg border border-white/[0.08] bg-white/[0.03] text-[#8b92a5] transition hover:bg-white/[0.06] hover:text-white"
+              className="flex h-7 w-7 items-center justify-center rounded-lg border border-foreground/[0.08] bg-foreground/[0.03] text-muted-foreground transition hover:bg-foreground/[0.06] hover:text-foreground"
             >
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <polyline points="15 18 9 12 15 6" />
@@ -124,7 +124,7 @@ export function MilestoneCarouselCard({
             <button
               type="button"
               onClick={next}
-              className="flex h-7 w-7 items-center justify-center rounded-lg border border-white/[0.08] bg-white/[0.03] text-[#8b92a5] transition hover:bg-white/[0.06] hover:text-white"
+              className="flex h-7 w-7 items-center justify-center rounded-lg border border-foreground/[0.08] bg-foreground/[0.03] text-muted-foreground transition hover:bg-foreground/[0.06] hover:text-foreground"
             >
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <polyline points="9 6 15 12 9 18" />
@@ -144,7 +144,7 @@ export function MilestoneCarouselCard({
               ? "bg-emerald-400"
               : dotReleased
                 ? "bg-violet-400"
-                : "bg-white/20";
+                : "bg-foreground/20";
             return (
               <button
                 key={m.index}
@@ -166,9 +166,9 @@ export function MilestoneCarouselCard({
             max={total - 1}
             value={activeIdx}
             onChange={(e) => setActiveIdx(Number(e.target.value))}
-            className="h-1 w-32 cursor-pointer appearance-none rounded-full bg-white/10 accent-violet-400 sm:w-48"
+            className="h-1 w-32 cursor-pointer appearance-none rounded-full bg-foreground/10 accent-violet-700 dark:accent-violet-400 sm:w-48"
           />
-          <span className="text-[11px] tabular-nums text-[#6f7c95]">
+          <span className="text-[11px] tabular-nums text-muted-foreground">
             {activeIdx + 1}/{total}
           </span>
         </div>
@@ -255,9 +255,9 @@ function InfoCell({
   accent?: boolean;
 }) {
   return (
-    <div className="rounded-xl border border-white/[0.04] bg-black/20 px-3.5 py-3">
-      <p className="text-[10px] uppercase tracking-[0.14em] text-[#555d73]">{label}</p>
-      <p className={`mt-1.5 text-[14px] font-semibold ${accent ? "text-emerald-400" : "text-white"}`}>
+    <div className="rounded-xl border border-foreground/[0.04] bg-black/20 px-3.5 py-3">
+      <p className="text-[10px] uppercase tracking-[0.14em] text-muted-foreground">{label}</p>
+      <p className={`mt-1.5 text-[14px] font-semibold ${accent ? "text-emerald-700 dark:text-emerald-400" : "text-foreground"}`}>
         {value}
       </p>
     </div>
@@ -274,9 +274,9 @@ function WorkflowCell({
   fallback: string;
 }) {
   return (
-    <div className="rounded-xl border border-white/[0.04] bg-black/20 px-3.5 py-3">
-      <p className="text-[10px] uppercase tracking-[0.14em] text-[#6f7c95]">{label}</p>
-      <p className="mt-1.5 text-[13px] font-medium text-white">
+    <div className="rounded-xl border border-foreground/[0.04] bg-black/20 px-3.5 py-3">
+      <p className="text-[10px] uppercase tracking-[0.14em] text-muted-foreground">{label}</p>
+      <p className="mt-1.5 text-[13px] font-medium text-foreground">
         {value ?? fallback}
       </p>
     </div>

@@ -15,9 +15,9 @@ function truncateAddress(addr: string, chars = 6): string {
 export function DetailRow({ label, value, mono }: DetailRowProps) {
   return (
     <div className="flex items-start justify-between gap-4">
-      <span className="shrink-0 text-[12px] text-[#555d73]">{label}</span>
+      <span className="shrink-0 text-[12px] text-muted-foreground">{label}</span>
       <span
-        className={`text-right text-[13px] text-white ${mono ? "font-mono" : ""}`}
+        className={`text-right text-[13px] text-foreground ${mono ? "font-mono" : ""}`}
         title={value}
       >
         {mono ? truncateAddress(value) : value}

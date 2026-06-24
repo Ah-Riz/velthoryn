@@ -23,6 +23,8 @@ interface BeneficiaryCampaign {
   cancelledAt: number | null;
   createdAt: number;
   metadata: { name?: string; description?: string; logoUri?: string } | null;
+  instantRefunded: boolean;
+  streamSettled: boolean;
   myClaimed: number | string;
   myLeaf: MyLeaf;
 }

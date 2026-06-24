@@ -10,16 +10,7 @@
  */
 import { expect, test } from "@playwright/test";
 import { collectRelevantPageErrors } from "./pageErrors";
-import {
-  enableE2eWallet,
-  gotoWithRetry,
-  selectSolToken,
-  fillCliffSchedule,
-  fillLinearSchedule,
-  openCsvMode,
-  parseCsv,
-  csv,
-} from "./helpers";
+import { enableE2eWallet, expectCsvReadyToFund, gotoWithRetry, selectSolToken, openCsvMode, parseCsv, csv, fillCliffSchedule, fillLinearSchedule } from "./helpers";
 
 // ---------------------------------------------------------------------------
 // Cliff vesting — create stream
@@ -69,12 +60,13 @@ test.describe("Cliff vesting — create stream", () => {
     await selectSolToken(page);
     await fillCliffSchedule(page);
     await openCsvMode(page);
+    const cliffTs = String(Math.floor(Date.now() / 1000) + 86400 * 30);
     await parseCsv(
       page,
-      csv([`3coyVxLQYHdQ6MNQRRdm2KuCABJopxPfo9XuQeosUmf3,0.001,Cliff`]),
+      csv([`3coyVxLQYHdQ6MNQRRdm2KuCABJopxPfo9XuQeosUmf3,0.001,Cliff,0,${cliffTs},${cliffTs},0`]),
     );
 
-    await expect(page.getByRole("button", { name: /create & fund campaign/i })).toBeEnabled({ timeout: 10_000 });
+    await expectCsvReadyToFund(page);
     expect(pageErrors).toEqual([]);
   });
 
@@ -84,7 +76,6 @@ test.describe("Cliff vesting — create stream", () => {
     await gotoWithRetry(page, "/campaign/create/cliff");
 
     await selectSolToken(page);
-    await fillCliffSchedule(page);
     await openCsvMode(page);
     // releaseType=Linear on cliff page should fail
     await parseCsv(
@@ -158,11 +149,14 @@ test.describe("Linear vesting — create stream", () => {
     await selectSolToken(page);
     await fillLinearSchedule(page);
     await openCsvMode(page);
+    const startTs = String(Math.floor(Date.now() / 1000));
+    const endTs = String(Math.floor(Date.now() / 1000) + 86400 * 30);
     await parseCsv(
       page,
-      csv([`3coyVxLQYHdQ6MNQRRdm2KuCABJopxPfo9XuQeosUmf3,0.001,Linear`]),
+      csv([`3coyVxLQYHdQ6MNQRRdm2KuCABJopxPfo9XuQeosUmf3,0.001,Linear,${startTs},0,${endTs},0`]),
     );
-    await expect(page.getByRole("button", { name: /create & fund campaign/i })).toBeEnabled({ timeout: 10_000 });
+
+    await expectCsvReadyToFund(page);
     expect(pageErrors).toEqual([]);
   });
 
@@ -172,7 +166,6 @@ test.describe("Linear vesting — create stream", () => {
     await gotoWithRetry(page, "/campaign/create/linear");
 
     await selectSolToken(page);
-    await fillLinearSchedule(page);
     await openCsvMode(page);
     const row = `3coyVxLQYHdQ6MNQRRdm2KuCABJopxPfo9XuQeosUmf3,0.001,Linear`;
     await parseCsv(page, csv([row, row])); // same wallet twice
@@ -212,15 +205,15 @@ test.describe("Milestone vesting — create stream", () => {
     await enableE2eWallet(page);
     await gotoWithRetry(page, "/campaign/create/milestone");
 
+    await selectSolToken(page);
     await openCsvMode(page, /csv campaign/i);
     const cliffTs = String(Math.floor(Date.now() / 1000) + 86400 * 30);
     // Same wallet, different milestoneIdx (0 and 1) — should be valid
-    const row0 = `3coyVxLQYHdQ6MNQRRdm2KuCABJopxPfo9XuQeosUmf3,500000,2,0,${cliffTs},${cliffTs},0`;
-    const row1 = `3coyVxLQYHdQ6MNQRRdm2KuCABJopxPfo9XuQeosUmf3,500000,2,0,${cliffTs},${cliffTs},1`;
+    const row0 = `3coyVxLQYHdQ6MNQRRdm2KuCABJopxPfo9XuQeosUmf3,0.0005,Milestone,0,${cliffTs},${cliffTs},0`;
+    const row1 = `3coyVxLQYHdQ6MNQRRdm2KuCABJopxPfo9XuQeosUmf3,0.0005,Milestone,0,${cliffTs},${cliffTs},1`;
     await parseCsv(page, csv([row0, row1]));
 
-    await selectSolToken(page);
-    await expect(page.getByRole("button", { name: /create & fund campaign/i })).toBeEnabled({ timeout: 10_000 });
+    await expectCsvReadyToFund(page);
     expect(pageErrors).toEqual([]);
   });
 
@@ -229,6 +222,7 @@ test.describe("Milestone vesting — create stream", () => {
     await enableE2eWallet(page);
     await gotoWithRetry(page, "/campaign/create/milestone");
 
+    await selectSolToken(page);
     await openCsvMode(page, /csv campaign/i);
     const cliffTs = String(Math.floor(Date.now() / 1000) + 86400 * 30);
     // Same wallet, SAME milestoneIdx — should fail

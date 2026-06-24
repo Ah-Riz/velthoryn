@@ -303,7 +303,7 @@ test.describe("Navigation journeys", () => {
     });
     await gotoWithRetry(page, `/campaign/${ADDR}`);
 
-    const editorLink = page.getByRole("link", { name: /open allocation editor/i });
+    const editorLink = page.getByRole("link", { name: /edit allocations/i });
     await expect(editorLink).toBeVisible({ timeout: 20_000 });
     await editorLink.click();
 

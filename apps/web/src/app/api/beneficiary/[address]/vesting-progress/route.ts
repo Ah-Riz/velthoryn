@@ -93,8 +93,10 @@ async function getVestingProgressHandler(
 
   const campaignList = results.map((row) => {
     const amount = BigInt(row.amount);
-    const claimedSoFar = BigInt(row.my_claimed);
+    const rawClaimed = BigInt(row.my_claimed);
     const cancelledAt = row.cancelled_at !== null ? BigInt(row.cancelled_at) : null;
+    const isSettled = row.stream_settled === true;
+    const isRefunded = row.instant_refunded === true;
 
     const schedule: VestingSchedule = {
       amount,
@@ -105,13 +107,13 @@ async function getVestingProgressHandler(
     };
 
     const vestedSoFar = getVestedAmount(schedule, cancelledAt, now);
-    // Milestone leaves require on-chain release flag — check DB-indexed events.
-    // Without this, the API would report milestone tokens as claimable even when
-    // the creator hasn't released them yet.
     const milestoneReleased = row.release_type !== 2 || row.milestone_released === true;
-    const claimable = milestoneReleased && vestedSoFar > claimedSoFar
-      ? vestedSoFar - claimedSoFar
-      : 0n;
+
+    // Settlement distributes all vested tokens to beneficiary — treat as fully claimed.
+    // Instant refund returns everything to creator — nothing left to claim.
+    const claimedSoFar = isSettled ? vestedSoFar : rawClaimed;
+    const claimable = isRefunded ? 0n
+      : (milestoneReleased && vestedSoFar > claimedSoFar ? vestedSoFar - claimedSoFar : 0n);
 
     // progressPercent = (vestedSoFar / amount) * 100, with 2 decimal precision
     const progressPercent =
