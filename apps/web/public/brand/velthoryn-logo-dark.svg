@@ -1,0 +1,27 @@
+<svg
+  xmlns="http://www.w3.org/2000/svg"
+  viewBox="0 0 512 512"
+  fill="none"
+  preserveAspectRatio="xMidYMid meet"
+>
+  <g fill="none" stroke="#E5E7EB" stroke-linecap="round">
+    <line x1="88" y1="116" x2="252" y2="268" stroke-width="14" />
+    <line x1="408" y1="76" x2="252" y2="268" stroke-width="14" />
+    <line x1="252" y1="268" x2="296" y2="428" stroke-width="14" />
+  </g>
+  <circle cx="88" cy="116" r="32" fill="#7C3AED" />
+  <circle cx="408" cy="76" r="28" fill="#14F1D9" />
+  <g transform="translate(252 268) rotate(45)">
+    <rect
+      x="-44"
+      y="-44"
+      width="88"
+      height="88"
+      rx="6"
+      fill="#0B0D12"
+      stroke="#E5E7EB"
+      stroke-width="20"
+    />
+  </g>
+  <circle cx="296" cy="428" r="26" fill="#22C55E" />
+</svg>
