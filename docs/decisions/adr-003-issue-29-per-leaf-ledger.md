@@ -36,10 +36,10 @@ The `Vec<u64>` + realloc proposal was rejected: no realloc pattern existed in th
 - Both leaves now pay in full (verified: 1,200 of 1,200 entitled in regression test).
 - No breaking on-chain change for the bounded-array approach; fixed-size accounts.
 - No change needed to `update_root`.
-- Backend guards (`cliffLinearSeen`) are now obsolete and slated for removal.
+- Backend guards (`cliffLinearSeen`) were relaxed (2026-06-24) to a **cap-aware** check rather than removed: they now allow up to `PER_LEAF_CAP = 8` cliff/linear leaves per beneficiary and reject more, so a campaign can never build off-chain only to hit `PerLeafCapExceeded` on-chain. Milestone leaves remain exempt (bitmap-tracked). See `apps/web/src/lib/campaign/limits.ts` (`MAX_CLIFF_LINEAR_LEAVES_PER_BENEFICIARY`).
 
 **Negative:**
-- Per-leaf cap of 8 means a beneficiary with more than 8 distinct leaves in one campaign would hit a limit. This is unlikely in practice.
+- Per-leaf cap of 8 means a beneficiary with more than 8 distinct cliff/linear leaves in one campaign is rejected at ingest (cap-aware BE guard) rather than failing on-chain with `PerLeafCapExceeded`.
 - `zero_copy` requires explicit `repr(C)` layout and bytemuck `Pod`, which is more complex than standard Borsh serialization.
 - Legacy v0 accounts require migration via `AccountInfo::resize` on next touch.
 

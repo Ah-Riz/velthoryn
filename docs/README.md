@@ -1,12 +1,14 @@
 # Velthoryn — Token Distribution Protocol
 
+<img src="https://www.velthoryn.site/brand/velthoryn-logo-sm.svg" alt="Velthoryn logo" width="140" />
+
 Solana token-distribution protocol combining **Merkle-tree compression** with full vesting schedules, **per-recipient clawback**, and native SOL support.
 
 |                    |                                                              |
 | ------------------ | ------------------------------------------------------------ |
 | **Program ID**     | `G6iaigUdi2btFwUc2N65twfxwA8Ew5uKKhKJ5RJa8wvu`             |
 | **Network**        | Devnet                                                       |
-| **Framework**      | Anchor 0.32.1                                                |
+| **Framework**      | Anchor 1.0.0                                                |
 | **Live App**       | [velthoryn.site](https://velthoryn.site/)                    |
 | **Source**         | [GitHub](https://github.com/Ah-Riz/mancerxsuperteam-token-vesting) |
 
@@ -45,7 +47,7 @@ Solana token-distribution protocol combining **Merkle-tree compression** with fu
 | Metric                    | Value                                        |
 | ------------------------- | -------------------------------------------- |
 | Instruction handlers      | 18 (14 SPL + 3 native SOL + instant refund)  |
-| Error code variants       | 42                                           |
+| Error code variants       | 41                                           |
 | Event types               | 12                                           |
 | SC tests passing          | 127+                                         |
 | Web Vitest passing        | 572                                          |
@@ -88,11 +90,11 @@ velthoryn/
 
 | Area             | Stack                                         |
 | ---------------- | --------------------------------------------- |
-| Smart Contract   | Rust, Anchor 0.32.1                           |
+| Smart Contract   | Rust, Anchor 1.0.0                           |
 | Backend API      | Next.js API routes, Drizzle ORM, Supabase     |
 | Frontend UI      | Next.js 15, shadcn/ui, TanStack Query         |
 | Merkle Pipeline  | TypeScript, keccak-256, domain separation      |
 
 {% hint style="info" %}
-**Status:** Fully implemented — features F1–F4 complete. Deployed on devnet. See the [Mainnet Checklist](operations/mainnet-checklist.md) for production readiness gates.
+**Status:** Features F1–F4 complete and deployed on devnet. One known smart-contract issue is pending a program redeploy — native-SOL campaigns drain residual lamports on the final claim. See the [Mainnet Checklist](operations/mainnet-checklist.md) for production readiness gates.
 {% endhint %}

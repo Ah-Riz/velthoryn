@@ -28,7 +28,8 @@ Detect → triage → fix → docs pass across SC / MERKLE / BE / DB. Full detai
 **Still open / deferred:**
 - BE route-level tests (`tests/api/**`, incl. BE-SEC-01 401/403 + rate-limit cluster) → need a Postgres-backed env to execute (tests are staged).
 - SC Mollusk coverage of 4 `init_if_needed`/`Optional<T>` handlers → blocked on Mollusk 0.14.
-- **Remove the now-obsolete Issue #29 BE guards** (`cliffLinearSeen` in `apps/web/src/app/api/campaigns/prepare/route.ts:70-84` + `import/route.ts:92-110`) — separate post-deploy PR, after the upgraded program is on mainnet. Keep the milestone duplicate guard.
+- ✅ **RESOLVED (2026-06-24):** the now-obsolete Issue #29 BE guards (`cliffLinearSeen` in `apps/web/src/app/api/campaigns/prepare/route.ts` + `import/route.ts`) were relaxed to a **cap-aware** check — see `apps/web/src/lib/campaign/limits.ts` (`MAX_CLIFF_LINEAR_LEAVES_PER_BENEFICIARY = 8`, mirroring on-chain `PER_LEAF_CAP`). They now allow up to 8 cliff/linear leaves per beneficiary and reject more; the milestone duplicate guard is unchanged. (Previously: "remove in a separate post-deploy PR".) Tests updated in `tests/api/bulk-campaign.test.ts`.
+- ⚠️ **Resolve `PATCH /api/campaigns/:treeAddress/status` divergence (decision pending).** The route **still exists in code** (`apps/web/src/app/api/campaigns/[treeAddress]/status/route.ts`, public, 10/min, writes `paused`/`cancelledAt`/`totalClaimed`/`instantRefunded` to DB) but is documented as **Removed** in `api-endpoints.md` + `trust-boundaries.md`, which claim status flows only from the indexer. Decide: (a) remove the route to match the documented indexer-only boundary, or (b) keep it and re-document honestly. Currently flagged via callouts in both reference docs; no code changed this pass.
 - FE multi-leaf-cliff/linear support in the bulk-send UI → Geral (handoff; the on-chain program now supports it).
 - `BE-SEC-02` (XFF trust) + `BE-SEC-04` (Redis prod assertion) → revisit if moving off Vercel.
 - **SC-FIND-07 (new, 2026-06-21) — `claim.rs` + `withdraw.rs` drain all lamports on final native SOL claim, destroying VestingTree PDA.** `claim.rs` final drain uses `pda_info.lamports()` (all lamports including rent); `withdraw.rs` single-stream final withdraw has the same pattern. Solana deletes zero-lamport accounts at transaction end → `close_claim_record` subsequently fails with `AccountNotInitialized (3012)` because `vesting_tree` is a required non-optional account. `withdraw_unvested.rs` (SC-FIND-02) and `instant_refund_campaign.rs` already correctly preserve `rent_min`. Fix: apply the same pattern to `claim.rs` and `withdraw.rs` — `pda_info.lamports().saturating_sub(rent_min)` on the final drain. Requires SC redeploy. FE workaround already in place (see FE-BUG-20): pre-checks VestingTree existence and shows clear native-SOL-specific error if gone.
@@ -72,13 +73,13 @@ _No open high-priority BE items from the original audit._
 
 | # | Task | Source | What's needed |
 |---|------|--------|---------------|
-| 8 | Known issue #29 — cumulative claimed_amount undercount | Week8 Known Issues | ✅ **Fixed on-chain 2026-06-16** (per-leaf ledger; `ClaimRecord` now `zero_copy`; ADR-003 superseded). **Follow-up:** remove the now-obsolete `cliffLinearSeen` BE guards (prepare + import) in a separate post-deploy PR once the upgraded program is on mainnet. |
+| 8 | Known issue #29 — cumulative claimed_amount undercount | Week8 Known Issues | ✅ **Fixed on-chain 2026-06-16** (per-leaf ledger; `ClaimRecord` now `zero_copy`; ADR-003 updated). ✅ **BE guards resolved 2026-06-24:** `cliffLinearSeen` (prepare + import) relaxed to cap-aware (≤ `PER_LEAF_CAP = 8`), not removed. |
 
 ### Ops/Infra
 
 | # | Task | Source | What's needed |
 |---|------|--------|---------------|
-| 12 | Sentry DSN in Vercel production | B1 | Scaffolding done. Ops needs to set `NEXT_PUBLIC_SENTRY_DSN` in Vercel; production deploy appears down (`velthoryn.vercel.app` returns DEPLOYMENT_NOT_FOUND). |
+| 12 | Sentry DSN in Vercel production | B1 | Scaffolding done. Ops needs to set `NEXT_PUBLIC_SENTRY_DSN` in Vercel; production is live at `www.velthoryn.site` (legacy `velthoryn.vercel.app` subdomain returns DEPLOYMENT_NOT_FOUND). |
 
 ---
 
@@ -186,4 +187,4 @@ Batch-verified and marked `[x]` in `.claude/specs/{production-security-ops,bulk-
 | **Ops** | 1 | 1 | 0 | 5 |
 | **Total** | **~4** | **~17** | **0** (batch done) | **8** |
 
-**86 total items audited.** Last refresh 2026-06-16. Remaining real work: remove the obsolete Issue #29 BE guards (post-deploy PR), FE E2E/clawback, Ops Sentry DSN + production redeploy. **8** externally blocked. Prod deployment at `velthoryn.vercel.app` is currently down — redeploy needed before smoke tests or Sentry verification can complete.
+**86 total items audited.** Last refresh 2026-06-24. Remaining real work: FE E2E/clawback, Ops Sentry DSN, and resolving the `PATCH /api/campaigns/:treeAddress/status` divergence (route still in code though documented as Removed). **8** externally blocked. Production is live at `www.velthoryn.site` (BE+Merkle pipeline + smoke tests pass 2026-06-23); the legacy `velthoryn.vercel.app` subdomain returns DEPLOYMENT_NOT_FOUND.

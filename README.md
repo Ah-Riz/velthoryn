@@ -227,20 +227,20 @@ Auth tiers: **Public** (read + stateless helpers), **Wallet** (ed25519 signature
 | `/api/simulate-vesting` | POST | Vesting simulation — linear/cliff/milestone (F4) | Public |
 | `/api/schedule-templates` | GET | Schedule presets — common vesting templates (F4) | Public |
 
-All routes deployed at [velthoryn.site](https://velthoryn.site/). Supabase tables have Row Level Security enabled (read-public, write-service-role).
+All routes deployed at [www.velthoryn.site](https://www.velthoryn.site/). Supabase tables have Row Level Security enabled (read-public, write-service-role).
 
 See [`docs/BACKEND_API.md`](docs/BACKEND_API.md) for request/response shapes and data flows.
 
 ### Vercel Deployment
 
-Deployed at [velthoryn.site](https://velthoryn.site/). The Vercel project imports this repo
+Deployed at [www.velthoryn.site](https://www.velthoryn.site/). The Vercel project imports this repo
 (`Ah-Riz/mancerxsuperteam-token-vesting`) via the native GitHub integration, with **Root Directory
 `apps/web/`** and Framework Preset **Next.js**. Production Branch: `main`. Required env vars: see
 `apps/web/.env.example` — these must be set on the Vercel project for the app to *function* (not just build).
 
 **Quick redeploy (dashboard):** If the site returns `404: NOT_FOUND / DEPLOYMENT_NOT_FOUND`, the
 production deployment is missing. In vercel.com → the `velthoryn` project → confirm Root Directory
-`apps/web/`, Git integration connected to this repo, and `velthoryn.site` assigned under
+`apps/web/`, Git integration connected to this repo, and `www.velthoryn.site` assigned under
 Domains → then Deployments → most recent **Ready** → ⋯ → **Redeploy**. (Equivalent trigger: push an
 empty commit to `main`.) If the project itself is gone, recreate it: New Project → import this repo →
 Root Directory `apps/web/` → add the env vars → Deploy → assign the domain.

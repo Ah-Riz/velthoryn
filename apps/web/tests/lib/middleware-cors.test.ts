@@ -6,7 +6,7 @@ describe("middleware CORS", () => {
   const prevOrigin = process.env.ALLOWED_ORIGIN;
 
   beforeEach(() => {
-    process.env.ALLOWED_ORIGIN = "https://velthoryn.site";
+    process.env.ALLOWED_ORIGIN = "https://www.velthoryn.site";
   });
 
   afterEach(() => {
@@ -16,7 +16,7 @@ describe("middleware CORS", () => {
   it("returns 204 for OPTIONS preflight with CORS headers", () => {
     const req = new NextRequest("http://localhost/api/campaigns", {
       method: "OPTIONS",
-      headers: { origin: "https://velthoryn.site" },
+      headers: { origin: "https://www.velthoryn.site" },
     });
 
     const res = middleware(req);
@@ -24,7 +24,7 @@ describe("middleware CORS", () => {
     expect(res.headers.get("access-control-allow-methods")).toContain("GET");
     expect(res.headers.get("access-control-max-age")).toBe("86400");
     expect(res.headers.get("access-control-allow-origin")).toBe(
-      "https://velthoryn.site",
+      "https://www.velthoryn.site",
     );
   });
 
@@ -41,12 +41,12 @@ describe("middleware CORS", () => {
   it("allows configured production origin", () => {
     const req = new NextRequest("http://localhost/api/campaigns", {
       method: "GET",
-      headers: { origin: "https://velthoryn.site" },
+      headers: { origin: "https://www.velthoryn.site" },
     });
 
     const res = middleware(req);
     expect(res.headers.get("access-control-allow-origin")).toBe(
-      "https://velthoryn.site",
+      "https://www.velthoryn.site",
     );
   });
 });

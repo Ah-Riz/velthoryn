@@ -1,8 +1,7 @@
 import Link from "next/link";
 import { SmoothScrollLink } from "@/components/landing/SmoothScrollLink";
 
-const repoUrl = "https://github.com/Ah-Riz/velthoryn";
-const docsUrl = `${repoUrl}/tree/main/docs`;
+const docsUrl = "https://docs.velthoryn.site";
 
 /**
  * Hero - Landing page hero section with animated Aperture brand mark.

@@ -161,7 +161,7 @@ The API uses **three** auth mechanisms:
 - **Timing-safe key comparison**: `verifyAdminKey()` and `verifyApiKey()` both hash inputs with SHA-256 before comparing, preventing timing attacks. ✅
 - **Body size limits**: Route-specific body limits enforced via `bodyLimit` option. ✅
 - **Input validation**: All request bodies validated via Zod schemas before processing. ✅
-- **CORS**: Origin-restricted via middleware. Production defaults to `velthoryn.vercel.app`. ✅
+- **CORS**: Origin-restricted via middleware. Production defaults to `www.velthoryn.site`. ✅
 - **Cron auth**: `CRON_SECRET` validated via Bearer token, not exposed in client code. ✅
 
 ---

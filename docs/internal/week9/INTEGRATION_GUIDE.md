@@ -361,7 +361,7 @@ await program.methods
 > instead — `const proof = prepared.proofs[i]` (the leaf's index from §1) — and skip this fetch.
 
 ```ts
-const API_BASE = "https://velthoryn.site";    // or your own BE origin
+const API_BASE = "https://www.velthoryn.site";    // or your own BE origin
 const ben = alicePubkey;                            // the claiming beneficiary's wallet
 
 const r = await fetch(`${API_BASE}/api/campaigns/${vestingTree.toBase58()}/proof?beneficiary=${ben.toBase58()}`);
