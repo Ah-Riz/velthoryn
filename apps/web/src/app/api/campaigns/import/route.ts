@@ -6,6 +6,7 @@ import { bulkRecipientSchema } from "@/lib/api/validators";
 import { getRequestId } from "@/lib/api/request-id";
 import { logger } from "@/lib/api/logger";
 import { parseCsvRows, normalizeCsvHeader } from "@/lib/campaign/csv";
+import { MAX_CLIFF_LINEAR_LEAVES_PER_BENEFICIARY } from "@/lib/campaign/limits";
 
 const REQUIRED_HEADERS = [
   "beneficiary",
@@ -90,22 +91,26 @@ function parseCsvText(text: string): {
     }
   }
 
-  // Known Issue #29: reject multiple cliff/linear leaves per beneficiary.
-  const cliffLinearSeen = new Map<string, number>();
+  // Per-leaf cap (ADR-003): the on-chain ClaimRecord tracks up to
+  // PER_LEAF_CAP=8 cliff/linear leaves per beneficiary. Allow up to that cap;
+  // reject rows beyond it so the CSV doesn't import only to fail with
+  // PerLeafCapExceeded at claim time. Milestone rows (release_type 2) use a
+  // bitmap and don't consume ledger slots, so they're exempt.
+  const cliffLinearCount = new Map<string, number>();
   const duplicateRows = new Set<number>();
   for (const recipient of recipients) {
     if (recipient.releaseType !== 2) {
-      const prevRow = cliffLinearSeen.get(recipient.beneficiary);
-      if (prevRow !== undefined) {
+      const count = (cliffLinearCount.get(recipient.beneficiary) ?? 0) + 1;
+      cliffLinearCount.set(recipient.beneficiary, count);
+      if (count > MAX_CLIFF_LINEAR_LEAVES_PER_BENEFICIARY) {
         duplicateRows.add(recipient.row);
         errors.push({
           row: recipient.row,
           field: "beneficiary",
           message:
-            `Known Issue #29: beneficiary ${recipient.beneficiary} already has a cliff/linear entry at row ${prevRow}`,
+            `beneficiary ${recipient.beneficiary} already has ${MAX_CLIFF_LINEAR_LEAVES_PER_BENEFICIARY} cliff/linear entries ` +
+            `(the on-chain per-leaf ledger cap). Move this leaf to a separate campaign.`,
         });
-      } else {
-        cliffLinearSeen.set(recipient.beneficiary, recipient.row);
       }
     }
   }

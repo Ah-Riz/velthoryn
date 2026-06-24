@@ -37,7 +37,8 @@ const BASE = __ENV.BASE_URL || "http://localhost:3000";
 const CREATOR = "11111111111111111111111111111112";
 const MINT = "11111111111111111111111111111114";
 
-// Valid Solana pubkeys — one cliff/linear leaf per beneficiary (Known Issue #29).
+// Valid Solana pubkeys — one cliff/linear leaf per beneficiary (keeps each
+// under the on-chain per-leaf cap of 8; ADR-003).
 const BENEFICIARIES = [
   "11111111111111111111111111111111",
   "11111111111111111111111111111112",

@@ -178,20 +178,31 @@ describe("POST /api/campaigns/prepare", () => {
     expect(json.error).toBe("Validation failed");
   });
 
-  it("returns 400 for duplicate cliff leaves for same beneficiary (Known Issue #29)", async () => {
-    const recipients = [
-      { ...VALID_RECIPIENT, amount: "1000000" },
-      { ...VALID_RECIPIENT, amount: "2000000" },
-    ];
+  it("allows up to 8 cliff/linear leaves per beneficiary (on-chain PER_LEAF_CAP)", async () => {
+    // The on-chain ClaimRecord per-leaf ledger holds 8 slots (ADR-003), so up
+    // to 8 cliff/linear leaves per beneficiary build and claim cleanly.
+    const recipients = Array.from({ length: 8 }, () => ({ ...VALID_RECIPIENT }));
+
+    const req = await makeAuthenticatedPostRequest("/api/campaigns/prepare", makeBaseBody({ recipients }));
+    const res = await postPrepare(req);
+    const json = await res.json();
+
+    expect(res.status).toBe(200);
+    expect(json.leafCount).toBe(8);
+  });
+
+  it("returns 400 when a beneficiary exceeds the per-leaf cap (9 cliff leaves)", async () => {
+    // 9 cliff leaves for one beneficiary would build off-chain but fail
+    // on-chain with PerLeafCapExceeded (PER_LEAF_CAP = 8).
+    const recipients = Array.from({ length: 9 }, () => ({ ...VALID_RECIPIENT }));
 
     const req = await makeAuthenticatedPostRequest("/api/campaigns/prepare", makeBaseBody({ recipients }));
     const res = await postPrepare(req);
     const json = await res.json();
 
     expect(res.status).toBe(400);
-    expect(json.error).toMatch(/Known Issue #29/);
+    expect(json.error).toMatch(/per-leaf ledger/);
     expect(json.error).toContain(BENEFICIARY);
-    expect(json.error).toMatch(/indices \[0, 1\]/);
   });
 
   it("allows cliff + milestone for same beneficiary", async () => {
@@ -357,11 +368,36 @@ describe("POST /api/campaigns/import", () => {
     expect(json.recipients[0].amount).toBe("1000000");
   });
 
-  it("returns per-row error for duplicate cliff rows for same beneficiary (Known Issue #29)", async () => {
+  it("allows up to 8 cliff/linear rows per beneficiary (on-chain PER_LEAF_CAP)", async () => {
+    // The on-chain ClaimRecord per-leaf ledger holds 8 slots (ADR-003).
+    const header = "beneficiary,amount,releaseType,startTime,cliffTime,endTime,milestoneIdx";
+    const cliffRows = Array.from(
+      { length: 8 },
+      () => `${BENEFICIARY},1000000,0,1700000000,1731536000,1731536000,0`,
+    );
+    const csv = [header, ...cliffRows].join("\n");
+
+    const req = await makeImportRequest(csv);
+    const res = await postImport(req);
+    const json = await res.json();
+
+    expect(res.status).toBe(200);
+    expect(json.totalRows).toBe(8);
+    expect(json.validRows).toBe(8);
+    expect(json.errors).toHaveLength(0);
+  });
+
+  it("returns per-row error when a beneficiary exceeds the per-leaf cap (9th cliff row)", async () => {
+    // PER_LEAF_CAP = 8 (ADR-003). The first 8 cliff rows are kept; the 9th is
+    // rejected so the campaign won't import only to fail on-chain.
+    const header = "beneficiary,amount,releaseType,startTime,cliffTime,endTime,milestoneIdx";
+    const cliffRows = Array.from(
+      { length: 9 },
+      () => `${BENEFICIARY},1000000,0,1700000000,1731536000,1731536000,0`,
+    );
     const csv = [
-      "beneficiary,amount,releaseType,startTime,cliffTime,endTime,milestoneIdx",
-      `${BENEFICIARY},1000000,0,1700000000,1731536000,1731536000,0`,
-      `${BENEFICIARY},2000000,0,1700000000,1731536000,1731536000,0`,
+      header,
+      ...cliffRows,
       `${OTHER_BENEFICIARY},3000000,1,1700000000,1700000000,1731536000,0`,
     ].join("\n");
 
@@ -370,13 +406,13 @@ describe("POST /api/campaigns/import", () => {
     const json = await res.json();
 
     expect(res.status).toBe(200);
-    expect(json.totalRows).toBe(3);
-    expect(json.validRows).toBe(2);
-    expect(json.recipients).toHaveLength(2);
-    const dupErrors = json.errors.filter((e: { row: number }) => e.row === 3);
-    expect(dupErrors.length).toBeGreaterThanOrEqual(1);
-    expect(dupErrors[0].message).toMatch(/Known Issue #29/);
-    expect(dupErrors[0].message).toContain(BENEFICIARY);
+    expect(json.totalRows).toBe(10);
+    expect(json.validRows).toBe(9); // 8 BENEFICIARY cliff rows + 1 OTHER
+    // The 9th BENEFICIARY cliff row is data row 9 -> row number 10 (header is row 1).
+    const overCapErrors = json.errors.filter((e: { row: number }) => e.row === 10);
+    expect(overCapErrors.length).toBeGreaterThanOrEqual(1);
+    expect(overCapErrors[0].message).toMatch(/per-leaf ledger cap/);
+    expect(overCapErrors[0].message).toContain(BENEFICIARY);
   });
 
   it("allows cliff + milestone rows for same beneficiary in CSV import", async () => {
