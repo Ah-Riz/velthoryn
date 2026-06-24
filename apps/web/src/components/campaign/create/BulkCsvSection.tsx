@@ -32,8 +32,8 @@ const COLUMN_GLOSSARY: Record<string, { label: string; desc: string }> = {
     desc: "When the vesting period begins · Format: YYYY-MM-DD HH:MM",
   },
   cliffTime: {
-    label: "Unlock date",
-    desc: "Tokens are locked until this date (cliff = full unlock; linear = earliest vest)",
+    label: "Unlock / cliff date",
+    desc: "Cliff: full unlock date · Linear: vesting-start date · Milestone: optional earliest claim date, defaults to now if empty",
   },
   endTime: {
     label: "Vesting end date",
@@ -41,14 +41,14 @@ const COLUMN_GLOSSARY: Record<string, { label: string; desc: string }> = {
   },
   milestoneIdx: {
     label: "Milestone number",
-    desc: "Which milestone this row represents · Use 0, 1, 2… (milestone vesting only; set to 0 for cliff/linear)",
+    desc: "Which milestone this row unlocks · Use 0, 1, 2… up to 255 (milestone only)",
   },
 };
 
 const COLUMNS_BY_TYPE: Record<VestingType, string[]> = {
   cliff: ["beneficiary", "amount", "releaseType", "startTime", "cliffTime"],
-  linear: ["beneficiary", "amount", "releaseType", "startTime", "cliffTime", "endTime", "milestoneIdx"],
-  milestone: ["beneficiary", "amount", "releaseType", "startTime", "cliffTime", "endTime", "milestoneIdx"],
+  linear: ["beneficiary", "amount", "releaseType", "startTime", "cliffTime", "endTime"],
+  milestone: ["beneficiary", "amount", "releaseType", "cliffTime", "milestoneIdx"],
 };
 
 // ── Icons ──────────────────────────────────────────────────────────────────
@@ -272,16 +272,22 @@ export function BulkCsvSection({
   const hasResult = csvResult !== null;
   const isValid = hasResult && csvResult.issues.length === 0 && csvResult.rows.length > 0;
 
-  // Schedule metrics from valid rows
+  // Schedule metrics from valid rows.
+  // For milestone, cliffTime is the meaningful date (startTime is unused in math,
+  // endTime mirrors cliffTime). Skip entirely when all times are 0 (no time gate).
   const scheduleMetrics = (() => {
     const rows = csvResult?.rows;
     if (!rows?.length) return null;
-    let earliest = rows[0].startTime;
-    let latest = rows[0].endTime;
+    const isMilestone = vestingType === "milestone";
+    let earliest = isMilestone ? rows[0].cliffTime : rows[0].startTime;
+    let latest = isMilestone ? rows[0].cliffTime : rows[0].endTime;
     for (const r of rows) {
-      if (r.startTime < earliest) earliest = r.startTime;
-      if (r.endTime > latest) latest = r.endTime;
+      const lo = isMilestone ? r.cliffTime : r.startTime;
+      const hi = isMilestone ? r.cliffTime : r.endTime;
+      if (lo < earliest) earliest = lo;
+      if (hi > latest) latest = hi;
     }
+    if (isMilestone && earliest === 0 && latest === 0) return null;
     return { earliest, latest, duration: latest - earliest };
   })();
 
@@ -629,11 +635,11 @@ export function BulkCsvSection({
               </div>
               <div className="grid grid-cols-3 gap-2">
                 <ScheduleTile
-                  label="Earliest Start"
+                  label={vestingType === "milestone" ? "Earliest Unlock" : "Earliest Start"}
                   value={formatUnixToDate(scheduleMetrics.earliest)}
                 />
                 <ScheduleTile
-                  label="Latest End"
+                  label={vestingType === "milestone" ? "Latest Unlock" : "Latest End"}
                   value={formatUnixToDate(scheduleMetrics.latest)}
                 />
                 <ScheduleTile
@@ -756,11 +762,11 @@ export function BulkCsvSection({
             {scheduleMetrics && (
               <>
                 <SummaryRow
-                  label="Earliest Start"
+                  label={vestingType === "milestone" ? "Earliest Unlock" : "Earliest Start"}
                   value={formatUnixToDate(scheduleMetrics.earliest)}
                 />
                 <SummaryRow
-                  label="Latest End"
+                  label={vestingType === "milestone" ? "Latest Unlock" : "Latest End"}
                   value={formatUnixToDate(scheduleMetrics.latest)}
                 />
                 <SummaryRow

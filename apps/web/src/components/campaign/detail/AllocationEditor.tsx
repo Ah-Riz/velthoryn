@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
@@ -169,7 +169,17 @@ function computeRemovalErrors(
     });
 }
 
+// ─── release type display config ────────────────────────────────────────────
+
+const RELEASE_TYPE_CONFIG: Record<number, { label: string; badge: string }> = {
+  0: { label: "Cliff",     badge: "text-sky-700 bg-sky-500/10 dark:text-sky-400" },
+  1: { label: "Linear",    badge: "text-emerald-700 bg-emerald-500/10 dark:text-emerald-400" },
+  2: { label: "Milestone", badge: "text-amber-700 bg-amber-500/10 dark:text-amber-400" },
+};
+
 // ─── component ───────────────────────────────────────────────────────────────
+
+const PAGE_SIZE = 50;
 
 export function AllocationEditor({
   initialRecipients,
@@ -187,6 +197,10 @@ export function AllocationEditor({
   const [synced, setSynced] = useState(false);
   const [originalRows, setOriginalRows] = useState<RecipientRow[]>([]);
   const [newRowIds, setNewRowIds] = useState<Set<string>>(new Set());
+  // Rows that arrived from the DB (non-empty beneficiary at sync time) — releaseType locked for these
+  const [existingRowIds, setExistingRowIds] = useState<Set<string>>(new Set());
+  const [searchQuery, setSearchQuery] = useState("");
+  const [currentPage, setCurrentPage] = useState(0);
   const pendingFocusId = useRef<string | null>(null);
   const inputRefs = useRef<Map<string, HTMLInputElement>>(new Map());
 
@@ -194,6 +208,7 @@ export function AllocationEditor({
   if (!synced && initialRecipients.length > 0 && rows[0]?.beneficiary === "") {
     setRows(initialRecipients);
     setOriginalRows(initialRecipients);
+    setExistingRowIds(new Set(initialRecipients.filter((r) => r.beneficiary).map((r) => r.id)));
     setSynced(true);
   }
 
@@ -224,6 +239,25 @@ export function AllocationEditor({
     setRows((prev) => [...prev, newRow]);
     setNewRowIds((prev) => new Set([...prev, newRow.id]));
     pendingFocusId.current = newRow.id;
+    // Jump to last page (where the new row lands) and clear search
+    setSearchQuery("");
+    setCurrentPage(Math.floor(rows.length / PAGE_SIZE));
+  }
+
+  // Search + pagination (display only — rows state stays full)
+  const filteredRows = useMemo(() => {
+    const q = searchQuery.trim().toLowerCase();
+    if (!q) return rows;
+    return rows.filter((r) => r.beneficiary.toLowerCase().includes(q));
+  }, [rows, searchQuery]);
+
+  const totalPages = Math.max(1, Math.ceil(filteredRows.length / PAGE_SIZE));
+  const safePage = Math.min(currentPage, totalPages - 1);
+  const pagedRows = filteredRows.slice(safePage * PAGE_SIZE, (safePage + 1) * PAGE_SIZE);
+
+  function handleSearchChange(value: string) {
+    setSearchQuery(value);
+    setCurrentPage(0);
   }
 
   const rowErrors = computeRowErrors(rows, claimedAmounts, mintDecimals);
@@ -313,20 +347,54 @@ export function AllocationEditor({
       )}
 
       {/* ── Toolbar ── */}
-      <div className="flex items-center justify-between gap-3">
-        <p className="text-[12px] text-muted-foreground">
-          {rows.length} recipient{rows.length !== 1 ? "s" : ""}
-        </p>
-        <button
-          type="button"
-          onClick={addRow}
-          className="flex items-center gap-1.5 rounded-xl border border-violet-500/25 bg-violet-500/10 px-3.5 py-1.5 text-[12px] font-medium text-violet-700 transition hover:bg-violet-500/20 dark:text-violet-400"
-        >
-          <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
-            <path d="M6 1v10M1 6h10" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
-          </svg>
-          Add Recipient
-        </button>
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex items-center gap-3">
+          <p className="shrink-0 text-[12px] text-muted-foreground">
+            {searchQuery.trim()
+              ? `${filteredRows.length} of ${rows.length} recipient${rows.length !== 1 ? "s" : ""}`
+              : `${rows.length} recipient${rows.length !== 1 ? "s" : ""}`}
+          </p>
+        </div>
+        <div className="flex items-center gap-2">
+          {/* Search */}
+          <div className="relative">
+            <svg
+              width="12" height="12" viewBox="0 0 16 16" fill="none"
+              className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground"
+            >
+              <circle cx="6.5" cy="6.5" r="5" stroke="currentColor" strokeWidth="1.5"/>
+              <path d="M10.5 10.5L14 14" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
+            </svg>
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => handleSearchChange(e.target.value)}
+              placeholder="Search wallet…"
+              className="h-7 w-48 rounded-xl border border-foreground/[0.08] bg-muted pl-7 pr-2.5 text-[11px] text-foreground outline-none placeholder:text-muted-foreground focus:border-foreground/20"
+            />
+            {searchQuery && (
+              <button
+                type="button"
+                onClick={() => handleSearchChange("")}
+                className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+              >
+                <svg width="10" height="10" viewBox="0 0 12 12" fill="none">
+                  <path d="M1 1l10 10M11 1L1 11" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
+                </svg>
+              </button>
+            )}
+          </div>
+          <button
+            type="button"
+            onClick={addRow}
+            className="flex items-center gap-1.5 rounded-xl border border-violet-500/25 bg-violet-500/10 px-3.5 py-1.5 text-[12px] font-medium text-violet-700 transition hover:bg-violet-500/20 dark:text-violet-400"
+          >
+            <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
+              <path d="M6 1v10M1 6h10" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+            </svg>
+            Add Recipient
+          </button>
+        </div>
       </div>
 
       {/* ── Table ── */}
@@ -334,14 +402,28 @@ export function AllocationEditor({
         <table className="w-full text-[12px]">
           <thead>
             <tr className="border-b border-foreground/[0.06] bg-foreground/[0.02] text-left text-[11px] uppercase tracking-wider text-muted-foreground">
-              <th className="px-3 py-2.5">Recipient Wallet</th>
+              <th className="px-3 py-2.5">
+                Recipient Wallet
+                {rows.length > PAGE_SIZE && (
+                  <span className="ml-2 font-normal normal-case tracking-normal text-muted-foreground/60">
+                    ({safePage * PAGE_SIZE + 1}–{Math.min((safePage + 1) * PAGE_SIZE, filteredRows.length)} shown)
+                  </span>
+                )}
+              </th>
               <th className="px-3 py-2.5 w-36">Amount</th>
               <th className="px-3 py-2.5 w-24">Type</th>
               <th className="px-3 py-2.5 w-10" />
             </tr>
           </thead>
           <tbody>
-            {rows.map((row) => {
+            {pagedRows.length === 0 && searchQuery.trim() && (
+              <tr>
+                <td colSpan={4} className="px-3 py-6 text-center text-[12px] text-muted-foreground">
+                  No recipients match &quot;{searchQuery}&quot;
+                </td>
+              </tr>
+            )}
+            {pagedRows.map((row) => {
               const isNew = newRowIds.has(row.id);
               const claimedRaw = claimedAmounts[row.beneficiary];
               const hasClaims = isPositiveRaw(claimedRaw);
@@ -398,17 +480,35 @@ export function AllocationEditor({
                     )}
                   </td>
 
-                  {/* Vesting type */}
+                  {/* Vesting type — locked badge for DB rows, editable select for new rows */}
                   <td className="px-2 py-2 align-top">
-                    <select
-                      value={row.releaseType}
-                      onChange={(e) => updateRow(row.id, "releaseType", Number(e.target.value))}
-                      className="w-full rounded-lg border border-foreground/[0.08] bg-muted px-2 py-1.5 text-[11px] text-foreground outline-none focus:border-foreground/20"
-                    >
-                      <option value={0}>Cliff</option>
-                      <option value={1}>Linear</option>
-                      <option value={2}>Milestone</option>
-                    </select>
+                    {existingRowIds.has(row.id) ? (
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <span className={cn(
+                            "inline-flex w-full cursor-default items-center justify-center rounded-lg px-2 py-1.5 text-[11px] font-medium",
+                            RELEASE_TYPE_CONFIG[row.releaseType]?.badge ?? "text-muted-foreground bg-foreground/[0.06]",
+                          )}>
+                            {RELEASE_TYPE_CONFIG[row.releaseType]?.label ?? "Unknown"}
+                          </span>
+                        </TooltipTrigger>
+                        <TooltipContent side="left" className="max-w-[220px] text-center">
+                          <p className="text-[11px] leading-5">
+                            Release type is locked for existing recipients — changing it would silently corrupt the vesting schedule. Remove this row and add a new one to change the type.
+                          </p>
+                        </TooltipContent>
+                      </Tooltip>
+                    ) : (
+                      <select
+                        value={row.releaseType}
+                        onChange={(e) => updateRow(row.id, "releaseType", Number(e.target.value))}
+                        className="w-full rounded-lg border border-foreground/[0.08] bg-muted px-2 py-1.5 text-[11px] text-foreground outline-none focus:border-foreground/20"
+                      >
+                        <option value={0}>Cliff</option>
+                        <option value={1}>Linear</option>
+                        <option value={2}>Milestone</option>
+                      </select>
+                    )}
                   </td>
 
                   {/* Remove */}
@@ -443,6 +543,37 @@ export function AllocationEditor({
           </tbody>
         </table>
       </div>
+
+      {/* ── Pagination ── */}
+      {totalPages > 1 && (
+        <div className="flex items-center justify-between gap-2">
+          <button
+            type="button"
+            onClick={() => setCurrentPage((p) => Math.max(0, p - 1))}
+            disabled={safePage === 0}
+            className="flex items-center gap-1.5 rounded-lg border border-foreground/[0.08] px-3 py-1.5 text-[11px] text-muted-foreground transition hover:border-foreground/20 hover:text-foreground disabled:opacity-30 disabled:cursor-not-allowed"
+          >
+            <svg width="10" height="10" viewBox="0 0 12 12" fill="none">
+              <path d="M8 1L3 6l5 5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+            </svg>
+            Prev
+          </button>
+          <span className="text-[11px] text-muted-foreground tabular-nums">
+            Page {safePage + 1} / {totalPages}
+          </span>
+          <button
+            type="button"
+            onClick={() => setCurrentPage((p) => Math.min(totalPages - 1, p + 1))}
+            disabled={safePage >= totalPages - 1}
+            className="flex items-center gap-1.5 rounded-lg border border-foreground/[0.08] px-3 py-1.5 text-[11px] text-muted-foreground transition hover:border-foreground/20 hover:text-foreground disabled:opacity-30 disabled:cursor-not-allowed"
+          >
+            Next
+            <svg width="10" height="10" viewBox="0 0 12 12" fill="none">
+              <path d="M4 1l5 5-5 5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+            </svg>
+          </button>
+        </div>
+      )}
 
       {/* ── Bottom ghost add-row button ── */}
       <button
@@ -536,7 +667,7 @@ export function AllocationEditor({
         </div>
       )}
 
-      {canRotate && (
+      {canRotate && !lockedReason && (
         <Button
           type="button"
           onClick={() => onSubmit(rows)}
@@ -547,7 +678,7 @@ export function AllocationEditor({
         </Button>
       )}
 
-      {!canRotate && (
+      {(!canRotate || lockedReason) && (
         <p className="text-[12px] text-amber-700 dark:text-amber-400">
           {lockedReason ?? "Only the cancel authority can update allocations."}
         </p>

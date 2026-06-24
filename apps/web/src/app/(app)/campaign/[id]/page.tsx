@@ -1909,6 +1909,7 @@ export default function CampaignPage({ params }: { params: Promise<{ id: string 
           claimFundingDisabledReason={claimFundingDisabledReason}
           withdrawDisabledReason={withdrawDisabledReason}
           waitCountdown={waitCountdown}
+          isLinear={isLinear}
           formatTokenAmount={formatTokenAmount}
           mintLabel={mintLabel}
         />
@@ -2005,7 +2006,9 @@ export default function CampaignPage({ params }: { params: Promise<{ id: string 
               <VestingChart
                 releaseType={releaseType}
                 startTs={campaignDetailQuery.data.vestingCurve.minStartTime}
-                cliffTs={campaignDetailQuery.data.vestingCurve.minStartTime}
+                cliffTs={minCliffTimeBigint && Number(minCliffTimeBigint) > 0
+                  ? Number(minCliffTimeBigint)
+                  : campaignDetailQuery.data.vestingCurve.minStartTime}
                 endTs={campaignDetailQuery.data.vestingCurve.maxEndTime}
                 totalAmount={totalSupply}
                 vestedAmount={campaignTotalVested}
@@ -2042,9 +2045,13 @@ export default function CampaignPage({ params }: { params: Promise<{ id: string 
             startTime={campaignDetailQuery.data?.vestingCurve
               ? unixToDatetimeLocal(campaignDetailQuery.data.vestingCurve.minStartTime)
               : startTime}
-            cliffTime={cliffTime || (campaignDetailQuery.data?.vestingCurve
-              ? unixToDatetimeLocal(campaignDetailQuery.data.vestingCurve.minStartTime)
-              : "")}
+            cliffTime={cliffTime || (
+              minCliffTimeBigint && Number(minCliffTimeBigint) > 0
+                ? unixToDatetimeLocal(Number(minCliffTimeBigint))
+                : campaignDetailQuery.data?.vestingCurve
+                ? unixToDatetimeLocal(campaignDetailQuery.data.vestingCurve.minStartTime)
+                : ""
+            )}
             endTime={campaignDetailQuery.data?.vestingCurve
               ? unixToDatetimeLocal(campaignDetailQuery.data.vestingCurve.maxEndTime)
               : endTime}
@@ -2172,7 +2179,7 @@ export default function CampaignPage({ params }: { params: Promise<{ id: string 
 
                         {waitCountdown && (
                           <div className="flex items-center justify-between rounded-lg border border-foreground/[0.05] bg-foreground/[0.02] px-3.5 py-2.5">
-                            <span className="text-[11px] text-muted-foreground/70">Next unlock</span>
+                            <span className="text-[11px] text-muted-foreground/70">{isLinear ? "Vesting starts" : "Next unlock"}</span>
                             <span className="text-[12px] font-medium tabular-nums text-foreground">{waitCountdown}</span>
                           </div>
                         )}
@@ -2779,6 +2786,7 @@ function RecipientClaimBanner({
   claimFundingDisabledReason,
   withdrawDisabledReason,
   waitCountdown,
+  isLinear,
   formatTokenAmount,
   mintLabel,
 }: {
@@ -2789,6 +2797,7 @@ function RecipientClaimBanner({
   claimFundingDisabledReason: string | null;
   withdrawDisabledReason: string | null | undefined;
   waitCountdown: string | null;
+  isLinear: boolean;
   formatTokenAmount: (v: bigint) => string;
   mintLabel: string | null;
 }) {
@@ -2834,7 +2843,7 @@ function RecipientClaimBanner({
     pill = (
       <span className="inline-flex items-center gap-1.5 rounded-full border border-violet-500/20 bg-violet-500/5 px-3 py-1 text-[12px] text-violet-600 dark:text-violet-400">
         <span className="h-1.5 w-1.5 rounded-full bg-violet-500" />
-        Next unlock in {waitCountdown}
+        {isLinear ? "Vesting starts in" : "Next unlock in"} {waitCountdown}
       </span>
     );
   } else if (canClaim) {
@@ -2957,7 +2966,13 @@ function VestingScheduleTimeline({
   type TimelineNode = { label: string; ts: number; sub?: string; highlight?: boolean };
   const nodes: TimelineNode[] = [];
 
-  nodes.push({ label: "Start", ts: startTs });
+  // For linear: startTs = leaf.startTime (ignored by vesting math). The real vesting
+  // start is cliffTs. Show "Lock Start" only when a cliff period exists (startTs < cliffTs)
+  // so recipients know when their tokens were locked. Skip it when they're equal (no-op).
+  if (isLinear && startTs < cliffTs) {
+    nodes.push({ label: "Lock Start", ts: startTs });
+  }
+  nodes.push({ label: isLinear ? "Vest Start" : "Start", ts: isLinear ? cliffTs : startTs });
 
   if (isCliff || isMilestone) {
     nodes.push({ label: isMilestone ? "Milestone Unlock" : "Cliff Unlock", ts: cliffTs, highlight: true });
