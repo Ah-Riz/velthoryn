@@ -2,7 +2,15 @@
 
 **Scope:** BE-DB-SC-Merkle — backend API (`apps/web/src/app/api/`), Postgres/indexer (`apps/web/src/lib/db/`, `src/lib/indexer/`), Solana program (`programs/vesting/`), and the Merkle client/verifier (`clients/ts/`, `programs/vesting/src/math/`). Frontend UI is Geral's.
 
-**Week 10 was the Demo Day verification week** — an independent, evidence-based pass that proves the BE + smart-contract + Merkle slice actually works end-to-end on devnet and in production, and that the docs/numbers are honest. No new product features; the work is read-only verification plus a targeted cleanup of a stale-deployment reference that was actively misleading.
+**Week 10 was two things.** First — the **production infrastructure shipped**: the `velthoryn.site` domain/DNS (apex → `www`, plus the `docs.velthoryn.site` subdomain) and the **GitBook docs site** published from this repo's `docs/`. Second — the **Demo Day verification pass**: an independent, evidence-based run that proves the BE + smart-contract + Merkle slice works end-to-end on devnet and in production, and that the docs/numbers are honest. No new product features; the work is infrastructure + docs + read-only verification, plus a targeted cleanup of a stale-deployment reference that was actively misleading.
+
+## Infrastructure shipped this week — domain/DNS + GitBook
+
+The headline deliverables for the week were standing up the production domain/DNS and the standalone docs site:
+
+- **Domain/DNS:** configured the `velthoryn.site` zone. Apex `velthoryn.site` → **307 → `www.velthoryn.site`** (Vercel, production Next.js app — `/api/health` 200, `status:ok`). Added the **`docs.velthoryn.site`** subdomain → **HTTP 200**, `server: cloudflare`, serving the GitBook docs. The dead `velthoryn.vercel.app` (404) is retired in favour of the canonical `www.velthoryn.site` (the 41→0 stale-ref cleanup below). Verified live via `curl` (307 / 200 / `server: cloudflare`).
+- **GitBook docs site:** created the GitBook site from this repo's `docs/` (GitBook-format migration, commit `ac0c1eb`) and published it at **`https://docs.velthoryn.site/`**. TOC (`docs/SUMMARY.md`): README + Getting Started; Guides ×4; Reference ×8 (incl. a new dedicated `database-schema.md` — all 13 tables, RLS, indexes, migrations); Frontend ×4; Security ×2; Operations ×4; Architecture Decisions ×11 (ADR-001/002/003 + 7 FE ADRs). Native `{% hint %}` callouts throughout.
+- **Supporting docs/domain wiring:** pointed the app's "Docs" buttons/links (`Hero` + `Footer`) at `docs.velthoryn.site`, replacing the broken GitHub `.md` deep-links; added the GitBook README hero logo; plus a BE/DB/SC/MERKLE doc-alignment pass (corrected README Anchor version + error count, prepare rate limit, `root_versions` column; new DB schema page; relaxed the Issue #29 BE guards to cap-aware; flagged the `PATCH /status` route divergence).
 
 **What I verified (chronological):**
 - **Devnet program liveness (T1):** `solana program show G6iaig…8wvu --url devnet` — program live, upgrade authority `GPfHeZtB…L5Es6` correct, last-deploy slot **469,756,770** (newer than the documented 464,782,646). Flagged that the on-chain data length is **1,047,776 B (~1 MiB)** — ~2× both the documented "~492 KB" and the local `target/deploy/vesting.so` (530,208 B / ~518 KiB), i.e. the deployed binary does not match the local build and was upgraded after the README snapshot. Needs a confirmation that the deployed build is the intended one.
@@ -28,6 +36,8 @@
 | **Docs** | Stale dead-URL refs removed from code/active-docs (41 → 0) | 12-file swap `vercel.app → www.velthoryn.site`; `PENDING_WORK.md` status corrected; CORS test 3/3 |
 | **Tooling** | `cloc 2.09` installed (no-root) | `~/.local/bin/cloc` |
 | **Metrics** | Slice code-only LOC = 4,875 | `cloc` Rust 3,017 + TS 1,858 |
+| **Domain/DNS** | `velthoryn.site` apex→www (Vercel) + `docs.velthoryn.site` (Cloudflare/GitBook) live | `curl`: apex 307→www; `docs` 200 `server: cloudflare`; `/api/health` 200 |
+| **Docs** | GitBook site live at `https://docs.velthoryn.site/` from repo `docs/` | commit `ac0c1eb`; `docs/SUMMARY.md` (Guides×4, Reference×8 + DB schema page, ADRs×11) |
 
 ---
 
@@ -39,10 +49,13 @@
 | 🟢 Low | **T5 cross-doc drift** — clock 11-vs-12; SC 127-vs-126; proptest split 10/8-vs-11/7 | Reconcile the numbers in one pass |
 | 🟢 Low | **12 uncommitted URL-cleanup edits** on `dev_lana` (working tree; not committed/PR'd) | Commit + PR to `test`/`main` |
 | 🟢 Low | BE pipeline test created **1 ephemeral test campaign** (campaignId 81) in live Supabase | Acceptable test data; prune if desired |
+| 🟢 Low | **GitBook dashboard logo/header** — README hero logo added in-repo, but the space-icon / header logo is a GitBook-only dashboard setting | Upload the SVG in GitBook Space settings (space icon + paid Header) |
+| 🟢 Low | **`docs.velthoryn.site` links point to root only** — footer resource links all go to the docs home, not deep-linked | Optional: map each to its GitBook page slug once confirmed |
 
 ---
 
 ## Delivery
 
 - **Uncommitted on `dev_lana`:** 12 files (`README.md`, `apps/web/{.env.example,src/middleware.ts,tests/lib/middleware-cors.test.ts}`, `docs/{BACKEND_API,BE-SC-MERKLE-ACCEPTANCE-STATUS,INTEGRATION,PENDING_WORK,SHIP-PATH-NEXT,security-audit-report}.md`, `docs/roadmap/01-TASKS-P0-SECURITY-OPS.md`, `docs/week9/INTEGRATION_GUIDE.md`) — +24/−24, URL swap + PENDING_WORK status correction. Commit/PR on request.
+- **Also uncommitted on `dev_lana` (domain/GitBook/docs work this week):** GitBook hero logo + SC-number fixes (`docs/README.md`), `docs/SUMMARY.md`, `docs/getting-started.md`, new `docs/reference/database-schema.md`, `docs/reference/{api-endpoints,trust-boundaries}.md`, `docs/decisions/adr-003-*.md`, `docs/internal/tracking/PENDING_WORK.md`; app "Docs" links → `docs.velthoryn.site` (`apps/web/src/components/landing/{Hero,Footer}.tsx`); cap-aware Issue #29 guard (`apps/web/src/lib/campaign/limits.ts`, `prepare`/`import` routes, `tests/api/bulk-campaign.test.ts`). All lint/test green; commit/PR on request.
 - **Verification verdict for Demo Day:** SC live on devnet (claim finalized), BE+Merkle pipeline ALL PASS against production, production API healthy at `https://www.velthoryn.site`, metrics and LOC honest. No Demo Day blockers remaining from the BE/SC/Merkle slice; one item to confirm (deployed-build identity, T1).
