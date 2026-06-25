@@ -28,6 +28,7 @@ const nextConfig: NextConfig = {
               "img-src 'self' data: https:",
               "font-src 'self' data: https://fonts.gstatic.com",
               `connect-src 'self' https://*.solana.com https://*.helius-rpc.com wss://*.helius-rpc.com https://*.supabase.co wss://*.solana.com https://api.devnet.solana.com https://api.mainnet-beta.solana.com${localRpcConnectSrc}`,
+              "media-src 'self' https://*.supabase.co",
               "frame-ancestors 'none'",
               "base-uri 'self'",
               "form-action 'self'",
